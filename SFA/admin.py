@@ -1,5 +1,7 @@
 from django.contrib import admin
 from .models import Territory, Employee, Stockist, Chemist, Doctor, Product, PrimarySale, SecondarySale, RCPA_Audit, Route, TourProgram
+from .models import *
+
 
 # Master Tables
 @admin.register(Route)
@@ -74,3 +76,4 @@ class DCRAdmin(admin.ModelAdmin):
 class DayEndAdmin(admin.ModelAdmin):
     list_display = ('employee', 'date', 'is_closed', 'closed_at')
     list_filter = ('date', 'employee', 'is_closed')
+admin.site.register(DayStart)
