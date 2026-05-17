@@ -1,4 +1,5 @@
 # SFA/views.py
+from django.contrib import messages
 from .models import DayStart, Territory 
 from django.utils import timezone
 from django.db.models import Sum, Count
@@ -98,7 +99,15 @@ def mr_dashboard_view(request):
 def day_end_view(request):
     employee = request.user.employee
     today = timezone.now().date()
-    
+    if not DayStart.objects.filter(employee=employee, date=today).exists():
+        messages.error(request, "Pehle Day Start karein, tabhi Day End hoga!")
+        return redirect('mr_dashboard')
+
+    # LOCK 2: Agar pehle hi Day End ho chuka hai, toh dobara na ho
+    if DayEnd.objects.filter(employee=employee, date=today, is_closed=True).exists():
+        messages.warning(request, "Aaj ka kaam pehle hi freeze ho chuka hai!")
+        return redirect('mr_dashboard')
+
     # 1. Check karein ki kya aaj ka din pehle hi lock ho chuka hai
     day_closed = DayEnd.objects.filter(employee=employee, date=today, is_closed=True).exists()
     
@@ -140,6 +149,14 @@ def day_end_view(request):
 def doctor_visit_view(request, doc_id):
     employee = request.user.employee
     today = timezone.now().date()
+    if not DayStart.objects.filter(employee=employee, date=today).exists():
+        messages.error(request, "Visit shuru karne se pehle Day Start karein!")
+        return redirect('mr_dashboard')
+        
+    # LOCK 2: Day end ho chuka hai toh bhaga do
+    if DayEnd.objects.filter(employee=employee, date=today, is_closed=True).exists():
+        messages.error(request, "Aaj ka din close ho chuka hai. Ab visit add nahi ho sakti!")
+        return redirect('mr_dashboard')
     doctor = get_object_or_404(Doctor, id=doc_id)
     products = Product.objects.all()
 
@@ -207,7 +224,9 @@ def manager_report_view(request):
 def day_start_view(request):
     employee = request.user.employee
     today_str = str(timezone.now().date())
-    
+    if DayStart.objects.filter(employee=employee, date=today).exists():
+        messages.warning(request, "Aapka aaj ka Day pehle hi Start ho chuka hai!")
+        return redirect('mr_dashboard')
     started_dates = DayStart.objects.filter(employee=employee).values_list('date', flat=True)
     ended_dates = DayEnd.objects.filter(employee=employee, is_closed=True).values_list('date', flat=True)
     pending_dates = sorted(list(set(started_dates) - set(ended_dates)))
