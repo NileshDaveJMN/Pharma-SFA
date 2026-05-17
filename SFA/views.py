@@ -154,7 +154,7 @@ def doctor_visit_view(request, doc_id):
             employee=employee, 
             date=today, 
             route=doctor.route, 
-            doctor=doctor
+            doctor=doctor,
             remark=remark_text
         )
 
