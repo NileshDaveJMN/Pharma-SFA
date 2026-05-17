@@ -99,6 +99,7 @@ def mr_dashboard_view(request):
 def day_end_view(request):
     employee = request.user.employee
     today = timezone.now().date()
+    
     if not DayStart.objects.filter(employee=employee, date=today).exists():
         messages.error(request, "Pehle Day Start karein, tabhi Day End hoga!")
         return redirect('mr_dashboard')
@@ -224,6 +225,7 @@ def manager_report_view(request):
 def day_start_view(request):
     employee = request.user.employee
     today_str = str(timezone.now().date())
+    today = timezone.now().date() 
     if DayStart.objects.filter(employee=employee, date=today).exists():
         messages.warning(request, "Aapka aaj ka Day pehle hi Start ho chuka hai!")
         return redirect('mr_dashboard')
