@@ -2,7 +2,7 @@
 from django.urls import path
 from rest_framework.authtoken.views import obtain_auth_token
 from . import views
-
+from django.shortcuts import redirect
 urlpatterns = [
     # APIs (Mobile App ke liye)
     path('api/doctors/', views.doctor_list_api, name='doctor-list'),
@@ -21,5 +21,5 @@ path('request/add-chemist/', views.add_chemist_view, name='add_chemist'),
 path('request/add-tp/', views.add_tour_program_view, name='add_tour_program'),
 path('view/', views.view_hub_view, name='view_hub'),
     path('visit/chemist/<int:chem_id>/', views.chemist_visit_view, name='chemist_visit'),
-
+path('', lambda request: redirect('login/')),
 ]
