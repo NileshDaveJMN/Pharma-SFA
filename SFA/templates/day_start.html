@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card p-4 shadow-sm border-0 mb-4 bg-white rounded-3">
+    <h4 class="text-primary fw-bold mb-3">🌅 Day Start</h4>
+    
+    {% if pending_dates %}
+    <div class="alert alert-danger shadow-sm">
+        <h6 class="fw-bold mb-1">⚠️ Pending DCRs!</h6>
+        <small class="d-block mb-2">Aapne in tarikhon ka Day End nahi kiya hai. Kripya pehle inhe poora karein:</small>
+        <div class="d-flex flex-wrap gap-2">
+            {% for p_date in pending_dates %}
+                <span class="badge bg-danger p-2">{{ p_date }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST">
+        {% csrf_token %}
+        
+        <div class="mb-3">
+            <label class="form-label text-muted small fw-bold">SELECT DATE</label>
+            <input type="date" class="form-control bg-light" name="date" value="{{ today_str }}" required>
+        </div>
+
+        <div class="mb-4">
+            <label class="form-label text-muted small fw-bold">SELECT TERRITORY (MTP)</label>
+            <select class="form-select bg-light" name="territory" required>
+                <option value="" disabled selected>-- Choose Territory --</option>
+                {% for terr in territories %}
+                    <option value="{{ terr.id }}">{{ terr.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100 fw-bold py-3 shadow">🚀 START MY DAY</button>
+    </form>
+</div>
+{% endblock %}

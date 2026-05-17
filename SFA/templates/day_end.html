@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card p-4 shadow-sm border-0 mb-4 bg-white rounded-3">
+    <div class="text-center mb-4">
+        <h4 class="text-danger fw-bold mb-1">🛑 Day End Summary</h4>
+        <small class="text-muted">{{ today }}</small>
+    </div>
+
+    <div class="row text-center mb-4">
+        <div class="col-4">
+            <h3 class="text-primary mb-0 fw-bold">{{ total_visits }}</h3>
+            <small class="text-muted" style="font-size: 0.75rem;">Total Visits</small>
+        </div>
+        <div class="col-4 border-start border-end">
+            <h3 class="text-dark mb-0 fw-bold">{{ total_samples }}</h3>
+            <small class="text-muted" style="font-size: 0.75rem;">Samples</small>
+        </div>
+        <div class="col-4">
+            <h3 class="text-success mb-0 fw-bold">{{ total_orders }}</h3>
+            <small class="text-muted" style="font-size: 0.75rem;">Orders</small>
+        </div>
+    </div>
+
+    {% if pending_docs_count > 0 and not day_closed %}
+        <div class="alert alert-warning text-center shadow-sm">
+            <h6 class="fw-bold mb-1">⚠️ Incomplete Route</h6>
+            <small>Aapke MTP route par abhi bhi <b>{{ pending_docs_count }} Doctors</b> ki visit baaki hai. Kya aap sach mein Day End karna chahte hain?</small>
+        </div>
+    {% elif not day_closed %}
+        <div class="alert alert-success text-center shadow-sm">
+            <h6 class="fw-bold mb-1">🎉 Perfect Day!</h6>
+            <small>Aapne route ke sabhi doctors cover kar liye hain.</small>
+        </div>
+    {% endif %}
+
+    {% if day_closed %}
+        <div class="alert alert-dark text-center fw-bold shadow-sm">
+            🔒 Aaj ka din lock ho chuka hai.
+        </div>
+    {% else %}
+        <form method="POST">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger w-100 fw-bold py-3 shadow" onclick="return confirm('Kya aap conform karna chahte hain? Final submit ke baad aaj ki entry nahi hogi.');">
+                🔒 CONFIRM DAY END
+            </button>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}

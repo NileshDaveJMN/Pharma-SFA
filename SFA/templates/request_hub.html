@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="mb-4">
+    <h4 class="fw-bold text-dark mb-1">➕ Request Hub</h4>
+    <small class="text-muted">Naya data add karne ya MTP submit karne ke liye select karein</small>
+</div>
+
+<div class="list-group shadow-sm border-0 rounded-3 overflow-hidden mb-4">
+    <a href="{% url 'add_tour_program' %}" class="list-group-item list-group-item-action d-flex align-items-center p-3">
+        <div class="fs-3 me-3">📅</div>
+        <div>
+            <h6 class="mb-0 fw-bold text-dark">Submit New Tour Program (MTP)</h6>
+            <small class="text-muted">Agli dates ke liye route plan bhejein</small>
+        </div>
+    </a>
+
+    <a href="{% url 'add_doctor' %}" class="list-group-item list-group-item-action d-flex align-items-center p-3">
+        <div class="fs-3 me-3">🧑‍⚕️</div>
+        <div>
+            <h6 class="mb-0 fw-bold text-dark">Add New Doctor</h6>
+            <small class="text-muted">Apne list mein naya doctor jodein</small>
+        </div>
+    </a>
+
+    <a href="{% url 'add_chemist' %}" class="list-group-item list-group-item-action d-flex align-items-center p-3">
+        <div class="fs-3 me-3">🧪</div>
+        <div>
+            <h6 class="mb-0 fw-bold text-dark">Add New Chemist</h6>
+            <small class="text-muted">Apne list mein naya chemist jodein</small>
+        </div>
+    </a>
+</div>
+{% endblock %}

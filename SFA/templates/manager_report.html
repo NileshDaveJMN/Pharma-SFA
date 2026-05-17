@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager Daily Report</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+    <nav class="navbar navbar-dark bg-dark sticky-top shadow-sm">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">📊 Daily Sales Report</span>
+            <span class="navbar-text text-white fw-bold">{{ today }}</span>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="card text-white bg-success mb-4 shadow border-0">
+            <div class="card-body text-center">
+                <h5 class="card-title mb-0">Total Orders Today</h5>
+                <h2 class="display-4 fw-bold mb-0">{{ grand_total_orders }}</h2>
+                <small>Company Wide Total</small>
+            </div>
+        </div>
+
+        <h6 class="text-muted px-1 mb-3">MR PERFORMANCE SUMMARY (TODAY)</h6>
+        
+        <div class="table-responsive shadow-sm bg-white rounded-3">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>MR Name</th>
+                        <th>Assigned Route</th>
+                        <th class="text-center">Total Visits Done</th>
+                        <th class="text-center">Total Samples Given</th>
+                        <th class="text-center">Total Orders Collected</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for report in mr_reports %}
+                    <tr>
+                        <td class="fw-bold text-primary">{{ report.employee__name }}</td>
+                        <td><span class="badge bg-light text-dark border">📍 {{ report.route__name }}</span></td>
+                        <td class="text-center fw-bold text-dark">{{ report.total_visits }}</td>
+                        <td class="text-center bg-light text-muted">{{ report.total_samples|default:"0" }}</td>
+                        <td class="text-center fw-bold text-success bg-light">{{ report.total_orders|default:"0" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">Aaj abhi tak kisi MR ne field visit start nahi ki hai.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+</body>
+</html>

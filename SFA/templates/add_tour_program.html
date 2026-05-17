@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card p-4 shadow-sm border-0 mb-4 bg-white rounded-3">
+    <h5 class="fw-bold text-primary mb-1">📅 Monthly MTP Builder</h5>
+    <small class="text-muted mb-4 d-block">Ek-ek karke dates aur routes list mein add karein, fir final submit karein.</small>
+    
+    <form method="POST" class="bg-light p-3 rounded border">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_draft">
+        
+        <div class="row g-2">
+            <div class="col-12 col-md-5">
+                <label class="form-label text-muted small fw-bold mb-1">SELECT DATE</label>
+                <input type="date" class="form-control" name="date" required>
+            </div>
+            <div class="col-12 col-md-5">
+                <label class="form-label text-muted small fw-bold mb-1">SELECT ROUTE</label>
+                <select class="form-select" name="route" required>
+                    <option value="" disabled selected>-- Choose Route --</option>
+                    {% for r in routes %}
+                        <option value="{{ r.id }}">{{ r.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-2 d-flex align-items-end mt-3 mt-md-0">
+                <button type="submit" class="btn btn-primary w-100 fw-bold">➕ Add</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+{% if draft_mtps %}
+<div class="card p-4 shadow-sm border-0 bg-white rounded-3 mb-4">
+    <h6 class="fw-bold text-dark mb-3">📝 Unsubmitted Plan (Drafts)</h6>
+    
+    <div class="list-group mb-4">
+        {% for tp in draft_mtps %}
+            <div class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                <div>
+                    <h6 class="mb-0 fw-bold text-primary">{{ tp.date|date:"d M, Y" }}</h6>
+                    <small class="text-muted">Route: {{ tp.route.name }}</small>
+                </div>
+                <form method="POST" class="m-0">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="delete_draft">
+                    <input type="hidden" name="tp_id" value="{{ tp.id }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger fw-bold">🗑️</button>
+                </form>
+            </div>
+        {% endfor %}
+    </div>
+
+    <form method="POST" onsubmit="return confirm('Kya poore mahine ka plan sahi hai? Submit hone ke baad edit nahi hoga.');">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="submit_final">
+        <button type="submit" class="btn btn-success w-100 fw-bold py-3 shadow">🚀 SUBMIT PLAN TO MANAGER</button>
+    </form>
+</div>
+{% endif %}
+{% endblock %}

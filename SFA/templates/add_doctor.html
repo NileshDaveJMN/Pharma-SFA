@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="card p-4 shadow-sm border-0 bg-white rounded-3">
+    <h5 class="fw-bold text-primary mb-3">🧑‍⚕️ Add New Doctor</h5>
+    <form method="POST">
+        {% csrf_token %}
+        <div class="mb-3">
+            <label class="form-label text-muted small fw-bold">DOCTOR NAME</label>
+            <input type="text" class="form-control bg-light" name="name" placeholder="Dr. Enter Name" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label text-muted small fw-bold">SPECIALTY</label>
+            <input type="text" class="form-control bg-light" name="specialty" placeholder="e.g. MD, GP, Cardiologist" required>
+        </div>
+        <div class="mb-3">
+            <label class="form-label text-muted small fw-bold">TERRITORY</label>
+            <select class="form-select bg-light" name="territory" required>
+                {% for t in territories %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="mb-4">
+            <label class="form-label text-muted small fw-bold">ROUTE</label>
+            <select class="form-select bg-light" name="route" required>
+                {% for r in routes %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary w-100 fw-bold py-3 shadow">Save Doctor</button>
+    </form>
+</div>
+{% endblock %}
