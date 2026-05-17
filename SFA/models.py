@@ -147,6 +147,7 @@ class DCR(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.SET_NULL, null=True, blank=True)
     chemist = models.ForeignKey(Chemist, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    remark = models.TextField(blank=True, null=True) 
 
     def __str__(self):
         target = self.doctor.name if self.doctor else (self.chemist.name if self.chemist else "Unknown")

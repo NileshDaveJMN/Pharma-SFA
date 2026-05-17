@@ -50,7 +50,13 @@ def mr_dashboard_view(request):
         return render(request, 'dashboard.html', {'error': 'Employee profile missing'})
 
     today = timezone.now().date()
-    day_closed = DayEnd.objects.filter(employee=employee, date=today, is_closed=True).exists()
+    
+    # 🔒 STRICT COMPLIANCE FLAGS
+    # Check karein kya aaj Day Start hua hai
+    is_day_started = DayStart.objects.filter(employee=employee, date=today).exists()
+    # Check karein kya aaj ka Day End (lock) ho chuka hai
+    is_day_ended = DayEnd.objects.filter(employee=employee, date=today, is_closed=True).exists()
+
     tp = TourProgram.objects.filter(employee=employee, date=today, status='Approved').first()
     
     route = None
@@ -82,7 +88,8 @@ def mr_dashboard_view(request):
         'visited_doctors': visited_doctors,
         'pending_chemists': pending_chemists,
         'visited_chemists': visited_chemists,
-        'day_closed': day_closed,
+        'is_day_started': is_day_started, # <-- Naya flag pass kiya
+        'is_day_ended': is_day_ended,     # <-- Naya flag pass kiya
         'tp': tp
     }
     return render(request, 'dashboard.html', context)
@@ -141,12 +148,14 @@ def doctor_visit_view(request, doc_id):
         return redirect('mr_dashboard')
 
     if request.method == "POST":
+        remark_text = request.POST.get('remark', '')
         # 1. Pehle aaj ki visit ka main record (DCR) banayein
         dcr, created = DCR.objects.get_or_create(
             employee=employee, 
             date=today, 
             route=doctor.route, 
             doctor=doctor
+            remark=remark_text
         )
 
         # 2. Har product ka form data check karein

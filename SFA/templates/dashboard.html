@@ -14,77 +14,83 @@
     </div>
 </div>
 
-{% if day_closed %}
-    <div class="alert alert-dark text-center fw-bold">🔒 Aaj ka kaam freeze ho chuka hai.</div>
-{% endif %}
+{% if is_day_ended %}
+    <div class="alert alert-dark text-center fw-bold mt-3 shadow-sm rounded-3 p-4">
+        <h1 class="display-4 mb-3">✅</h1>
+        🔒 Aaj ka kaam freeze ho chuka hai. Kal milte hain!
+    </div>
 
-{% if not tp %}
-    <div class="alert alert-warning text-center">Aaj aapka koi Tour Program approved nahi hai. Pehle Admin panel se TP approve karein.</div>
+{% elif not is_day_started %}
+    <div class="alert alert-warning text-center mt-4 shadow-sm border-0 bg-warning bg-opacity-10 p-4 rounded-3">
+        <h1 class="display-4 mb-3 text-warning">⚠️</h1>
+        <h5 class="fw-bold text-dark mb-2">Day Not Started</h5>
+        <p class="text-muted small mb-4">Visits shuru karne se pehle apna Day Start mark karein.</p>
+        <a href="{% url 'day_start' %}" class="btn btn-warning fw-bold px-4 py-3 shadow-sm text-dark w-100">🚀 Start Day Now</a>
+    </div>
+
 {% else %}
-
-    <h6 class="text-muted px-1 mt-3 text-uppercase small fw-bold">Available Doctors (Baki Hain)</h6>
-    <div class="list-group shadow-sm mb-4">
-        {% for doc in pending_doctors %}
-            <div class="list-group-item d-flex justify-content-between align-items-center p-3 bg-white">
-                <div>
-                    <h6 class="mb-0 fw-bold text-primary">Dr. {{ doc.name }}</h6>
-                    <small class="text-muted">{{ doc.specialty }}</small>
-                </div>
-                {% if not day_closed %}
+    {% if not tp %}
+        <div class="alert alert-warning text-center mt-3">Aaj aapka koi Tour Program approved nahi hai. Pehle Admin panel se TP approve karein.</div>
+    {% else %}
+        
+        <h6 class="text-muted px-1 mt-3 text-uppercase small fw-bold">Available Doctors (Baki Hain)</h6>
+        <div class="list-group shadow-sm mb-4">
+            {% for doc in pending_doctors %}
+                <div class="list-group-item d-flex justify-content-between align-items-center p-3 bg-white">
+                    <div>
+                        <h6 class="mb-0 fw-bold text-primary">Dr. {{ doc.name }}</h6>
+                        <small class="text-muted">{{ doc.specialty }}</small>
+                    </div>
                     <a href="{% url 'doctor_visit' doc.id %}" class="btn btn-sm btn-primary fw-bold shadow-sm px-3">Visit</a>
-                {% endif %}
-            </div>
-        {% empty %}
-            <div class="list-group-item text-muted text-center p-3 bg-white">🎉 Sabhi doctors ki visit ho chuki hai!</div>
-        {% endfor %}
-    </div>
-
-    {% if visited_doctors %}
-    <h6 class="text-success px-1 mt-3 text-uppercase small fw-bold">Visited Doctors (Ho Gaye)</h6>
-    <div class="list-group shadow-sm mb-4">
-        {% for doc in visited_doctors %}
-            <div class="list-group-item d-flex justify-content-between align-items-center p-3 bg-white opacity-75">
-                <div>
-                    <h6 class="mb-0 fw-bold text-secondary text-decoration-line-through">Dr. {{ doc.name }}</h6>
-                    <small class="text-muted">{{ doc.specialty }}</small>
                 </div>
-                <span class="badge bg-success rounded-pill px-3 py-2">✓ Done</span>
-            </div>
-        {% endfor %}
-    </div>
-    {% endif %}
+            {% empty %}
+                <div class="list-group-item text-muted text-center p-3 bg-white">🎉 Sabhi doctors ki visit ho chuki hai!</div>
+            {% endfor %}
+        </div>
 
-    <h6 class="text-muted px-1 text-uppercase small fw-bold">Available Chemists</h6>
-    <div class="list-group shadow-sm mb-4">
-        {% for chem in pending_chemists %}
-            <div class="list-group-item d-flex justify-content-between align-items-center p-3 bg-white">
-                <div>
-                    <h6 class="mb-0 fw-bold text-dark">{{ chem.name }}</h6>
-                    <small class="text-muted">Ph: {{ chem.phone }}</small>
+        {% if visited_doctors %}
+        <h6 class="text-success px-1 mt-3 text-uppercase small fw-bold">Visited Doctors (Ho Gaye)</h6>
+        <div class="list-group shadow-sm mb-4">
+            {% for doc in visited_doctors %}
+                <div class="list-group-item d-flex justify-content-between align-items-center p-3 bg-white opacity-75">
+                    <div>
+                        <h6 class="mb-0 fw-bold text-secondary text-decoration-line-through">Dr. {{ doc.name }}</h6>
+                        <small class="text-muted">{{ doc.specialty }}</small>
+                    </div>
+                    <span class="badge bg-success rounded-pill px-3 py-2">✓ Done</span>
                 </div>
-                {% if not day_closed %}
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <h6 class="text-muted px-1 text-uppercase small fw-bold">Available Chemists</h6>
+        <div class="list-group shadow-sm mb-4">
+            {% for chem in pending_chemists %}
+                <div class="list-group-item d-flex justify-content-between align-items-center p-3 bg-white">
+                    <div>
+                        <h6 class="mb-0 fw-bold text-dark">{{ chem.name }}</h6>
+                        <small class="text-muted">Ph: {{ chem.phone }}</small>
+                    </div>
                     <a href="{% url 'chemist_visit' chem.id %}" class="btn btn-sm btn-outline-dark fw-bold px-3">Visit</a>
-                {% endif %}
-            </div>
-        {% empty %}
-            <div class="list-group-item text-muted text-center p-3 bg-white">Sabhi chemists ki visit ho chuki hai!</div>
-        {% endfor %}
-    </div>
-
-    {% if visited_chemists %}
-    <h6 class="text-success px-1 text-uppercase small fw-bold">Visited Chemists</h6>
-    <div class="list-group shadow-sm mb-4">
-        {% for chem in visited_chemists %}
-            <div class="list-group-item d-flex justify-content-between align-items-center p-3 bg-white opacity-75">
-                <div>
-                    <h6 class="mb-0 fw-bold text-secondary text-decoration-line-through">{{ chem.name }}</h6>
-                    <small class="text-muted">Ph: {{ chem.phone }}</small>
                 </div>
-                <span class="badge bg-success rounded-pill px-3 py-2">✓ Done</span>
-            </div>
-        {% endfor %}
-    </div>
-    {% endif %}
+            {% empty %}
+                <div class="list-group-item text-muted text-center p-3 bg-white">Sabhi chemists ki visit ho chuki hai!</div>
+            {% endfor %}
+        </div>
 
-{% endif %}
-{% endblock %}
+        {% if visited_chemists %}
+        <h6 class="text-success px-1 text-uppercase small fw-bold">Visited Chemists</h6>
+        <div class="list-group shadow-sm mb-4">
+            {% for chem in visited_chemists %}
+                <div class="list-group-item d-flex justify-content-between align-items-center p-3 bg-white opacity-75">
+                    <div>
+                        <h6 class="mb-0 fw-bold text-secondary text-decoration-line-through">{{ chem.name }}</h6>
+                        <small class="text-muted">Ph: {{ chem.phone }}</small>
+                    </div>
+                    <span class="badge bg-success rounded-pill px-3 py-2">✓ Done</span>
+                </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+    {% endif %} {% endif %} {% endblock %}
