@@ -329,6 +329,10 @@ def add_tour_program_view(request):
         if action == 'add_draft':
             date = request.POST.get('date')
             route_id = request.POST.get('route')
+            existing_tp = TourProgram.objects.filter(employee=employee, date=date).first()
+            if existing_tp and existing_tp.status in ['Pending', 'Approved']:
+                messages.error(request, f"{date} ka Tour Program pehle hi '{existing_tp.status}' hai. Aap isme badlaav nahi kar sakte!")
+                return redirect('add_tour_program')
             if date and route_id:
                 TourProgram.objects.update_or_create(
                     employee=employee,
