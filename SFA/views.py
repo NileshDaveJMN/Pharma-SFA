@@ -52,48 +52,62 @@ def mr_dashboard_view(request):
 
     today = timezone.now().date()
     
-    # 🔒 STRICT COMPLIANCE FLAGS
-    # Check karein kya aaj Day Start hua hai
-    is_day_started = DayStart.objects.filter(employee=employee, date=today).exists()
-    # Check karein kya aaj ka Day End (lock) ho chuka hai
+    day_start = DayStart.objects.filter(employee=employee, date=today).first()
+    is_day_started = day_start is not None
     is_day_ended = DayEnd.objects.filter(employee=employee, date=today, is_closed=True).exists()
-
     tp = TourProgram.objects.filter(employee=employee, date=today, status='Approved').first()
+
+    # 🔥 NAYA LOGIC: Agar MR naya route add karne ki request (POST) bhejta hai
+    if request.method == "POST" and "add_extra_route" in request.POST:
+        new_route_id = request.POST.get('extra_route')
+        if new_route_id and day_start and not is_day_ended:
+            day_start.routes.add(new_route_id)
+            messages.success(request, "Extra route successfully add ho gaya!")
+        return redirect('mr_dashboard')
     
-    route = None
+    active_routes = []
+    available_routes = []
     pending_doctors = []
     visited_doctors = []
     pending_chemists = []
     visited_chemists = []
     
-    if tp:
-        route = tp.route
-        # 1. Aaj is MR ne jin Doctors/Chemists ko visit kar liya unki IDs nikalo
+    if is_day_started:
+        # DayStart mein add kiye gaye saare routes nikalo
+        active_routes = day_start.routes.all()
+        active_route_ids = active_routes.values_list('id', flat=True)
+        
+        # Extra routes ke dropdown ke liye wo routes bhejo jo abhi tak add nahi hue hain
+        my_all_route_ids = set(list(Doctor.objects.filter(allocated_to=employee).values_list('route_id', flat=True)) + list(Chemist.objects.filter(allocated_to=employee).values_list('route_id', flat=True)))
+        available_routes = Route.objects.filter(id__in=my_all_route_ids).exclude(id__in=active_route_ids)
+
         visited_doc_ids = set(DCR.objects.filter(employee=employee, date=today, doctor__isnull=False).values_list('doctor_id', flat=True))
         visited_chem_ids = set(DCR.objects.filter(employee=employee, date=today, chemist__isnull=False).values_list('chemist_id', flat=True))
         
-        # 2. Saare Doctors/Chemists ko do alag lists mein baant do (Pending aur Visited)
-        all_doctors = Doctor.objects.filter(allocated_to=employee, route=route)
+        # 🔥 NAYA LOGIC: Ab list ek route (tp.route) ki jagah saare active_routes se aayegi
+        all_doctors = Doctor.objects.filter(allocated_to=employee, route__in=active_routes)
         pending_doctors = [d for d in all_doctors if d.id not in visited_doc_ids]
         visited_doctors = [d for d in all_doctors if d.id in visited_doc_ids]
         
-        all_chemists = Chemist.objects.filter(allocated_to=employee, route=route)
+        all_chemists = Chemist.objects.filter(allocated_to=employee, route__in=active_routes)
         pending_chemists = [c for c in all_chemists if c.id not in visited_chem_ids]
         visited_chemists = [c for c in all_chemists if c.id in visited_chem_ids]
 
     context = {
         'employee': employee,
         'today': today,
-        'route': route,
+        'active_routes': active_routes,       # Naya variable
+        'available_routes': available_routes, # Dropdown ke liye
         'pending_doctors': pending_doctors,
         'visited_doctors': visited_doctors,
         'pending_chemists': pending_chemists,
         'visited_chemists': visited_chemists,
-        'is_day_started': is_day_started, # <-- Naya flag pass kiya
-        'is_day_ended': is_day_ended,     # <-- Naya flag pass kiya
+        'is_day_started': is_day_started, 
+        'is_day_ended': is_day_ended,     
         'tp': tp
     }
     return render(request, 'dashboard.html', context)
+
 
 @login_required(login_url='/login/')
 def day_end_view(request):
@@ -226,14 +240,15 @@ def day_start_view(request):
     employee = request.user.employee
     today_str = str(timezone.now().date())
     today = timezone.now().date() 
+    
     if DayStart.objects.filter(employee=employee, date=today).exists():
         messages.warning(request, "Aapka aaj ka Day pehle hi Start ho chuka hai!")
         return redirect('mr_dashboard')
+        
     started_dates = DayStart.objects.filter(employee=employee).values_list('date', flat=True)
     ended_dates = DayEnd.objects.filter(employee=employee, is_closed=True).values_list('date', flat=True)
     pending_dates = sorted(list(set(started_dates) - set(ended_dates)))
     
-    # 🔥 SMART FILTER: Sirf MR ki apni Territories
     doc_terr = Doctor.objects.filter(allocated_to=employee).values_list('territory_id', flat=True)
     chem_terr = Chemist.objects.filter(allocated_to=employee).values_list('territory_id', flat=True)
     my_territory_ids = set(list(doc_terr) + list(chem_terr))
@@ -245,11 +260,17 @@ def day_start_view(request):
         
         if selected_date and territory_id:
             territory = get_object_or_404(Territory, id=territory_id)
-            DayStart.objects.get_or_create(
+            day_start, created = DayStart.objects.get_or_create(
                 employee=employee,
                 date=selected_date,
                 defaults={'territory': territory}
             )
+            
+            # 🔥 NAYA LOGIC: Tour Plan ka route automatically add karo
+            tp = TourProgram.objects.filter(employee=employee, date=selected_date, status='Approved').first()
+            if tp and created:
+                day_start.routes.add(tp.route)
+                
             return redirect('mr_dashboard')
 
     context = {
@@ -258,6 +279,7 @@ def day_start_view(request):
         'pending_dates': pending_dates,
     }
     return render(request, 'day_start.html', context)
+
 
 # SFA/views.py ke sabse niche paste karein
 
@@ -385,28 +407,23 @@ def chemist_visit_view(request, chem_id):
     employee = request.user.employee
     today = timezone.now().date()
     
-    # Check karein ki aaj ka TP approved hai ya nahi
-    tp = TourProgram.objects.filter(employee=employee, date=today, status='Approved').first()
-    if not tp:
+    # 🔥 NAYA LOGIC: TP check karne ke bajaye DayStart check karein
+    if not DayStart.objects.filter(employee=employee, date=today).exists():
+        messages.error(request, "Visit shuru karne se pehle Day Start karein!")
         return redirect('mr_dashboard')
         
     products = Product.objects.all()
 
-    
     if request.method == "POST":
-        # 1. Chemist ke liye ek DCR entry banayein
         dcr = DCR.objects.create(
             employee=employee,
             date=today,
-            route=tp.route,
+            route=chemist.route, # Yahan pehle tp.route tha, usko chemist.route kar diya
             chemist=chemist
         )
         
-        # 2. Jo bhi order quantity aayi hai, use save karein
         for product in products:
             order_qty = request.POST.get(f'order_{product.id}', 0)
-            
-            # Chemist visit mein hum sample 0 aur detailed False rakh rahe hain
             if order_qty and int(order_qty) > 0:
                 DCRProductDetail.objects.create(
                     dcr=dcr,

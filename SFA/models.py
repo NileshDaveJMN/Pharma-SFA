@@ -180,6 +180,10 @@ class DayStart(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
     date = models.DateField()
     territory = models.ForeignKey(Territory, on_delete=models.CASCADE)
+    
+    # YEH NAYA FIELD ADD KARNA HAI:
+    routes = models.ManyToManyField(Route, blank=True, help_text="Planned and Extra Routes for the day")
+    
     started_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
