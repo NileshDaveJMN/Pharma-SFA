@@ -157,31 +157,45 @@ class DailyTourPlan(models.Model):
     def __str__(self):
         return f"{self.date} - {self.route.name}"
 
+# ==========================================
+# DCR (MASTER & DETAIL)
+# ==========================================
 
-class DCR(models.Model):
+# 1. MASTER TABLE (Ek din mein sirf ek banega)
+class DailyDCR(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
     date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('employee', 'date')
+
+    def __str__(self):
+        return f"{self.employee.name} | {self.date}"
+
+# 2. DETAIL TABLE (Iske andar saare Doctors aur Chemists aayenge, jinhe delete bhi kiya ja sakega)
+class DCRVisit(models.Model):
+    daily_dcr = models.ForeignKey(DailyDCR, on_delete=models.CASCADE, related_name='visits')
     route = models.ForeignKey(Route, on_delete=models.CASCADE)
-    # Doctor ya Chemist mein se koi ek select hoga visit ke waqt
     doctor = models.ForeignKey(Doctor, on_delete=models.SET_NULL, null=True, blank=True)
     chemist = models.ForeignKey(Chemist, on_delete=models.SET_NULL, null=True, blank=True)
+    remark = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    remark = models.TextField(blank=True, null=True) 
 
     def __str__(self):
         target = self.doctor.name if self.doctor else (self.chemist.name if self.chemist else "Unknown")
-        return f"{self.employee.name} | {self.date} | Visited: {target}"
+        return f"Visit: {target} on {self.daily_dcr.date}"
 
-
+# 3. PRODUCT DETAIL (Samples aur Orders)
 class DCRProductDetail(models.Model):
-    dcr = models.ForeignKey(DCR, on_delete=models.CASCADE, related_name='product_details')
+    visit = models.ForeignKey(DCRVisit, on_delete=models.CASCADE, related_name='product_details')
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    is_detailed = models.BooleanField(default=False) # Product samjhaya ya nahi
-    sample_qty = models.IntegerField(default=0)      # Kitne sample diye
-    order_qty = models.IntegerField(default=0)       # Kitna order mila (Rx/POBC)
+    is_detailed = models.BooleanField(default=False)
+    sample_qty = models.IntegerField(default=0)
+    order_qty = models.IntegerField(default=0)
 
     def __str__(self):
-        return f"{self.product.name} (D:{self.is_detailed}, S:{self.sample_qty}, O:{self.order_qty})"
+        return f"{self.product.name} (S:{self.sample_qty}, O:{self.order_qty})"
 
 
 class DayEnd(models.Model):

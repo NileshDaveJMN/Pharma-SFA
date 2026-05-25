@@ -2,8 +2,8 @@ from django.contrib import admin
 from .models import (
     Territory, Employee, Stockist, Chemist, Doctor, Product, 
     PrimarySale, SecondarySale, RCPA_Audit, Route, 
-    MonthlyTourProgram, DailyTourPlan, # Naye MTP models
-    DCR, DCRProductDetail, DayEnd, DayStart
+    MonthlyTourProgram, DailyTourPlan,
+    DailyDCR, DCRVisit, DCRProductDetail, DayEnd, DayStart
 )
 
 # Master Tables
@@ -82,10 +82,28 @@ class DCRProductDetailInline(admin.TabularInline):
     model = DCRProductDetail
     extra = 1
 
-@admin.register(DCR)
-class DCRAdmin(admin.ModelAdmin):
-    list_display = ('employee', 'date', 'route', 'doctor', 'chemist')
-    list_filter = ('date', 'employee', 'route')
+# ==========================================
+# DCR & DAY TRACKING (Master-Detail)
+# ==========================================
+
+class DCRVisitInline(admin.TabularInline):
+    model = DCRVisit
+    extra = 1
+
+@admin.register(DailyDCR)
+class DailyDCRAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'date')
+    list_filter = ('date', 'employee')
+    inlines = [DCRVisitInline] 
+
+class DCRProductDetailInline(admin.TabularInline):
+    model = DCRProductDetail
+    extra = 1
+
+@admin.register(DCRVisit)
+class DCRVisitAdmin(admin.ModelAdmin):
+    list_display = ('daily_dcr', 'doctor', 'chemist')
+    list_filter = ('daily_dcr__date', 'daily_dcr__employee')
     inlines = [DCRProductDetailInline] 
 
 @admin.register(DayEnd)

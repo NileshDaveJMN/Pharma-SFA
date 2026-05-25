@@ -11,7 +11,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 # Purana: from .models import Doctor, Chemist, TourProgram, DayEnd...
 # NAYA:
-from .models import Doctor, Chemist, DayEnd, Product, Route, DCR, DCRProductDetail, MonthlyTourProgram, DailyTourPlan
+from .models import (
+    Doctor, Chemist, DayEnd, DayStart, Product, Route, 
+    DailyDCR, DCRVisit, DCRProductDetail, 
+    MonthlyTourProgram, DailyTourPlan, Territory
+)
+
 
 from .serializers import DoctorSerializer
 @api_view(['GET'])
