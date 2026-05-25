@@ -1,20 +1,23 @@
 from django.contrib import admin
-from .models import Territory, Employee, Stockist, Chemist, Doctor, Product, PrimarySale, SecondarySale, RCPA_Audit, Route, TourProgram
-from .models import *
-
+from .models import (
+    Territory, Employee, Stockist, Chemist, Doctor, Product, 
+    PrimarySale, SecondarySale, RCPA_Audit, Route, 
+    MonthlyTourProgram, DailyTourPlan, # Naye MTP models
+    DCR, DCRProductDetail, DayEnd, DayStart
+)
 
 # Master Tables
 @admin.register(Route)
 class RouteAdmin(admin.ModelAdmin):
     list_display = ('name', 'territory')
     list_filter = ('territory',)
+
 @admin.register(Territory)
 class TerritoryAdmin(admin.ModelAdmin):
     list_display = ('name', 'city')
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
-    # Ab Admin panel mein Manager bhi dikhega
     list_display = ('name', 'employee_code', 'designation', 'manager', 'headquarter', 'phone')
     list_filter = ('designation', 'headquarter')
     search_fields = ('name', 'employee_code')
@@ -25,15 +28,18 @@ class StockistAdmin(admin.ModelAdmin):
 
 @admin.register(Chemist)
 class ChemistAdmin(admin.ModelAdmin):
-    list_display = ('name', 'territory', 'route', 'linked_stockist', 'allocated_to') # route add kiya
+    list_display = ('name', 'territory', 'route', 'linked_stockist', 'allocated_to')
     list_filter = ('territory', 'route', 'allocated_to')
+
 @admin.register(Doctor)
 class DoctorAdmin(admin.ModelAdmin):
-    list_display = ('name', 'specialty', 'territory', 'route', 'allocated_to') # route add kiya
+    list_display = ('name', 'specialty', 'territory', 'route', 'allocated_to')
     list_filter = ('territory', 'route', 'allocated_to')
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = ('name', 'pack_size', 'price')
+
 
 # Transaction Tables
 @admin.register(PrimarySale)
@@ -51,17 +57,27 @@ class RCPA_AuditAdmin(admin.ModelAdmin):
     list_display = ('date', 'employee', 'doctor', 'product', 'quantity_prescribed')
     list_filter = ('date', 'doctor', 'employee')
 
-@admin.register(TourProgram)
-class TourProgramAdmin(admin.ModelAdmin):
-    list_display = ('employee', 'date', 'route', 'status')
-    list_filter = ('status', 'date', 'employee')
-    list_editable = ('status',) # Boss yahin se seedha status change kar payega
-    date_hierarchy = 'date'
-    
-# SFA/admin.py ke sabse upar imports mein naye models add karein
-from .models import Territory, Route, Stockist, Employee, Chemist, Doctor, Product, PrimarySale, SecondarySale, TourProgram, DCR, DCRProductDetail, DayEnd
 
-# Ek visit ke andar hi saare products dikhane ke liye Inline classes use karenge
+# ==========================================
+# TOUR PROGRAM (Master & Detail Admin)
+# ==========================================
+
+class DailyTourPlanInline(admin.TabularInline):
+    model = DailyTourPlan
+    extra = 1
+
+@admin.register(MonthlyTourProgram)
+class MonthlyTourProgramAdmin(admin.ModelAdmin):
+    list_display = ('employee', 'month', 'year', 'status')
+    list_filter = ('status', 'month', 'year', 'employee')
+    list_editable = ('status',) # Boss yahin se seedha status change kar payega
+    inlines = [DailyTourPlanInline] # MTP ke andar hi us mahine ke saare routes dikhenge
+
+
+# ==========================================
+# DCR & DAY TRACKING
+# ==========================================
+
 class DCRProductDetailInline(admin.TabularInline):
     model = DCRProductDetail
     extra = 1
@@ -70,10 +86,11 @@ class DCRProductDetailInline(admin.TabularInline):
 class DCRAdmin(admin.ModelAdmin):
     list_display = ('employee', 'date', 'route', 'doctor', 'chemist')
     list_filter = ('date', 'employee', 'route')
-    inlines = [DCRProductDetailInline] # Isse visit ke andar hi products ka table dikhega
+    inlines = [DCRProductDetailInline] 
 
 @admin.register(DayEnd)
 class DayEndAdmin(admin.ModelAdmin):
     list_display = ('employee', 'date', 'is_closed', 'closed_at')
     list_filter = ('date', 'employee', 'is_closed')
+
 admin.site.register(DayStart)
