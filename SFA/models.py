@@ -118,7 +118,11 @@ class RCPA_Audit(models.Model):
     def __str__(self):
         return f"Dr. {self.doctor.name} -> {self.product.name} via {self.chemist.name}"
 
-class TourProgram(models.Model):
+# ==========================================
+# TOUR PROGRAM (MASTER & DETAIL)
+# ==========================================
+
+class MonthlyTourProgram(models.Model):
     STATUS_CHOICES = (
         ('Draft', 'Draft'),
         ('Pending', 'Pending Approval'),
@@ -127,17 +131,32 @@ class TourProgram(models.Model):
     )
     
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
-    date = models.DateField()
-    route = models.ForeignKey(Route, on_delete=models.CASCADE)
+    month = models.IntegerField(help_text="1 to 12 (e.g., 5 for May)")
+    year = models.IntegerField(help_text="e.g., 2026")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Draft')
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        # Ek MR ek din mein ek hi route ka plan bana sakta hai
-        unique_together = ('employee', 'date') 
+        # Ek MR ek mahine ka sirf ek hi MTP bana sakta hai
+        unique_together = ('employee', 'month', 'year')
 
     def __str__(self):
-        return f"{self.employee.name} | {self.date} | {self.route.name} ({self.status})"
-# SFA/models.py ke sabse neeche add karein
+        return f"{self.employee.name} | {self.month}/{self.year} ({self.status})"
+
+
+class DailyTourPlan(models.Model):
+    # Yeh model MTP master se juda hua hai (Master-Detail relationship)
+    mtp = models.ForeignKey(MonthlyTourProgram, on_delete=models.CASCADE, related_name='daily_plans')
+    date = models.DateField()
+    route = models.ForeignKey(Route, on_delete=models.CASCADE)
+
+    class Meta:
+        # Ek MTP ke andar ek date ek hi baar aayegi
+        unique_together = ('mtp', 'date')
+
+    def __str__(self):
+        return f"{self.date} - {self.route.name}"
+
 
 class DCR(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)

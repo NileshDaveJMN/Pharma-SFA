@@ -1,61 +1,110 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="card p-4 shadow-sm border-0 mb-4 bg-white rounded-3">
-    <h5 class="fw-bold text-primary mb-1">📅 Monthly MTP Builder</h5>
-    <small class="text-muted mb-4 d-block">Ek-ek karke dates aur routes list mein add karein, fir final submit karein.</small>
-    
-    <form method="POST" class="bg-light p-3 rounded border">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="add_draft">
-        
-        <div class="row g-2">
-            <div class="col-12 col-md-5">
-                <label class="form-label text-muted small fw-bold mb-1">SELECT DATE</label>
-                <input type="date" class="form-control" name="date" required>
-            </div>
-            <div class="col-12 col-md-5">
-                <label class="form-label text-muted small fw-bold mb-1">SELECT ROUTE</label>
-                <select class="form-select" name="route" required>
-                    <option value="" disabled selected>-- Choose Route --</option>
-                    {% for r in routes %}
-                        <option value="{{ r.id }}">{{ r.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-12 col-md-2 d-flex align-items-end mt-3 mt-md-0">
-                <button type="submit" class="btn btn-primary w-100 fw-bold">➕ Add</button>
-            </div>
-        </div>
-    </form>
-</div>
+<div class="container-fluid mb-4">
+    <h4 class="fw-bold mb-3">📅 Monthly Tour Program (MTP)</h4>
 
-{% if draft_mtps %}
-<div class="card p-4 shadow-sm border-0 bg-white rounded-3 mb-4">
-    <h6 class="fw-bold text-dark mb-3">📝 Unsubmitted Plan (Drafts)</h6>
-    
-    <div class="list-group mb-4">
-        {% for tp in draft_mtps %}
-            <div class="list-group-item d-flex justify-content-between align-items-center bg-light">
-                <div>
-                    <h6 class="mb-0 fw-bold text-primary">{{ tp.date|date:"d M, Y" }}</h6>
-                    <small class="text-muted">Route: {{ tp.route.name }}</small>
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <h6 class="text-primary fw-bold mb-3">1. Create New Month Plan</h6>
+            <form method="POST" class="row g-2">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="create_mtp">
+                
+                <div class="col-6">
+                    <select name="month" class="form-select" required>
+                        <option value="" disabled selected>-- Month --</option>
+                        <option value="1">January</option> <option value="2">February</option>
+                        <option value="3">March</option> <option value="4">April</option>
+                        <option value="5">May</option> <option value="6">June</option>
+                        <option value="7">July</option> <option value="8">August</option>
+                        <option value="9">September</option> <option value="10">October</option>
+                        <option value="11">November</option> <option value="12">December</option>
+                    </select>
                 </div>
-                <form method="POST" class="m-0">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="delete_draft">
-                    <input type="hidden" name="tp_id" value="{{ tp.id }}">
-                    <button type="submit" class="btn btn-sm btn-outline-danger fw-bold">🗑️</button>
-                </form>
-            </div>
-        {% endfor %}
+                <div class="col-3">
+                    <input type="number" name="year" class="form-control" value="{{ current_year }}" required>
+                </div>
+                <div class="col-3">
+                    <button type="submit" class="btn btn-primary w-100 fw-bold">Create</button>
+                </div>
+            </form>
+        </div>
     </div>
 
-    <form method="POST" onsubmit="return confirm('Kya poore mahine ka plan sahi hai? Submit hone ke baad edit nahi hoga.');">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="submit_final">
-        <button type="submit" class="btn btn-success w-100 fw-bold py-3 shadow">🚀 SUBMIT PLAN TO MANAGER</button>
-    </form>
+    {% for mtp in draft_mtps %}
+        <div class="card border-0 shadow-sm mb-4" style="border-top: 4px solid #ffc107 !important;">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold mb-0">Plan: {{ mtp.month }}/{{ mtp.year }}</h5>
+                    <span class="badge bg-warning text-dark">{{ mtp.status }}</span>
+                </div>
+
+                <form method="POST" class="row g-2 mb-3 bg-light p-2 rounded">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="add_daily_plan">
+                    <input type="hidden" name="mtp_id" value="{{ mtp.id }}">
+                    
+                    <div class="col-12 col-md-4">
+                        <input type="date" name="date" class="form-control" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <select name="route" class="form-select" required>
+                            <option value="" disabled selected>-- Select Route --</option>
+                            {% for route in routes %}
+                                <option value="{{ route.id }}">{{ route.name }} ({{ route.territory.name }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-2">
+                        <button type="submit" class="btn btn-success w-100">Add Day</button>
+                    </div>
+                </form>
+
+                {% if mtp.daily_plans.all %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Route</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for plan in mtp.daily_plans.all %}
+                                <tr>
+                                    <td>{{ plan.date|date:"d M, y" }}</td>
+                                    <td>{{ plan.route.name }}</td>
+                                    <td class="text-center">
+                                        <form method="POST" class="d-inline">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="delete_daily_plan">
+                                            <input type="hidden" name="plan_id" value="{{ plan.id }}">
+                                            <button type="submit" class="btn btn-sm btn-danger px-2 py-0">✕</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <form method="POST" class="mt-3 text-end">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="submit_mtp">
+                        <input type="hidden" name="mtp_id" value="{{ mtp.id }}">
+                        <button type="submit" class="btn btn-warning fw-bold px-4">Submit For Approval</button>
+                    </form>
+                {% else %}
+                    <p class="text-muted small text-center mb-0 mt-3">Koi date add nahi ki gayi hai.</p>
+                {% endif %}
+            </div>
+        </div>
+    {% empty %}
+        <div class="alert alert-info text-center shadow-sm">
+            Koi Draft MTP nahi hai. Naya Tour Program banane ke liye upar form ka use karein.
+        </div>
+    {% endfor %}
 </div>
-{% endif %}
 {% endblock %}

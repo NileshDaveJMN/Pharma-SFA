@@ -9,7 +9,10 @@ from django.contrib.auth.decorators import login_required
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from .models import Doctor, Chemist, TourProgram, DayEnd, Product, Route, DCR, DCRProductDetail
+# Purana: from .models import Doctor, Chemist, TourProgram, DayEnd...
+# NAYA:
+from .models import Doctor, Chemist, DayEnd, Product, Route, DCR, DCRProductDetail, MonthlyTourProgram, DailyTourPlan
+
 from .serializers import DoctorSerializer
 @api_view(['GET'])
 @permission_classes([IsAuthenticated]) # 🔒 Sirf login kiya hua banda hi dekh sakega
@@ -55,9 +58,11 @@ def mr_dashboard_view(request):
     day_start = DayStart.objects.filter(employee=employee, date=today).first()
     is_day_started = day_start is not None
     is_day_ended = DayEnd.objects.filter(employee=employee, date=today, is_closed=True).exists()
-    tp = TourProgram.objects.filter(employee=employee, date=today, status='Approved').first()
+    
+    # 🔥 NAYA LOGIC: MTP aur DailyPlan se data lana
+    daily_plan = DailyTourPlan.objects.filter(mtp__employee=employee, date=today, mtp__status='Approved').first()
+    tp = daily_plan # HTML template mein humne 'tp' use kiya hai, isliye iska naam wahi rakha.
 
-    # 🔥 NAYA LOGIC: Agar MR naya route add karne ki request (POST) bhejta hai
     if request.method == "POST" and "add_extra_route" in request.POST:
         new_route_id = request.POST.get('extra_route')
         if new_route_id and day_start and not is_day_ended:
@@ -73,18 +78,15 @@ def mr_dashboard_view(request):
     visited_chemists = []
     
     if is_day_started:
-        # DayStart mein add kiye gaye saare routes nikalo
         active_routes = day_start.routes.all()
         active_route_ids = active_routes.values_list('id', flat=True)
         
-        # Extra routes ke dropdown ke liye wo routes bhejo jo abhi tak add nahi hue hain
         my_all_route_ids = set(list(Doctor.objects.filter(allocated_to=employee).values_list('route_id', flat=True)) + list(Chemist.objects.filter(allocated_to=employee).values_list('route_id', flat=True)))
         available_routes = Route.objects.filter(id__in=my_all_route_ids).exclude(id__in=active_route_ids)
 
         visited_doc_ids = set(DCR.objects.filter(employee=employee, date=today, doctor__isnull=False).values_list('doctor_id', flat=True))
         visited_chem_ids = set(DCR.objects.filter(employee=employee, date=today, chemist__isnull=False).values_list('chemist_id', flat=True))
         
-        # 🔥 NAYA LOGIC: Ab list ek route (tp.route) ki jagah saare active_routes se aayegi
         all_doctors = Doctor.objects.filter(allocated_to=employee, route__in=active_routes)
         pending_doctors = [d for d in all_doctors if d.id not in visited_doc_ids]
         visited_doctors = [d for d in all_doctors if d.id in visited_doc_ids]
@@ -96,8 +98,8 @@ def mr_dashboard_view(request):
     context = {
         'employee': employee,
         'today': today,
-        'active_routes': active_routes,       # Naya variable
-        'available_routes': available_routes, # Dropdown ke liye
+        'active_routes': active_routes,
+        'available_routes': available_routes,
         'pending_doctors': pending_doctors,
         'visited_doctors': visited_doctors,
         'pending_chemists': pending_chemists,
@@ -108,7 +110,6 @@ def mr_dashboard_view(request):
     }
     return render(request, 'dashboard.html', context)
 
-
 @login_required(login_url='/login/')
 def day_end_view(request):
     employee = request.user.employee
@@ -118,35 +119,30 @@ def day_end_view(request):
         messages.error(request, "Pehle Day Start karein, tabhi Day End hoga!")
         return redirect('mr_dashboard')
 
-    # LOCK 2: Agar pehle hi Day End ho chuka hai, toh dobara na ho
     if DayEnd.objects.filter(employee=employee, date=today, is_closed=True).exists():
         messages.warning(request, "Aaj ka kaam pehle hi freeze ho chuka hai!")
         return redirect('mr_dashboard')
 
-    # 1. Check karein ki kya aaj ka din pehle hi lock ho chuka hai
     day_closed = DayEnd.objects.filter(employee=employee, date=today, is_closed=True).exists()
     
-    # 2. Agar button dabaya (POST request), toh lock kar do
     if request.method == "POST" and not day_closed:
         DayEnd.objects.get_or_create(employee=employee, date=today, defaults={'is_closed': True})
         return redirect('mr_dashboard')
         
-    # 3. Poore din ka Summary nikalein
     dcrs = DCR.objects.filter(employee=employee, date=today)
     total_visits = dcrs.count()
     
-    # Product details se sum nikalein
     samples_orders = DCRProductDetail.objects.filter(dcr__employee=employee, dcr__date=today).aggregate(
         t_samples=Sum('sample_qty'), t_orders=Sum('order_qty')
     )
     total_samples = samples_orders['t_samples'] or 0
     total_orders = samples_orders['t_orders'] or 0
     
-    # 4. Check karein ki koi Doctor chhut toh nahi gaya (Pending Visits)
-    tp = TourProgram.objects.filter(employee=employee, date=today, status='Approved').first()
+    # 🔥 NAYA LOGIC: MTP se pending docs count check karna
+    daily_plan = DailyTourPlan.objects.filter(mtp__employee=employee, date=today, mtp__status='Approved').first()
     pending_docs_count = 0
-    if tp:
-        all_docs = Doctor.objects.filter(allocated_to=employee, route=tp.route).count()
+    if daily_plan:
+        all_docs = Doctor.objects.filter(allocated_to=employee, route=daily_plan.route).count()
         visited_docs = dcrs.filter(doctor__isnull=False).count()
         pending_docs_count = max(0, all_docs - visited_docs)
 
@@ -158,7 +154,7 @@ def day_end_view(request):
         'total_orders': total_orders,
         'pending_docs_count': pending_docs_count
     }
-    return render(request, 'day_end.html', context)    
+    return render(request, 'day_end.html', context)
 
 @login_required(login_url='/login/')
 def doctor_visit_view(request, doc_id):
@@ -235,6 +231,7 @@ def manager_report_view(request):
     }
     return render(request, 'manager_report.html', context)
     
+
 @login_required(login_url='/login/')
 def day_start_view(request):
     employee = request.user.employee
@@ -266,10 +263,10 @@ def day_start_view(request):
                 defaults={'territory': territory}
             )
             
-            # 🔥 NAYA LOGIC: Tour Plan ka route automatically add karo
-            tp = TourProgram.objects.filter(employee=employee, date=selected_date, status='Approved').first()
-            if tp and created:
-                day_start.routes.add(tp.route)
+            # 🔥 NAYA LOGIC: DailyTourPlan se route add karna
+            daily_plan = DailyTourPlan.objects.filter(mtp__employee=employee, date=selected_date, mtp__status='Approved').first()
+            if daily_plan and created:
+                day_start.routes.add(daily_plan.route)
                 
             return redirect('mr_dashboard')
 
@@ -279,7 +276,6 @@ def day_start_view(request):
         'pending_dates': pending_dates,
     }
     return render(request, 'day_start.html', context)
-
 
 # SFA/views.py ke sabse niche paste karein
 
@@ -348,49 +344,69 @@ def add_tour_program_view(request):
     if request.method == "POST":
         action = request.POST.get('action')
         
-        if action == 'add_draft':
-            date = request.POST.get('date')
+        # 1. Naya Mahina (Master MTP) Create Karna
+        if action == 'create_mtp':
+            month = int(request.POST.get('month'))
+            year = int(request.POST.get('year'))
+            
+            if MonthlyTourProgram.objects.filter(employee=employee, month=month, year=year).exists():
+                messages.error(request, f"{month}/{year} ka MTP pehle hi ban chuka hai!")
+            else:
+                MonthlyTourProgram.objects.create(employee=employee, month=month, year=year, status='Draft')
+            return redirect('add_tour_program')
+            
+        # 2. MTP ke andar Daily Plan (Date + Route) add karna
+        elif action == 'add_daily_plan':
+            mtp_id = request.POST.get('mtp_id')
+            date_str = request.POST.get('date')
             route_id = request.POST.get('route')
-            existing_tp = TourProgram.objects.filter(employee=employee, date=date).first()
-            if existing_tp and existing_tp.status in ['Pending', 'Approved']:
-                messages.error(request, f"{date} ka Tour Program pehle hi '{existing_tp.status}' hai. Aap isme badlaav nahi kar sakte!")
+            
+            mtp = get_object_or_404(MonthlyTourProgram, id=mtp_id, employee=employee)
+            
+            if mtp.status != 'Draft':
+                messages.error(request, "Sirf Draft MTP mein hi routes add kar sakte hain.")
                 return redirect('add_tour_program')
-            if date and route_id:
-                TourProgram.objects.update_or_create(
-                    employee=employee,
-                    date=date,
-                    defaults={'route_id': route_id, 'status': 'Draft'}
-                )
+                
+            if DailyTourPlan.objects.filter(mtp=mtp, date=date_str).exists():
+                messages.error(request, f"{date_str} ka plan pehle hi add ho chuka hai.")
+            else:
+                DailyTourPlan.objects.create(mtp=mtp, date=date_str, route_id=route_id)
             return redirect('add_tour_program')
             
-        elif action == 'delete_draft':
-            tp_id = request.POST.get('tp_id')
-            TourProgram.objects.filter(id=tp_id, employee=employee, status='Draft').delete()
+        # 3. Galti se add ho gaya toh Daily Plan delete karna
+        elif action == 'delete_daily_plan':
+            plan_id = request.POST.get('plan_id')
+            DailyTourPlan.objects.filter(id=plan_id, mtp__employee=employee, mtp__status='Draft').delete()
             return redirect('add_tour_program')
             
-        elif action == 'submit_final':
-            TourProgram.objects.filter(employee=employee, status='Draft').update(status='Pending')
+        # 4. Final MTP Submit karna
+        elif action == 'submit_mtp':
+            mtp_id = request.POST.get('mtp_id')
+            MonthlyTourProgram.objects.filter(id=mtp_id, employee=employee, status='Draft').update(status='Pending')
+            messages.success(request, "Tour Program approval ke liye manager ko bhej diya gaya hai!")
             return redirect('request_hub')
 
-    draft_mtps = TourProgram.objects.filter(employee=employee, status='Draft').order_by('date')
+    # Sirf Draft MTPs bhejein taaki unme routes add kiye ja sakein
+    draft_mtps = MonthlyTourProgram.objects.filter(employee=employee, status='Draft').prefetch_related('daily_plans')
             
     context = {
         'routes': routes,
-        'draft_mtps': draft_mtps
+        'draft_mtps': draft_mtps,
+        'current_year': timezone.now().year
     }
     return render(request, 'add_tour_program.html', context)
 
-# SFA/views.py ke sabse niche add karein
 
+# SFA/views.py ke sabse niche add karein
 @login_required(login_url='/login/')
 def view_hub_view(request):
     employee = request.user.employee
     
-    my_tps = TourProgram.objects.filter(employee=employee).order_by('-date')
+    # 🔥 NAYA LOGIC: Ab TourProgram ki jagah MonthlyTourProgram aayega
+    my_tps = MonthlyTourProgram.objects.filter(employee=employee).order_by('-year', '-month')
     my_doctors = Doctor.objects.filter(allocated_to=employee)
     my_chemists = Chemist.objects.filter(allocated_to=employee)
     
-    # 🔥 SMART FILTER for View Tab
     my_terr_ids = set(list(my_doctors.values_list('territory_id', flat=True)) + list(my_chemists.values_list('territory_id', flat=True)))
     my_territories = Territory.objects.filter(id__in=my_terr_ids)
 
@@ -401,6 +417,8 @@ def view_hub_view(request):
         'my_territories': my_territories,
     }
     return render(request, 'view_hub.html', context)
+
+
 @login_required(login_url='/login/')
 def chemist_visit_view(request, chem_id):
     chemist = get_object_or_404(Chemist, id=chem_id)
