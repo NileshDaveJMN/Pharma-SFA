@@ -64,9 +64,8 @@ def mr_dashboard_view(request):
     is_day_started = day_start is not None
     is_day_ended = DayEnd.objects.filter(employee=employee, date=today, is_closed=True).exists()
     
-    # 🔥 NAYA LOGIC: MTP aur DailyPlan se data lana
     daily_plan = DailyTourPlan.objects.filter(mtp__employee=employee, date=today, mtp__status='Approved').first()
-    tp = daily_plan # HTML template mein humne 'tp' use kiya hai, isliye iska naam wahi rakha.
+    tp = daily_plan 
 
     if request.method == "POST" and "add_extra_route" in request.POST:
         new_route_id = request.POST.get('extra_route')
@@ -89,8 +88,14 @@ def mr_dashboard_view(request):
         my_all_route_ids = set(list(Doctor.objects.filter(allocated_to=employee).values_list('route_id', flat=True)) + list(Chemist.objects.filter(allocated_to=employee).values_list('route_id', flat=True)))
         available_routes = Route.objects.filter(id__in=my_all_route_ids).exclude(id__in=active_route_ids)
 
-        visited_doc_ids = set(DCR.objects.filter(employee=employee, date=today, doctor__isnull=False).values_list('doctor_id', flat=True))
-        visited_chem_ids = set(DCR.objects.filter(employee=employee, date=today, chemist__isnull=False).values_list('chemist_id', flat=True))
+        # 🔥 NAYA LOGIC: Yahan hum DailyDCR aur DCRVisit use kar rahe hain
+        daily_dcr = DailyDCR.objects.filter(employee=employee, date=today).first()
+        visited_doc_ids = set()
+        visited_chem_ids = set()
+        
+        if daily_dcr:
+            visited_doc_ids = set(daily_dcr.visits.filter(doctor__isnull=False).values_list('doctor_id', flat=True))
+            visited_chem_ids = set(daily_dcr.visits.filter(chemist__isnull=False).values_list('chemist_id', flat=True))
         
         all_doctors = Doctor.objects.filter(allocated_to=employee, route__in=active_routes)
         pending_doctors = [d for d in all_doctors if d.id not in visited_doc_ids]
@@ -114,6 +119,7 @@ def mr_dashboard_view(request):
         'tp': tp
     }
     return render(request, 'dashboard.html', context)
+
 
 @login_required(login_url='/login/')
 def day_end_view(request):
@@ -218,16 +224,14 @@ def doctor_visit_view(request, doc_id):
 def manager_report_view(request):
     today = timezone.now().date()
     
-    # 🔥 MR-Wise Grouping Logic: Ek MR ne total kitne calls kiye, kitna sample diya aur kitna order laya
-    mr_reports = DCR.objects.filter(date=today).values(
-        'employee__name', 'route__name'
-    ).annotate(
-        total_visits=Count('id'),
-        total_samples=Sum('product_details__sample_qty'),
-        total_orders=Sum('product_details__order_qty')
-    )
+    # 🔥 MR-Wise Grouping Logic with New Master-Detail DCR
+    mr_reports = DailyDCR.objects.filter(date=today).annotate(
+        total_visits=Count('visits'),
+        total_samples=Sum('visits__product_details__sample_qty'),
+        total_orders=Sum('visits__product_details__order_qty')
+    ).values('employee__name', 'total_visits', 'total_samples', 'total_orders')
     
-    grand_total_orders = DCRProductDetail.objects.filter(dcr__date=today).aggregate(total=Sum('order_qty'))['total'] or 0
+    grand_total_orders = DCRProductDetail.objects.filter(visit__daily_dcr__date=today).aggregate(total=Sum('order_qty'))['total'] or 0
 
     context = {
         'today': today,
@@ -235,7 +239,7 @@ def manager_report_view(request):
         'grand_total_orders': grand_total_orders
     }
     return render(request, 'manager_report.html', context)
-    
+
 
 @login_required(login_url='/login/')
 def day_start_view(request):
