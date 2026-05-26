@@ -8,6 +8,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+# NAYA DATABASE STRUCTURE IMPORT
 from .models import (
     Doctor, Chemist, DayEnd, DayStart, Product, Route, 
     DailyDCR, DCRVisit, DCRProductDetail, 
@@ -76,11 +77,13 @@ def mr_dashboard_view(request):
         my_all_route_ids = set(list(Doctor.objects.filter(allocated_to=employee).values_list('route_id', flat=True)) + list(Chemist.objects.filter(allocated_to=employee).values_list('route_id', flat=True)))
         available_routes = Route.objects.filter(id__in=my_all_route_ids).exclude(id__in=active_route_ids)
 
+        # NAYA DCR LOGIC
         daily_dcr = DailyDCR.objects.filter(employee=employee, date=today).first()
         visited_doc_ids = set()
         visited_chem_ids = set()
         
         if daily_dcr:
+            # Hum seedha Visit objects pass kar rahe hain jisse HTML me ID mil sake
             visited_docs = daily_dcr.visits.filter(doctor__isnull=False).select_related('doctor')
             visited_chems = daily_dcr.visits.filter(chemist__isnull=False).select_related('chemist')
             
@@ -176,7 +179,7 @@ def doctor_visit_view(request, doc_id):
     if request.method == "POST":
         remark_text = request.POST.get('remark', '')
         
-        # 🔥 FINAL FIX: Yahan ab DailyDCR aur DCRVisit use ho raha hai
+        # NAYA DCR VISITS LOGIC
         daily_dcr, _ = DailyDCR.objects.get_or_create(employee=employee, date=today)
 
         visit = DCRVisit.objects.create(
@@ -221,7 +224,7 @@ def chemist_visit_view(request, chem_id):
     products = Product.objects.all()
 
     if request.method == "POST":
-        # 🔥 FINAL FIX: Yahan ab DailyDCR aur DCRVisit use ho raha hai
+        # NAYA DCR VISITS LOGIC
         daily_dcr, _ = DailyDCR.objects.get_or_create(employee=employee, date=today)
         
         visit = DCRVisit.objects.create(
