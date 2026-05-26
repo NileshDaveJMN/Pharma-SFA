@@ -479,3 +479,24 @@ def view_dcr_report(request, dcr_id):
         'visits': daily_dcr.visits.all()
     }
     return render(request, 'view_dcr_report.html', context)
+    
+    # ==========================================
+# EMERGENCY DATA CLEANUP (Run only once)
+# ==========================================
+from django.http import HttpResponse
+
+@login_required(login_url='/login/')
+def clean_database_view(request):
+    # Sirf superuser ko hi data delete karne ki permission ho
+    if not request.user.is_superuser:
+        return HttpResponse("Aapke paas permission nahi hai.")
+        
+    try:
+        from .models import DailyDCR, DCRVisit, DCRProductDetail
+        # Order zaroori hai (pehle child, phir parent)
+        DCRProductDetail.objects.all().delete()
+        DCRVisit.objects.all().delete()
+        DailyDCR.objects.all().delete()
+        return HttpResponse("SUCCESS! Saara corrupt DCR data delete ho gaya hai. Ab aap Admin panel aur Dashboard check kar sakte hain.")
+    except Exception as e:
+        return HttpResponse(f"ERROR aagaya: {str(e)}")
