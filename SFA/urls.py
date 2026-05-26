@@ -21,6 +21,5 @@ path('request/add-chemist/', views.add_chemist_view, name='add_chemist'),
 path('request/add-tp/', views.add_tour_program_view, name='add_tour_program'),
 path('view/', views.view_hub_view, name='view_hub'),
     path('visit/chemist/<int:chem_id>/', views.chemist_visit_view, name='chemist_visit'),
-    path('emergency-clean-data/', views.clean_database_view, name='clean_data'),
 path('', lambda request: redirect('login/')),
 ]
