@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.utils import timezone
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Prefetch
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
@@ -8,7 +8,6 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-# NAYA DATABASE STRUCTURE IMPORT
 from .models import (
     Doctor, Chemist, DayEnd, DayStart, Product, Route, 
     DailyDCR, DCRVisit, DCRProductDetail, 
@@ -49,11 +48,12 @@ def mr_dashboard_view(request):
 
     today = timezone.now().date()
     
-    day_start = DayStart.objects.filter(employee=employee, date=today).first()
+    # 🔥 OPTIMIZATION 1: Prefetch routes
+    day_start = DayStart.objects.prefetch_related('routes').filter(employee=employee, date=today).first()
     is_day_started = day_start is not None
     is_day_ended = DayEnd.objects.filter(employee=employee, date=today, is_closed=True).exists()
     
-    daily_plan = DailyTourPlan.objects.filter(mtp__employee=employee, date=today, mtp__status='Approved').first()
+    daily_plan = DailyTourPlan.objects.select_related('route').filter(mtp__employee=employee, date=today, mtp__status='Approved').first()
     tp = daily_plan 
 
     if request.method == "POST" and "add_extra_route" in request.POST:
@@ -72,28 +72,31 @@ def mr_dashboard_view(request):
     
     if is_day_started:
         active_routes = day_start.routes.all()
-        active_route_ids = active_routes.values_list('id', flat=True)
+        active_route_ids = [r.id for r in active_routes]
         
         my_all_route_ids = set(list(Doctor.objects.filter(allocated_to=employee).values_list('route_id', flat=True)) + list(Chemist.objects.filter(allocated_to=employee).values_list('route_id', flat=True)))
         available_routes = Route.objects.filter(id__in=my_all_route_ids).exclude(id__in=active_route_ids)
 
-        # NAYA DCR LOGIC
-        daily_dcr = DailyDCR.objects.filter(employee=employee, date=today).first()
+        # 🔥 OPTIMIZATION 2: Ek hi query mein DCR, Visits aur Doctors/Chemists le aao
+        daily_dcr = DailyDCR.objects.prefetch_related('visits__doctor', 'visits__chemist').filter(employee=employee, date=today).first()
+        
         visited_doc_ids = set()
         visited_chem_ids = set()
         
         if daily_dcr:
-            # Hum seedha Visit objects pass kar rahe hain jisse HTML me ID mil sake
-            visited_docs = daily_dcr.visits.filter(doctor__isnull=False).select_related('doctor')
-            visited_chems = daily_dcr.visits.filter(chemist__isnull=False).select_related('chemist')
+            # Code fast karne ke liye list comprehension
+            all_visits = list(daily_dcr.visits.all())
+            visited_docs = [v for v in all_visits if v.doctor]
+            visited_chems = [v for v in all_visits if v.chemist]
             
-            visited_doc_ids = set(visited_docs.values_list('doctor_id', flat=True))
-            visited_chem_ids = set(visited_chems.values_list('chemist_id', flat=True))
+            visited_doc_ids = {v.doctor_id for v in visited_docs if v.doctor_id}
+            visited_chem_ids = {v.chemist_id for v in visited_chems if v.chemist_id}
         
-        all_doctors = Doctor.objects.filter(allocated_to=employee, route__in=active_routes)
+        # 🔥 OPTIMIZATION 3: Doctors aur Chemists ek sath le aao
+        all_doctors = Doctor.objects.select_related('route').filter(allocated_to=employee, route__in=active_routes)
         pending_doctors = [d for d in all_doctors if d.id not in visited_doc_ids]
         
-        all_chemists = Chemist.objects.filter(allocated_to=employee, route__in=active_routes)
+        all_chemists = Chemist.objects.select_related('route').filter(allocated_to=employee, route__in=active_routes)
         pending_chemists = [c for c in all_chemists if c.id not in visited_chem_ids]
 
     context = {
@@ -127,6 +130,7 @@ def day_end_view(request):
         DayEnd.objects.get_or_create(employee=employee, date=today, defaults={'is_closed': True})
         return redirect('mr_dashboard')
         
+    # 🔥 OPTIMIZATION 4: Day End ki counting fast karein
     daily_dcr = DailyDCR.objects.filter(employee=employee, date=today).first()
     
     total_visits = 0
@@ -135,10 +139,10 @@ def day_end_view(request):
     pending_docs_count = 0
 
     if daily_dcr:
-        visits = daily_dcr.visits.all()
-        total_visits = visits.count()
+        total_visits = daily_dcr.visits.count()
         
-        samples_orders = DCRProductDetail.objects.filter(visit__in=visits).aggregate(
+        # Ek hi query mein samples aur order ginna
+        samples_orders = DCRProductDetail.objects.filter(visit__daily_dcr=daily_dcr).aggregate(
             t_samples=Sum('sample_qty'), t_orders=Sum('order_qty')
         )
         total_samples = samples_orders['t_samples'] or 0
@@ -179,7 +183,6 @@ def doctor_visit_view(request, doc_id):
     if request.method == "POST":
         remark_text = request.POST.get('remark', '')
         
-        # NAYA DCR VISITS LOGIC
         daily_dcr, _ = DailyDCR.objects.get_or_create(employee=employee, date=today)
 
         visit = DCRVisit.objects.create(
@@ -224,7 +227,6 @@ def chemist_visit_view(request, chem_id):
     products = Product.objects.all()
 
     if request.method == "POST":
-        # NAYA DCR VISITS LOGIC
         daily_dcr, _ = DailyDCR.objects.get_or_create(employee=employee, date=today)
         
         visit = DCRVisit.objects.create(
@@ -256,8 +258,9 @@ def chemist_visit_view(request, chem_id):
 def manager_report_view(request):
     today = timezone.now().date()
     
-    mr_reports = DailyDCR.objects.filter(date=today).annotate(
-        total_visits=Count('visits'),
+    # 🔥 OPTIMIZATION 5: Manager report speed fix
+    mr_reports = DailyDCR.objects.filter(date=today).select_related('employee').annotate(
+        total_visits=Count('visits', distinct=True),
         total_samples=Sum('visits__product_details__sample_qty'),
         total_orders=Sum('visits__product_details__order_qty')
     ).values('employee__name', 'total_visits', 'total_samples', 'total_orders')
@@ -366,7 +369,12 @@ def add_chemist_view(request):
 
 @login_required(login_url='/login/')
 def add_tour_program_view(request):
-    employee = request.user.employee
+    # Error proofing jo pehle lagayi thi
+    try:
+        employee = request.user.employee
+    except Exception:
+        messages.error(request, "Aapke user account ke sath koi Employee profile link nahi hai.")
+        return redirect('mr_dashboard')
     
     doc_routes = Doctor.objects.filter(allocated_to=employee).values_list('route_id', flat=True)
     chem_routes = Chemist.objects.filter(allocated_to=employee).values_list('route_id', flat=True)
@@ -446,9 +454,6 @@ def view_hub_view(request):
     }
     return render(request, 'view_hub.html', context)
 
-# ==========================================
-# DELETE VISIT FUNCTION
-# ==========================================
 @login_required(login_url='/login/')
 def delete_visit_view(request, visit_id):
     employee = request.user.employee
@@ -466,37 +471,18 @@ def delete_visit_view(request, visit_id):
     messages.success(request, f"{target} ki visit successfully delete ho gayi.")
     return redirect('mr_dashboard')
 
-# ==========================================
-# VIEW DCR REPORT
-# ==========================================
 @login_required(login_url='/login/')
 def view_dcr_report(request, dcr_id):
     employee = request.user.employee
-    daily_dcr = get_object_or_404(DailyDCR.objects.prefetch_related('visits__product_details__product', 'visits__doctor', 'visits__chemist'), id=dcr_id, employee=employee)
+    # 🔥 OPTIMIZATION 6: Report dekhne ki speed theek karna
+    daily_dcr = get_object_or_404(
+        DailyDCR.objects.prefetch_related('visits__product_details__product', 'visits__doctor', 'visits__chemist'), 
+        id=dcr_id, 
+        employee=employee
+    )
     
     context = {
         'daily_dcr': daily_dcr,
         'visits': daily_dcr.visits.all()
     }
     return render(request, 'view_dcr_report.html', context)
-    
-    # ==========================================
-# EMERGENCY DATA CLEANUP (Run only once)
-# ==========================================
-from django.http import HttpResponse
-
-@login_required(login_url='/login/')
-def clean_database_view(request):
-    # Sirf superuser ko hi data delete karne ki permission ho
-    if not request.user.is_superuser:
-        return HttpResponse("Aapke paas permission nahi hai.")
-        
-    try:
-        from .models import DailyDCR, DCRVisit, DCRProductDetail
-        # Order zaroori hai (pehle child, phir parent)
-        DCRProductDetail.objects.all().delete()
-        DCRVisit.objects.all().delete()
-        DailyDCR.objects.all().delete()
-        return HttpResponse("SUCCESS! Saara corrupt DCR data delete ho gaya hai. Ab aap Admin panel aur Dashboard check kar sakte hain.")
-    except Exception as e:
-        return HttpResponse(f"ERROR aagaya: {str(e)}")
