@@ -1049,7 +1049,13 @@ from django.shortcuts import render, redirect
 from django.conf import settings
 import os
 # 🌟 IMPORTS ADD KARO
-from fcm_sender import send_fcm_push 
+# 🌟 PERMANENT FIX: Agar file server par na ho, toh fake function bana do
+try:
+    from fcm_sender import send_fcm_push
+except ImportError:
+    def send_fcm_push(*args, **kwargs):
+        print("FCM Sender not available on this server. Skipping push.")
+        pass
 from SFA.models import DeviceToken, CompanyNotice, SystemNotification
 from SFA.decorators import employee_required
 
