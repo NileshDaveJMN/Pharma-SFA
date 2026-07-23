@@ -14,3 +14,7 @@ charset-normalizer==3.4.7
 dj-database-url==3.1.2
 psycopg[binary]
 whitenoise==6.8.2
+gunicorn
+psycopg2-binary
+dj-database-url
+whitenoise
