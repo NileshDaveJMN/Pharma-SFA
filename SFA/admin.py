@@ -94,20 +94,14 @@ class TerritoryAdmin(AssignCompanyMixin, admin.ModelAdmin):
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
-    # 🌟 Naye fields list_display me add kiye (is_active)
     list_display = ('id', 'name', 'employee_code', 'designation', 'is_active', 'manager', 'headquarter', 'joining_date')
-    
-    # 🌟 Naya filter (Active/Inactive)
     list_filter = ('is_active', 'designation', 'headquarter')
     search_fields = ('name', 'employee_code', 'user__username')
-    
-    # Optional: is_active ko bahar grid se hi click karke change karne ki permission
     list_editable = ('is_active',) 
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('manager', 'headquarter', 'user')
 
-    # 🛑 ADMIN ACTION: Ek click mein Soft-Delete / Deactivate karein
     actions = ['deactivate_employees']
 
     @admin.action(description='Mark selected employees as Inactive (Block Login)')
@@ -117,12 +111,10 @@ class EmployeeAdmin(admin.ModelAdmin):
         updated_count = 0
         for emp in queryset:
             if emp.is_active:
-                # 1. Employee ko inactive karo
                 emp.is_active = False
                 emp.leaving_date = timezone.now().date()
                 emp.save()
                 
-                # 2. Django User (Login) ko bhi block karo
                 if emp.user:
                     emp.user.is_active = False
                     emp.user.save()
@@ -239,32 +231,30 @@ class DailyDCRAdmin(admin.ModelAdmin):
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('employee')
 
-    # 1. Single Delete Override
     def delete_model(self, request, obj):
         with transaction.atomic():
             emp = obj.employee
             target_date = obj.date
             for visit in obj.visits.all():
-                reverse_visit_inventory(visit)  # 🔄 Inventory + ROI wapas reverse karo
+                reverse_visit_inventory(visit)
             DayStart.objects.filter(employee=emp, date=target_date).delete()
             DayEnd.objects.filter(employee=emp, date=target_date).delete()
-            DailyExpense.objects.filter(employee=emp, date=target_date).delete()  # 🔥 EXPENSE BHI DELETE HOGA
-            DailyDCRStatus.objects.filter(employee=emp, date=target_date).delete() # 🌟 NAYA: STATUS BHI DELETE HOGA!
+            DailyExpense.objects.filter(employee=emp, date=target_date).delete()
+            DailyDCRStatus.objects.filter(employee=emp, date=target_date).delete()
             obj.visits.all().delete()
             super().delete_model(request, obj)
 
-    # 2. Bulk Delete Override
     def delete_queryset(self, request, queryset):
         with transaction.atomic():
             for obj in queryset:
                 emp = obj.employee
                 target_date = obj.date
                 for visit in obj.visits.all():
-                    reverse_visit_inventory(visit)  # 🔄 Inventory + ROI wapas reverse karo
+                    reverse_visit_inventory(visit)
                 DayStart.objects.filter(employee=emp, date=target_date).delete()
                 DayEnd.objects.filter(employee=emp, date=target_date).delete()
-                DailyExpense.objects.filter(employee=emp, date=target_date).delete()  # 🔥 EXPENSE BHI DELETE HOGA
-                DailyDCRStatus.objects.filter(employee=emp, date=target_date).delete() # 🌟 NAYA: STATUS BHI DELETE HOGA!
+                DailyExpense.objects.filter(employee=emp, date=target_date).delete()
+                DailyDCRStatus.objects.filter(employee=emp, date=target_date).delete()
                 obj.visits.all().delete()
             super().delete_queryset(request, queryset)
 
@@ -291,8 +281,6 @@ class DCRVisitAdmin(admin.ModelAdmin):
         return obj.doctor.name if obj.doctor else obj.chemist.name
     target_name.short_description = 'Doctor/Chemist'
 
-    # 🔄 Agar koi visit yahan se DIRECTLY delete ho (DailyDCR ke through nahi),
-    # to bhi inventory/ROI sahi se reverse hona chahiye.
     def delete_model(self, request, obj):
         with transaction.atomic():
             reverse_visit_inventory(obj)
@@ -454,8 +442,6 @@ admin.site.register(SystemNotification)
 admin.site.register(DirectMessage)
 
 from SFA.models import SystemSetting
-
-# admin.py ke top imports mein DailyDCRStatus add kar lena
 from .models import DailyDCRStatus
 
 # ==========================================
@@ -465,7 +451,7 @@ from .models import DailyDCRStatus
 class DailyDCRStatusAdmin(admin.ModelAdmin):
     list_display = ('employee', 'date', 'day_type', 'is_open', 'is_submitted', 'is_admin_unlocked', 'unlocked_until')
     list_filter = ('is_open', 'is_submitted', 'is_admin_unlocked', 'date', 'employee')
-    list_editable = ('is_open', 'is_admin_unlocked') # 🌟 Yahan se Admin seedha Tick karke unlock karega! (1 din ke liye valid rahega)
+    list_editable = ('is_open', 'is_admin_unlocked')
     search_fields = ('employee__name',)
     ordering = ('-date', 'employee')
 
@@ -479,7 +465,8 @@ class SystemSettingAdmin(AssignCompanyMixin, admin.ModelAdmin):
     
     fieldsets = (
         ('General & App Settings', {
-            'fields': ('allow_location_capture', 'enable_offline_mode', 'strict_geofence_for_backdate'),
+            # 🌟 FIX: 'company' ko yahan add kar diya gaya hai
+            'fields': ('company', 'allow_location_capture', 'enable_offline_mode', 'strict_geofence_for_backdate'),
         }),
         ('Deadlines (Numeric Rules)', {
             'fields': ('dcr_lock_days', 'mtp_approval_deadline_day', 'expense_submit_deadline_day', 'sale_upload_deadline_day', 'free_claim_deadline_day', 'target_approval_deadline_day'),
@@ -496,6 +483,7 @@ class SystemSettingAdmin(AssignCompanyMixin, admin.ModelAdmin):
     def has_add_permission(self, request):
         if self.model.objects.exists(): return False
         return super().has_add_permission(request)
+
 class FreeQtyClaimLineInline(admin.TabularInline):
     model = FreeQtyClaimLine
     extra = 0
