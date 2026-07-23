@@ -1,0 +1,53 @@
+{% extends 'base.html' %}{% block content %}
+<div class="container-fluid p-0 mb-2 mt-2">
+    <a href="{% url 'view_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-1 rounded-3 border bg-white text-secondary"><span class="fs-5 fw-bold">⬅️</span></a>
+    <div class="d-flex align-items-center mb-2 px-2"><h5 class="fw-bold text-dark mb-0" style="font-size: 1.2rem;">🪑 Vacancy Status</h5></div>
+    <div class="mx-2">
+        {% if vacancy_data %}
+        <div class="alert alert-warning border-warning shadow-sm py-2 mb-2" style="border-radius: 10px; font-size: 0.75rem;">
+            <strong class="text-dark"><i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> {{ vacancy_data|length }} position{{ vacancy_data|length|pluralize }} abhi vacant hai{{ vacancy_data|length|pluralize:"," }}.
+        </div>
+
+        {% for v in vacancy_data %}
+        <div class="card border-0 shadow-sm bg-white mb-2" style="border-radius: 10px; border-top: 4px solid #ffc107 !important;">
+            <div class="card-body p-2">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div>
+                        <span class="fw-bold text-dark" style="font-size: 0.9rem;">{{ v.employee.designation }}</span>
+                        <span class="text-muted" style="font-size: 0.75rem;"> — {{ v.employee.headquarter.name|default:"No HQ" }}</span>
+                    </div>
+                    <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">VACANT</span>
+                </div>
+                <div class="text-muted mb-2" style="font-size: 0.7rem;">{{ v.employee.name }}</div>
+                <div class="row g-2 text-center">
+                    <div class="col-4">
+                        <div class="p-1 border border-primary border-opacity-25 rounded-3" style="background: #f0f8ff;">
+                            <div class="fw-bold text-dark" style="font-size: 0.95rem;">{{ v.doc_count }}</div>
+                            <div class="text-muted" style="font-size: 0.55rem; letter-spacing: 0.5px;">DOCTORS</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-1 border border-success border-opacity-25 rounded-3" style="background: #f0fff4;">
+                            <div class="fw-bold text-dark" style="font-size: 0.95rem;">{{ v.chem_count }}</div>
+                            <div class="text-muted" style="font-size: 0.55rem; letter-spacing: 0.5px;">CHEMISTS</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-1 border border-secondary border-opacity-25 rounded-3" style="background: #f8f9fa;">
+                            <div class="fw-bold text-dark" style="font-size: 0.95rem;">{{ v.team_count }}</div>
+                            <div class="text-muted" style="font-size: 0.55rem; letter-spacing: 0.5px;">TEAM</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% else %}
+        <div class="alert alert-success border-success shadow-sm py-3 mb-2 text-center" style="border-radius: 10px; font-size: 0.85rem;">
+            <i class="bi bi-check-circle-fill me-1"></i> Koi vacancy nahi hai — sab positions filled hain! 🎉
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

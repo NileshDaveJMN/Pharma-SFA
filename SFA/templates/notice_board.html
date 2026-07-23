@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mb-5 mt-2 p-0">
+
+    <!-- Header -->
+    <div class="d-flex align-items-center gap-2 mb-4 px-2">
+        <a href="{% url 'view_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-1 rounded-3 border bg-white text-secondary">⬅️</a>
+        <div>
+            <h4 class="fw-bold text-dark mb-0">📢 Notice Board</h4>
+            <small class="text-muted small">Company updates aur important alerts.</small>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 🚨 ADMIN BROADCAST PANEL (Sirf Admin ko dikhega) -->
+    <!-- ========================================== -->
+    {% if request.user.employee.designation == 'System Administrator' or request.user.employee.designation == 'Admin' %}
+    <div class="card border-0 shadow-sm mx-2 mb-4 bg-white" style="border-top: 4px solid #dc3545;">
+        <div class="card-body p-3">
+            <h6 class="fw-bold text-danger mb-3"><i class="bi bi-megaphone-fill me-1"></i> Broadcast New Notice</h6>
+            <form method="POST">
+                {% csrf_token %}
+                <div class="mb-2">
+                    <label class="form-label small fw-bold text-secondary mb-1">Notice Title</label>
+                    <input type="text" name="title" class="form-control bg-light" required placeholder="E.g., Monthly Sales Meeting">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-secondary mb-1">Detailed Message</label>
+                    <!-- 🔥 Yahan 'body' name use kiya hai kyunki aapke model me wahi hai -->
+                    <textarea name="body" class="form-control bg-light" rows="2" required placeholder="Type your broadcast message here..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-danger w-100 fw-bold shadow-sm py-2">
+                    📢 Broadcast to All
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ========================================== -->
+    <!-- 📜 PAST NOTICES (Sabko dikhega) -->
+    <!-- ========================================== -->
+    <div class="px-2 mb-4">
+        <h6 class="fw-bold text-secondary mb-3 border-bottom pb-1" style="font-size: 0.85rem;">📋 PAST NOTICES</h6>
+        
+        <div class="d-flex flex-column gap-3">
+            {% for notice in notices %}
+                <div class="card border-0 shadow-sm bg-white" style="border-radius: 10px; border-left: 4px solid #0d6efd !important;">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="fw-bold text-dark mb-0" style="font-size: 0.95rem;">{{ notice.title }}</h6>
+                            <small class="text-muted" style="font-size: 0.7rem;">{{ notice.created_at|date:"d M, Y" }}</small>
+                        </div>
+                        <p class="mb-1 text-secondary" style="font-size: 0.85rem; white-space: pre-wrap; line-height: 1.4;">{{ notice.body }}</p>
+                        <div class="text-end mt-2">
+                            <span class="badge bg-light text-secondary border" style="font-size: 0.65rem;">By: {{ notice.created_by.name }}</span>
+                        </div>
+                    </div>
+                </div>
+            {% empty %}
+                <div class="alert alert-light text-center text-muted py-4 border-0 shadow-sm rounded-3">
+                    <span class="fs-1 d-block mb-2">📭</span>
+                    <p class="small text-muted mb-0">Koi notice available nahi hai.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

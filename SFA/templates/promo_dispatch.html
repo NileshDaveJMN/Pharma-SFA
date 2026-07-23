@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4 mb-5">
+    
+    <!-- Header -->
+    <div class="d-flex align-items-center gap-2 mb-4">
+        <a href="{% url 'request_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-1 rounded-3 border bg-white text-secondary">⬅️</a>
+        <div>
+            <h4 class="fw-bold text-dark mb-0"><i class="bi bi-truck text-primary me-2"></i> Dispatch Promo/Gifts</h4>
+            <small class="text-muted small">Promo aur gifts dispatch karein.</small>
+        </div>
+    </div>
+
+    <!-- Dispatch Form -->
+    <div class="card shadow-sm border-0 mb-4 bg-white">
+        <div class="card-header bg-dark text-white fw-bold">
+            <i class="bi bi-box-seam me-1"></i> New Dispatch
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                {% csrf_token %}
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold text-muted small">Select Item</label>
+                        <select name="item_id" class="form-select shadow-sm" required>
+                            <option value="">-- Choose Item --</option>
+                            {% for item in items %}
+                                <option value="{{ item.id }}">{{ item.name }} ({{ item.get_item_type_display }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold text-muted small">Qty per MR</label>
+                        <input type="number" name="quantity" class="form-control shadow-sm" min="1" required placeholder="e.g. 50">
+                    </div>
+                    
+                    <div class="col-12 mt-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label fw-bold text-muted small mb-0">Select Target MRs</label>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="selectAllBtn">Select All</button>
+                        </div>
+                        <div class="border rounded p-2 bg-light" style="max-height: 200px; overflow-y: auto;">
+                            {% for mr in mrs %}
+                            <div class="form-check border-bottom py-1">
+                                <input class="form-check-input mr-checkbox" type="checkbox" name="employee_ids" value="{{ mr.id }}" id="mr_{{ mr.id }}">
+                                <label class="form-check-label" for="mr_{{ mr.id }}">
+                                    {{ mr.name }} <small class="text-muted">({{ mr.headquarter.name }})</small>
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 mt-4 fw-bold shadow-sm"><i class="bi bi-send-fill me-1"></i> Dispatch Now</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Recent Dispatches Log -->
+    <h6 class="fw-bold text-muted mb-2"><i class="bi bi-clock-history"></i> Recent Dispatches</h6>
+    <div class="card shadow-sm border-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                <thead class="table-light text-muted">
+                    <tr>
+                        <th>Date</th>
+                        <th>Item</th>
+                        <th>Sent To</th>
+                        <th class="text-center">Qty</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dispatch in recent_dispatches %}
+                    <tr>
+                        <td>{{ dispatch.dispatch_date|date:"d M y" }}</td>
+                        <td class="fw-bold text-dark">{{ dispatch.item.name }}</td>
+                        <td>{{ dispatch.employee.name }}</td>
+                        <td class="text-center fw-bold">{{ dispatch.quantity }}</td>
+                        <td>
+                            {% if dispatch.status == 'In-Transit' %}
+                                <span class="badge bg-warning text-dark"><i class="bi bi-truck"></i> In-Transit</span>
+                            {% else %}
+                                <span class="badge bg-success"><i class="bi bi-check-circle"></i> Received</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted p-3">No dispatches yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<!-- JavaScript for Select All Button -->
+<script>
+    document.getElementById('selectAllBtn').addEventListener('click', function() {
+        let checkboxes = document.querySelectorAll('.mr-checkbox');
+        let allChecked = true;
+        checkboxes.forEach(cb => { if(!cb.checked) allChecked = false; });
+        checkboxes.forEach(cb => cb.checked = !allChecked);
+        this.textContent = allChecked ? 'Select All' : 'Deselect All';
+    });
+</script>
+{% endblock %}

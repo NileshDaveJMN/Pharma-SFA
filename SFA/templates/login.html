@@ -4,24 +4,61 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SFA Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0056b3, #00a8cc);
+            height: 100vh;
+        }
+        .login-card {
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
+        .btn-pharma {
+            background-color: #0056b3;
+            color: white;
+            font-weight: 600;
+            border-radius: 8px;
+            padding: 12px;
+            transition: all 0.3s ease;
+        }
+        .btn-pharma:hover { background-color: #004494; color: white; }
+    </style>
 </head>
-<body class="bg-primary d-flex align-items-center" style="height: 100vh;">
+<body class="d-flex align-items-center">
     <div class="container">
         <div class="row justify-content-center">
-            <div class="col-md-4 card p-4 shadow">
-                <h3 class="text-center mb-4">MR Login</h3>
+            <div class="col-md-4 col-11 card p-4 login-card bg-white">
+                <div class="text-center mb-4">
+                    <span style="font-size: 2.5rem;">⚕️</span>
+                    <h3 class="fw-bold text-dark mt-2 mb-1" style="letter-spacing: -0.5px;">SFA Portal</h3>
+                    <small class="text-muted fw-medium">Sales Force Automation App</small>
+                </div>
+                {% if messages %}
+    <div class="container mt-3">
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show shadow-sm" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
                 <form method="POST">
                     {% csrf_token %}
                     <div class="mb-3">
-                        <input type="text" name="username" class="form-control" placeholder="Username" required>
+                        <input type="text" name="username" class="form-control py-2.5 px-3 bg-light border-0" placeholder="Username" style="border-radius: 8px;" required>
                     </div>
-                    <div class="mb-3">
-                        <input type="password" name="password" class="form-control" placeholder="Password" required>
+                    <div class="mb-4">
+                        <input type="password" name="password" class="form-control py-2.5 px-3 bg-light border-0" placeholder="Password" style="border-radius: 8px;" required>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">Sign In</button>
+                    <button type="submit" class="btn btn-pharma w-100 shadow-sm">Sign In</button>
                     {% if error %}
-                        <p class="text-danger mt-3 text-center">{{ error }}</p>
+                        <p class="text-danger mt-3 text-center small fw-semibold">❌ {{ error }}</p>
                     {% endif %}
                 </form>
             </div>

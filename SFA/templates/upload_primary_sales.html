@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-2">
+    <div class="d-flex align-items-center gap-2 mb-3 px-2">
+        <a href="{% url 'request_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-1 rounded-3 border bg-white text-secondary">⬅️</a>
+        <div>
+            <h4 class="fw-bold text-dark mb-0">📊 Upload Primary Sales</h4>
+            <small class="text-muted small">Billing data Excel (.xlsx) format mein upload karein.</small>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm bg-white mx-2" style="border-top: 4px solid #dc3545 !important; border-radius: 12px;">
+        <div class="card-body p-3">
+            
+            <div class="alert alert-warning small fw-bold mb-3 rounded-3" style="border-left: 4px solid #ffc107;">
+                ⚠️ <strong>Dhyan Dein:</strong> Aap jo Mahina aur Saal niche select karenge, uska <strong>purana upload kiya hua data delete ho jayega</strong> aur sirf is nayi file ka data save hoga.
+            </div>
+
+            <form method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark">Select State (RBM) <span class="text-danger">*</span></label>
+                    <select name="rbm_id" class="form-select border-0 shadow-sm" required>
+                        <option value="">-- Choose RBM --</option>
+                        {% for rbm in rbms %}
+                            <option value="{{ rbm.id }}">{{ rbm.name }} ({{ rbm.designation }})</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text small text-muted">Sirf is RBM ke under aane wale stockists ka purana data delete hoga.</div>
+                </div>
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label text-secondary small fw-bold mb-1">Month <span class="text-danger">*</span></label>
+                        <select name="month" class="form-select bg-light border-0 shadow-none fw-bold text-dark" style="border-radius: 8px; padding: 10px 15px;" required>
+                            {% for m_num, m_name in months %}
+                                <option value="{{ m_num }}" {% if m_num == today.month %}selected{% endif %}>{{ m_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-secondary small fw-bold mb-1">Year <span class="text-danger">*</span></label>
+                        <select name="year" class="form-select bg-light border-0 shadow-none fw-bold text-dark" style="border-radius: 8px; padding: 10px 15px;" required>
+                            {% for y in years %}
+                                <option value="{{ y }}" {% if y == today.year %}selected{% endif %}>{{ y }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label text-secondary small fw-bold mb-1">Upload Excel File <span class="text-danger">*</span></label>
+                    <!-- Yahan changes kiye gaye hain: name aur accept attributes -->
+                    <input type="file" name="excel_file" class="form-control bg-light border-0 shadow-none fw-bold text-dark" accept=".xlsx, .xls" style="border-radius: 8px; padding: 10px 15px;" required>
+                    <small class="text-muted mt-1 d-block" style="font-size: 0.75rem;">Header Row Format: date, stockist_name, product_name, qty, free_qty, batch_no</small>
+                </div>
+                
+                <button type="submit" class="btn btn-danger w-100 fw-bold py-2 rounded-3 shadow-sm" onclick="return confirm('Kripya confirm karein. Kya aap sure hain ki us mahine ka purana data hata kar naya replace karna hai?');">
+                    🚀 Replace & Upload Data
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

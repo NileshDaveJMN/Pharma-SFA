@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+    
+    <!-- 🌟 COMPACT HEADER WITH EXCEL BUTTON -->
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="{% url 'view_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0 flex-grow-1"><i class="bi bi-capsule text-primary me-1"></i> Product Master</h6>
+        
+        <!-- 📥 COMPACT EXCEL BUTTON (Moved to Top) -->
+        <a href="?export=excel" class="btn btn-success btn-sm fw-bold shadow-sm px-2 py-0" style="font-size: 0.75rem;">
+            📥 .XLSX
+        </a>
+    </div>
+
+    <!-- 🎨 COMPACT TABLE CSS -->
+    <style>
+    .excel-table-wrapper { max-height: 75vh; overflow-y: auto; overflow-x: hidden; border-radius: 8px; border: 1px solid #ccc; position: relative; }
+    .excel-table { table-layout: fixed; border-collapse: separate; border-spacing: 0; width: 100%; background-color: #fff; font-size: 0.75rem; }
+    .excel-table th, .excel-table td { border-right: 1px solid #d4d4d4; border-bottom: 1px solid #d4d4d4; padding: 4px 2px; vertical-align: middle; text-align: center; white-space: normal; word-wrap: break-word; overflow-wrap: break-word; }
+    
+    .excel-table thead tr th { position: sticky; top: 0; z-index: 20; color: #fff; background-color: #107C41; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 6px 2px; }
+    
+    /* 🌟 FIRST COLUMN (Sr No.) */
+    .excel-table thead tr th:first-child { position: sticky; left: 0; z-index: 30; background-color: #0b5e31; border-right: 2px solid #0b5e31; }
+    .excel-table tbody td:first-child { 
+        position: sticky; left: 0; background-color: #f4f7f9; z-index: 10; 
+        border-right: 2px solid #107C41; box-shadow: 3px 0 5px -1px rgba(0,0,0,0.1); 
+    }
+    
+    /* Product Name Column (Wrap allow taaki lamba naam fit ho jaye) */
+    .excel-table tbody td:nth-child(2) { text-align: left; font-weight: bold; color: #107C41; }
+
+    /* 🌟 PTS column ko highlight karo — company revenue ka actual basis hai */
+    .excel-table tbody td.pts-col { background-color: #fff8e1; font-weight: bold; color: #b8860b; }
+
+    .excel-table tbody tr:hover td { background-color: #e6f2eb; }
+    .excel-table tbody tr:hover td:first-child { background-color: #d1e5d8; }
+    .excel-table tbody tr:hover td.pts-col { background-color: #fff0c2; }
+
+    /* GST badge */
+    .gst-badge {
+        display: inline-block; padding: 1px 3px; border-radius: 4px;
+        background-color: #e3f2fd; color: #1565c0; font-weight: bold; font-size: 0.62rem;
+    }
+
+    /* 🌟 COMPACT: table-layout:fixed hone ki wajah se % widths reliably kaam
+       karenge — total 100% se zyada nahi hona chahiye */
+    .excel-table th:nth-child(1), .excel-table td:nth-child(1) { width: 8%; font-size: 0.68rem; }
+    .excel-table th:nth-child(2), .excel-table td:nth-child(2) { width: 26%; font-size: 0.68rem; }
+    .excel-table th:nth-child(3), .excel-table td:nth-child(3) { width: 12%; font-size: 0.65rem; }
+    .excel-table th:nth-child(4), .excel-table td:nth-child(4) { width: 14%; font-size: 0.65rem; }
+    .excel-table th:nth-child(5), .excel-table td:nth-child(5) { width: 14%; font-size: 0.65rem; }
+    .excel-table th:nth-child(6), .excel-table td:nth-child(6) { width: 14%; font-size: 0.65rem; }
+    .excel-table th:nth-child(7), .excel-table td:nth-child(7) { width: 12%; font-size: 0.62rem; }
+    </style>
+
+    <div class="card border-0 shadow-sm bg-white mx-1 mb-5" style="border-radius: 8px;">
+        <div class="excel-table-wrapper" style="border-radius: 8px;">
+            <table class="excel-table">
+                <thead>
+                    <tr>
+                        <th style="background-color: #0b5e31; color: white;">Sr.</th>
+                        <th style="background-color: #107C41; color: white; text-align: left;">Product</th>
+                        <th style="background-color: #107C41; color: white;">Pack</th>
+                        <th style="background-color: #159b53; color: white;">MRP</th>
+                        <th style="background-color: #159b53; color: white;">PTR</th>
+                        <th style="background-color: #b8860b; color: white;">PTS</th>
+                        <th style="background-color: #1565c0; color: white;">GST</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in products %}
+                    <tr>
+                        <td class="fw-bold text-dark">{{ forloop.counter }}</td>
+                        <td>{{ p.name }}</td>
+                        <td class="text-secondary fw-medium">{{ p.pack_size }}</td>
+                        <td class="text-dark">{{ p.mrp|floatformat:0 }}</td>
+                        <td class="text-dark">{{ p.ptr|floatformat:0 }}</td>
+                        <td class="pts-col">{{ p.pts|floatformat:0 }}</td>
+                        <td><span class="gst-badge">{{ p.gst_slab }}%</span></td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="100%" class="text-center text-muted py-4">Koi Product system mein define nahi hai.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 🌟 Legend -->
+    <div class="px-2">
+        <small class="text-muted">
+            <strong>MRP</strong> = Maximum Retail Price &nbsp;|&nbsp;
+            <strong>PTR</strong> = Price to Retailer &nbsp;|&nbsp;
+            <strong class="text-warning" style="color:#b8860b !important;">PTS</strong> = Price to Stockist (company revenue basis — reports isi par calculate hote hain)
+        </small>
+    </div>
+</div>
+{% endblock %}

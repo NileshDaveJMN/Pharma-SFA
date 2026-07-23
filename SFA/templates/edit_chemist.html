@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-2">
+    <div class="d-flex align-items-center gap-2 mb-3 px-2">
+        <a href="{% url 'edit_chemist_list' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-pencil-square text-warning me-1"></i> Edit Chemist</h5>
+    </div>
+
+    <div class="card border-0 shadow-sm bg-white mx-1" style="border-radius: 10px;">
+        <div class="card-body p-3">
+            <form method="POST">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold mb-1">Chemist / Pharmacy Name *</label>
+                    <input type="text" name="name" class="form-control fw-medium bg-light border-0" value="{{ chemist.name }}" required>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold mb-1">Phone Number</label>
+                    <input type="text" name="phone" class="form-control fw-medium bg-light border-0" value="{{ chemist.phone|default:'' }}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold mb-1">Shop Address</label>
+                    <textarea name="address" class="form-control fw-medium bg-light border-0" rows="2" placeholder="Chemist ka pura address...">{{ chemist.address|default:'' }}</textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label text-muted small fw-bold mb-1">Territory / HQ</label>
+                    <select name="territory" class="form-select fw-medium bg-light border-0">
+                        <option value="">-- Select Territory --</option>
+                        {% for t in territories %}
+                            <option value="{{ t.id }}" {% if chemist.territory_id == t.id %}selected{% endif %}>{{ t.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label text-muted small fw-bold mb-1">Route / Patch</label>
+                    <select name="route" class="form-select fw-medium bg-light border-0">
+                        <option value="">-- Select Route --</option>
+                        {% for r in routes %}
+                            <option value="{{ r.id }}" {% if chemist.route_id == r.id %}selected{% endif %}>{{ r.name }} ({{ r.territory.name }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+      <button type="submit" class="btn btn-warning w-100 fw-bold py-2 shadow-sm text-dark" style="border-radius: 8px;">
+        🚀 Send for Approval
+    </button>
+
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

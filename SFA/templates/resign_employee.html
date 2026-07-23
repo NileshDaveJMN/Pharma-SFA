@@ -1,0 +1,35 @@
+{% extends 'base.html' %}{% block content %}
+<div class="container-fluid p-0 mb-2 mt-2">
+    <a href="{% url 'request_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-1 rounded-3 border bg-white text-secondary"><span class="fs-5 fw-bold">⬅️</span></a>
+    <div class="d-flex align-items-center mb-2 px-2"><h5 class="fw-bold text-dark mb-0" style="font-size: 1.2rem;">Employee Resign / Exit</h5></div>
+    <div class="mx-2">
+        <div class="alert alert-warning border-warning shadow-sm py-2 mb-2" style="border-radius: 10px; font-size: 0.75rem;">
+            <strong class="text-dark"><i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> Dhyan Dein:</strong> <br> Employee ka saara ongoing data (Doctors, Chemists, Team, Sale Reports, Gift Plans, Free Qty Claims) ek temporary <strong>"Vacant" placeholder</strong> ko transfer ho jayega, aur employee ka account <strong>block (Inactive)</strong> ho jayega. Jab naya Employee mile, "Transfer Data" screen se Vacant placeholder ko select karke usko naye employee me transfer kar dena.
+        </div>
+        <div class="card border-0 shadow-sm bg-white" style="border-radius: 10px; border-top: 4px solid #dc3545 !important;">
+            <div class="card-body p-2">
+                <form method="POST" onsubmit="return confirm('⚠️ FINAL WARNING: Kya aap sach mein is employee ko resign mark karna chahte hain? Account turant block ho jayega aur data Vacant placeholder ko transfer ho jayega.');">{% csrf_token %}
+                    <div class="mb-2">
+                        <label class="form-label fw-bold text-danger mb-1" style="font-size: 0.8rem;"><i class="bi bi-person-dash-fill me-1"></i> Chhodkar Jaane Wala Employee</label>
+                        <select name="employee" class="form-select form-select-sm border-danger bg-danger bg-opacity-10 fw-bold text-dark shadow-sm" required>
+                            <option value="">-- Select Employee --</option>
+                            {% for emp in employees %}<option value="{{ emp.id }}">{{ emp.name }} ({{ emp.designation }} - {{ emp.headquarter.name|default:"No HQ" }})</option>{% endfor %}
+                        </select>
+                        <small class="text-muted" style="font-size: 0.65rem;">Is employee ka data ek Vacant placeholder ko transfer hoga, aur ye inactive ho jayega.</small>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label fw-bold text-dark mb-1" style="font-size: 0.8rem;"><i class="bi bi-clipboard-check-fill me-1"></i> Exit Reason</label>
+                        <select name="employment_status" class="form-select form-select-sm shadow-sm" required>
+                            <option value="resigned">Resigned</option>
+                            <option value="retired">Retired</option>
+                            <option value="terminated">Terminated</option>
+                        </select>
+                    </div>
+                    <hr class="text-muted opacity-25 mb-2">
+                    <button type="submit" class="btn w-100 fw-bold shadow-sm py-2 text-white" style="background: linear-gradient(135deg, #dc3545, #ff6b6b); border-radius: 8px;"><i class="bi bi-door-open-fill me-1"></i> Mark Resigned & Create Vacant Placeholder</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

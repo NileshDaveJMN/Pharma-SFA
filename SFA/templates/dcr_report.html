@@ -1,0 +1,210 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+    
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="{% url 'view_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-journal-text text-primary me-1"></i> DCR Report</h6>
+    </div>
+
+    <div class="row g-1 mb-2 px-1 text-center">
+        <div class="col-3">
+            <div class="card border-0 shadow-sm rounded-2 bg-white py-1">
+                <div style="font-size: 1rem; line-height: 1;">👨‍⚕️</div>
+                <div class="fw-bold text-dark mt-1" style="font-size: 0.8rem;">{{ total_dr_visits }}</div>
+                <div class="text-muted" style="font-size: 0.55rem;">Doctors</div>
+            </div>
+        </div>
+        <div class="col-3">
+            <div class="card border-0 shadow-sm rounded-2 bg-white py-1">
+                <div style="font-size: 1rem; line-height: 1;">🧪</div>
+                <div class="fw-bold text-dark mt-1" style="font-size: 0.8rem;">{{ total_chem_visits }}</div>
+                <div class="text-muted" style="font-size: 0.55rem;">Chemists</div>
+            </div>
+        </div>
+        <div class="col-3">
+            <div class="card border-0 shadow-sm rounded-2 bg-white py-1">
+                <div style="font-size: 1rem; line-height: 1;">💊</div>
+                <div class="fw-bold text-dark mt-1" style="font-size: 0.8rem;">{{ total_samples }}</div>
+                <div class="text-muted" style="font-size: 0.55rem;">Samples</div>
+            </div>
+        </div>
+        <div class="col-3">
+            <div class="card border-0 shadow-sm rounded-2 bg-white py-1">
+                <div style="font-size: 1rem; line-height: 1;">₹</div>
+                <div class="fw-bold text-success mt-1" style="font-size: 0.8rem;">{{ total_orders }}</div>
+                <div class="text-muted" style="font-size: 0.55rem;">POB</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-2 bg-white mx-1" style="border-radius: 8px;">
+        <div class="card-body p-2">
+            <form method="GET" class="row g-1 align-items-end">
+                {% if is_manager_view %}
+                <div class="col-12">
+                    <select name="employee_id" class="form-select form-select-sm fw-bold text-primary bg-light border-0 shadow-none" onchange="this.form.submit()" style="border-radius: 6px;">
+                        <option value="">👤 Select Employee...</option>
+                        {% for emp in team_employees %}
+                            <option value="{{ emp.id }}" {% if emp.id == selected_emp_id %}selected{% endif %}>
+                                {{ emp.name }} ({{ emp.designation }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                <div class="col-7">
+                    <select name="month" class="form-select form-select-sm fw-bold text-dark bg-light border-0 shadow-none" onchange="this.form.submit()" style="border-radius: 6px;">
+                        {% for m in months %}
+                            <option value="{{ m.0 }}" {% if m.0 == selected_month %}selected{% endif %}>📅 {{ m.1 }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-5">
+                    <select name="year" class="form-select form-select-sm fw-bold text-dark bg-light border-0 shadow-none" onchange="this.form.submit()" style="border-radius: 6px;">
+                        {% for y in years %}
+                            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>🗓️ {{ y }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="dcr-list mx-1">
+        {% for item in dcrs %}
+        <div class="card border-0 shadow-sm bg-white mb-2 {% if item.work_type != 'Field Work' %}border-start border-4 border-warning{% endif %}" style="border-radius: 8px;">
+            
+            <div class="card-body p-2 d-flex justify-content-between align-items-center">
+                
+                <div class="d-flex flex-column" onclick="{% if item.work_type == 'Field Work' %}toggleDcr('{{ item.id }}'){% endif %}" style="cursor: pointer;">
+                    <div class="d-flex align-items-center gap-1">
+                        <span class="fs-6">
+                            {% if item.work_type == 'Meeting' %}🤝
+                            {% elif item.work_type == 'Transit' %}🚗
+                            {% elif item.work_type == 'Leave' %}🏖️
+                            {% elif item.work_type == 'Holiday' %}⛱️
+                            {% else %}📅{% endif %}
+                        </span>
+                        <span class="fw-bold text-dark mb-0" style="font-size: 0.8rem;">{{ item.date|date:"d M Y, D" }}</span>
+                    </div>
+                    
+                    {% if item.work_type != 'Field Work' %}
+                        <small class="text-warning fw-bold ms-4" style="font-size: 0.70rem;">{{ item.work_type }}</small>
+                    {% else %}
+                        <small class="text-secondary fw-bold ms-4 d-block" style="font-size: 0.70rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;">
+                            📍 {{ item.route.name|default:"No Route" }}
+                        </small>
+                        {% if item.route.territory %}
+                        <small class="text-muted ms-4 d-block" style="font-size: 0.65rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;">
+                            🗺️ {{ item.route.territory }}
+                        </small>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                
+                <div class="d-flex gap-1 align-items-center">
+                    <a href="{% url 'route_playback' item.employee.id item.date|date:'Y-m-d' %}" class="btn btn-sm btn-outline-success fw-bold rounded-2 px-2 shadow-sm" style="font-size: 0.7rem; padding-top: 2px; padding-bottom: 2px;">
+                        📍 Track
+                    </a>
+                    
+                    {% if item.work_type == 'Field Work' %}
+                    <span id="dcr_btn_{{ item.id }}" data-count="{{ item.visits|length }}" onclick="toggleDcr('{{ item.id }}')" class="badge bg-primary rounded-2 px-2 py-1 shadow-sm" style="cursor: pointer; font-size: 0.7rem;">
+                        {{ item.visits|length }} Visits ⬇️
+                    </span>
+                    {% else %}
+                    <span class="badge bg-light text-secondary border rounded-2 px-2 py-1 shadow-sm" style="font-size: 0.7rem;">
+                        No Visits
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if item.work_type == 'Field Work' %}
+            <div id="dcr_content_{{ item.id }}" class="d-none bg-light p-2 border-top" style="border-radius: 0 0 8px 8px;">
+                {% for visit in item.visits %}
+                <div class="card border-0 shadow-sm bg-white mb-2" style="border-radius: 6px;">
+                    <div class="card-body p-2 d-flex justify-content-between align-items-center" onclick="toggleVisit('{{ visit.id }}')" style="cursor: pointer;">
+                        <div class="d-flex align-items-center gap-1">
+                            {% if visit.doctor %}
+                                <span style="font-size: 0.85rem;" class="text-primary">🩺</span>
+                                <span class="fw-bold text-primary mb-0" style="font-size: 0.8rem;">Dr. {{ visit.doctor.name }}</span>
+                            {% elif visit.chemist %}
+                                <span style="font-size: 0.85rem;" class="text-success">🧪</span>
+                                <span class="fw-bold text-success mb-0" style="font-size: 0.8rem;">{{ visit.chemist.name }}</span>
+                            {% endif %}
+                        </div>
+                        <span id="visit_btn_{{ visit.id }}" class="badge bg-secondary bg-opacity-10 text-secondary border px-2 py-1 fw-bold" style="font-size: 0.65rem;">🔽 Detail</span>
+                    </div>
+
+                    <div id="visit_content_{{ visit.id }}" class="d-none p-2 pt-0 border-top mt-1">
+                        <div class="table-responsive rounded border mt-1 bg-white">
+                            <table class="table table-sm table-bordered text-center mb-0" style="font-size: 0.75rem;">
+                                <thead class="table-light"><tr><th class="text-start ps-2">Product</th><th>Sample</th><th>Order</th></tr></thead>
+                                <tbody>
+                                    {% for detail in visit.product_details.all %}
+                                    <tr>
+                                        <td class="text-start ps-2 py-1">
+                                            <span class="fw-medium text-dark">{{ detail.product.name }}</span>
+                                            {% if detail.is_detailed %}<span class="badge bg-info text-white ms-1 shadow-sm" style="font-size: 0.55rem;">Detailed</span>{% endif %}
+                                        </td>
+                                        <td class="fw-bold text-secondary align-middle py-1">{{ detail.sample_qty }}</td>
+                                        <td class="fw-bold align-middle text-success py-1">{{ detail.order_qty }}</td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr><td colspan="3" class="text-muted py-1">Koi product detail nahi hai.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if visit.remark %}<div class="mt-1 bg-light p-1 rounded border text-muted" style="font-size: 0.7rem;"><b>Remark:</b> {{ visit.remark }}</div>{% endif %}
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center text-muted small p-2 fw-medium">Koi visit nahi mili.</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+        </div>
+        {% empty %}
+        <div class="text-center p-4 bg-white rounded shadow-sm mx-1" style="border-radius: 8px;">
+            <span class="fs-1 d-block mb-2">📭</span>
+            <span class="text-muted small fw-medium">Is mahine koi DCR record nahi mila.</span>
+        </div>
+        {% endfor %}
+    </div>
+
+</div>
+
+<script>
+    function toggleDcr(id) {
+        var content = document.getElementById('dcr_content_' + id);
+        var btn = document.getElementById('dcr_btn_' + id);
+        var count = btn.getAttribute('data-count');
+        if (content.classList.contains('d-none')) {
+            content.classList.remove('d-none');
+            btn.innerHTML = count + ' Visits ⬆️';
+        } else {
+            content.classList.add('d-none');
+            btn.innerHTML = count + ' Visits ⬇️';
+        }
+    }
+    function toggleVisit(id) {
+        var content = document.getElementById('visit_content_' + id);
+        var btn = document.getElementById('visit_btn_' + id);
+        if (content.classList.contains('d-none')) {
+            content.classList.remove('d-none');
+            btn.innerHTML = '🔼 Hide';
+            btn.classList.replace('text-secondary', 'text-warning');
+            btn.classList.replace('bg-secondary', 'bg-warning');
+        } else {
+            content.classList.add('d-none');
+            btn.innerHTML = '🔽 Detail';
+            btn.classList.replace('text-warning', 'text-secondary');
+            btn.classList.replace('bg-warning', 'bg-secondary');
+        }
+    }
+</script>
+{% endblock %}

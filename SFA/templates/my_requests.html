@@ -1,0 +1,45 @@
+{% extends 'base.html' %}{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="{% url 'view_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0"><i class="bi bi-list-check text-primary me-1"></i> My Requests</h6>
+    </div>
+
+    <div class="mx-1">
+        {% if requests_list %}
+        {% for r in requests_list %}
+        <div class="card border-0 shadow-sm bg-white mb-2" style="border-radius: 10px;
+            {% if r.status == 'Approved' %}border-left: 4px solid #198754;
+            {% elif r.status == 'Rejected' %}border-left: 4px solid #dc3545;
+            {% elif r.status == 'Draft' %}border-left: 4px solid #6c757d;
+            {% else %}border-left: 4px solid #ffc107;{% endif %}">
+            <div class="card-body p-2">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <span class="fw-bold text-dark" style="font-size: 0.8rem;">{{ r.icon }} {{ r.type }}</span>
+                        <div class="text-muted mt-1" style="font-size: 0.7rem;">{{ r.detail }}</div>
+                        {% if r.date %}<div class="text-muted" style="font-size: 0.6rem;">{{ r.date|date:"d M Y, h:i A" }}</div>{% endif %}
+                    </div>
+                    <span class="badge
+                        {% if r.status == 'Approved' %}bg-success
+                        {% elif r.status == 'Rejected' %}bg-danger
+                        {% elif r.status == 'Draft' %}bg-secondary
+                        {% else %}bg-warning text-dark{% endif %}"
+                        style="font-size: 0.65rem;">{{ r.status }}</span>
+                </div>
+                {% if r.remark %}
+                <div class="alert alert-light py-1 px-2 mt-2 mb-0 border" style="font-size: 0.65rem; border-radius: 6px;">
+                    💬 {{ r.remark }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="alert alert-light text-center shadow-sm" style="border-radius: 10px; font-size: 0.85rem;">
+            Abhi tak koi request nahi bheji gayi hai.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

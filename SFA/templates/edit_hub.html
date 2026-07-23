@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="mb-3 px-1">
+    <div class="d-flex align-items-center gap-2 mb-1">
+        <a href="{% url 'request_hub' %}" class="btn btn-light shadow-sm btn-sm px-2.5 py-1 rounded-3 border bg-white text-secondary">⬅️</a>
+        <h4 class="fw-bold text-dark mb-0">✏️ Edit Hub</h4>
+    </div>
+    <small class="text-muted small ps-1">Apne purane records ko update karein</small>
+</div>
+
+<div class="row g-1 mb-4 px-2">
+    <div class="col-3">
+        <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+             style="cursor: pointer; border-bottom: 3px solid #0056b3 !important; min-height: 62px; border-radius: 8px;" 
+             onclick="location.href='{% url 'edit_doctor_list' %}';">
+            <span class="mb-1" style="font-size: 1.1rem;">👨‍⚕️</span>
+            <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Edit Doctor</span>
+        </div>
+    </div>
+    
+    <div class="col-3">
+        <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+             style="cursor: pointer; border-bottom: 3px solid #198754 !important; min-height: 62px; border-radius: 8px;" 
+             onclick="location.href='{% url 'edit_chemist_list' %}';">
+            <span class="mb-1" style="font-size: 1.1rem;">🧪</span>
+            <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Edit Chemist</span>
+        </div>
+    </div>
+
+    <div class="col-3">
+        <div class="card h-100 text-center border-0 shadow-sm bg-light p-1 d-flex flex-column justify-content-center align-items-center opacity-75" 
+             style="border-bottom: 3px solid #fd7e14 !important; min-height: 62px; border-radius: 8px;">
+            <span class="mb-1" style="font-size: 1.1rem;">🗺️</span>
+            <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Edit Route<br><small class="text-danger">(Soon)</small></span>
+        </div>
+    </div>
+</div>
+{% endblock %}

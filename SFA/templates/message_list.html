@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+
+    <!-- 🌟 COMPACT HEADER -->
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <h6 class="fw-bold text-dark mb-0 flex-grow-1"><i class="bi bi-envelope-fill text-primary me-1"></i> Inbox</h6>
+        <a href="{% url 'web_compose' %}" class="btn btn-primary btn-sm fw-bold shadow-sm px-2 py-0 rounded-2">
+            <i class="bi bi-pencil-square"></i> Compose
+        </a>
+    </div>
+
+    <!-- 📌 QUICK LINKS (Notices & Alerts) -->
+    <div class="d-flex gap-2 mx-1 mb-2">
+        <a href="{% url 'notice_board' %}" class="btn btn-light shadow-sm btn-sm flex-fill fw-bold text-secondary border bg-white rounded-2" style="font-size: 0.70rem;">
+            📢 Notice Board
+        </a>
+        <a href="{% url 'notification_list' %}" class="btn btn-light shadow-sm btn-sm flex-fill fw-bold text-secondary border bg-white rounded-2" style="font-size: 0.70rem;">
+            🔔 Alerts
+        </a>
+    </div>
+
+    <!-- 📑 COMPACT PILL TABS -->
+    <ul class="nav nav-pills mx-1 mb-2 shadow-sm bg-white p-1" id="msgTabs" role="tablist" style="border-radius: 8px;">
+        <li class="nav-item flex-fill text-center" role="presentation">
+            <button class="nav-link active w-100 fw-bold py-1" id="inbox-tab" data-bs-toggle="pill" data-bs-target="#inbox" type="button" role="tab" style="border-radius: 6px; font-size: 0.70rem;">
+                📥 Inbox
+            </button>
+        </li>
+        <li class="nav-item flex-fill text-center" role="presentation">
+            <button class="nav-link w-100 fw-bold py-1 text-secondary" id="sent-tab" data-bs-toggle="pill" data-bs-target="#sent" type="button" role="tab" style="border-radius: 6px; font-size: 0.70rem;">
+                📤 Sent
+            </button>
+        </li>
+    </ul>
+
+    <style>
+        #msgTabs .nav-link.active { background-color: #0056b3 !important; color: white !important; }
+        #msgTabs .nav-link { color: #6c757d; border: none; }
+    </style>
+
+    <!-- 📩 MESSAGE LISTS -->
+    <div class="tab-content mx-1 mb-5" id="msgTabsContent">
+        
+        <!-- 📥 INBOX TAB -->
+        <div class="tab-pane fade show active" id="inbox" role="tabpanel">
+            <div class="d-flex flex-column gap-1">
+                {% for msg in received_msgs %}
+                    <div class="card border-0 shadow-sm bg-white" style="border-left: 3px solid #0056b3; border-radius: 6px;">
+                        <div class="card-body p-2">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="fw-bold text-dark" style="font-size: 0.75rem;">From: {{ msg.sender.name }}</span>
+                                <small class="text-muted fw-bold" style="font-size: 0.55rem;">{{ msg.sent_at|date:"d M, H:i" }}</small>
+                            </div>
+                            
+                            <!-- 🌟 Subject Clickable -->
+                            <a href="{% url 'web_message_detail' msg.id %}" class="text-decoration-none">
+                                <p class="mb-0 fw-bold text-primary" style="font-size: 0.70rem;">{{ msg.subject }}</p>
+                            </a>
+                            
+                            <p class="mb-0 text-secondary fw-medium mt-1" style="font-size: 0.70rem; line-height: 1.2;">{{ msg.body|truncatewords:15 }}</p>
+                            
+                            {% if msg.attachments.all %}
+                                <div class="mt-2 d-flex flex-wrap gap-1">
+                                    {% for att in msg.attachments.all %}
+                                        <a href="{{ att.file.url }}" target="_blank" class="badge bg-light text-primary border border-primary rounded-pill px-2 py-1 text-decoration-none d-inline-block text-truncate" style="font-size: 0.55rem; max-width: 150px;">
+                                            <i class="bi bi-paperclip"></i> {{ att.file.name|truncatechars:20 }}
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="text-center p-3 bg-white shadow-sm" style="border-radius: 6px;">
+                        <span class="fs-4 d-block mb-1">📭</span>
+                        <span class="text-muted fw-bold" style="font-size: 0.65rem;">Inbox is empty.</span>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- 📤 SENT TAB -->
+        <div class="tab-pane fade" id="sent" role="tabpanel">
+            <div class="d-flex flex-column gap-1">
+                {% for msg in sent_msgs %}
+                    <div class="card border-0 shadow-sm bg-light" style="border-radius: 6px;">
+                        <div class="card-body p-2">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="fw-bold text-secondary" style="font-size: 0.70rem;">To: {{ msg.receiver.name }}</span>
+                                <small class="text-muted fw-bold" style="font-size: 0.55rem;">{{ msg.sent_at|date:"d M, H:i" }}</small>
+                            </div>
+                            
+                            <!-- 🌟 Subject Clickable -->
+                            <a href="{% url 'web_message_detail' msg.id %}" class="text-decoration-none">
+                                <p class="mb-0 fw-bold text-dark" style="font-size: 0.70rem;">{{ msg.subject }}</p>
+                            </a>
+                            
+                            <p class="mb-0 text-secondary fw-medium mt-1" style="font-size: 0.70rem; line-height: 1.2;">{{ msg.body|truncatewords:15 }}</p>
+                            
+                            {% if msg.attachments.all %}
+                                <div class="mt-2 d-flex flex-wrap gap-1">
+                                    {% for att in msg.attachments.all %}
+                                        <a href="{{ att.file.url }}" target="_blank" class="badge bg-white text-secondary border rounded-pill px-2 py-1 text-decoration-none d-inline-block text-truncate" style="font-size: 0.55rem; max-width: 150px;">
+                                            <i class="bi bi-paperclip"></i> {{ att.file.name|truncatechars:20 }}
+                                        </a>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="text-center p-3 bg-white shadow-sm" style="border-radius: 6px;">
+                        <span class="text-muted fw-bold" style="font-size: 0.65rem;">No sent messages.</span>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

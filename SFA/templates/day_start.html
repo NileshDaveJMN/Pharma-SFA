@@ -1,40 +1,236 @@
 {% extends 'base.html' %}
-
 {% block content %}
-<div class="card p-4 shadow-sm border-0 mb-4 bg-white rounded-3">
-    <h4 class="text-primary fw-bold mb-3">🌅 Day Start</h4>
+<div class="container-fluid p-0 mb-4 mt-1">
     
-    {% if pending_dates %}
-    <div class="alert alert-danger shadow-sm">
-        <h6 class="fw-bold mb-1">⚠️ Pending DCRs!</h6>
-        <small class="d-block mb-2">Aapne in tarikhon ka Day End nahi kiya hai. Kripya pehle inhe poora karein:</small>
-        <div class="d-flex flex-wrap gap-2">
-            {% for p_date in pending_dates %}
-                <span class="badge bg-danger p-2">{{ p_date }}</span>
-            {% endfor %}
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="javascript:history.back()" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0 flex-grow-1"><i class="bi bi-brightness-alt-high text-warning me-1"></i> Start Your Day</h6>
+    </div>
+
+    <div class="card border-0 shadow-sm bg-white mx-1" style="border-radius: 8px;">
+        <div class="card-body p-2">
+            <form method="POST" id="dayStartForm">
+                {% csrf_token %}
+                <input type="hidden" name="latitude" id="lat">
+                <input type="hidden" name="longitude" id="lng">
+                
+                <div id="geo-status" class="alert alert-warning p-1 mb-2 text-center fw-bold border-0 shadow-sm" style="font-size: 0.65rem; border-radius: 6px;">
+                    ⏳ GPS Location fetch ho rahi hai...
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label fw-bold text-secondary mb-0" style="font-size: 0.65rem;">📅 Date</label>
+                        <input type="date" name="date" value="{{ today_str }}" class="form-control form-control-sm bg-light border-0 fw-bold text-dark" style="border-radius: 6px;" required onchange="window.location.href='{% url 'day_start' %}?date=' + this.value">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label fw-bold text-secondary mb-0" style="font-size: 0.65rem;">💼 Work Type</label>
+                        <select name="work_type" id="workType" class="form-select form-select-sm bg-light border-0 fw-bold text-dark" style="border-radius: 6px;" onchange="toggleRouteFields()">
+                            <option value="Field Work" selected>Field Work</option>
+                            <option value="Meeting">Meeting</option>
+                            <option value="Transit">Transit</option>
+                            <option value="Strike">Strike</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-2" id="jointWorkDiv">
+                    <label class="form-label fw-bold text-secondary mb-0" style="font-size: 0.65rem;">🤝 Joint Work With</label>
+                    <select name="joint_worked_with" class="form-select form-select-sm bg-light border-0 fw-bold text-dark" style="border-radius: 6px;">
+                        <option value="">-- Independent (No Joint Work) --</option>
+                        {% for emp in joint_employees %}
+                            <option value="{{ emp.id }}">{{ emp.name }} ({{ emp.designation }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div id="routeDivider" class="mt-2 mb-2 border-bottom pb-1">
+                    <span class="fw-bold text-secondary" style="font-size: 0.65rem;">📍 LOCATION DETAILS</span>
+                </div>
+
+                <div class="mb-2" id="territorySelectionDiv">
+                    <label class="form-label fw-bold text-secondary mb-0" style="font-size: 0.65rem;">🏢 Territory / HQ</label>
+                    <select name="territory" id="territorySelect" class="form-select form-select-sm bg-light border-0 fw-bold text-primary" style="border-radius: 6px;">
+                        <option value="">-- Select Territory --</option>
+                        {% for t in territories %}
+                            <option value="{{ t.id }}">{{ t.name }} ({{ t.city }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-2" id="routeSelectionDiv">
+                    <label class="form-label fw-bold text-secondary mb-0" style="font-size: 0.65rem;">🗺️ Primary Route</label>
+                    {% if suggested_route %}
+                    <div class="alert alert-success p-1 mb-1 fw-bold border-0 shadow-sm" style="font-size: 0.65rem; border-radius: 4px;">
+                        🎯 MTP Suggestion: {{ suggested_route.route.name }} ({{ suggested_route.route.category }})
+                    </div>
+                    {% endif %}
+                    <select name="primary_route" id="primaryRouteSelect" class="form-select form-select-sm bg-light border-0 fw-bold text-dark" style="border-radius: 6px;">
+                        <option value="">-- Select Route --</option>
+                        {% for r in available_routes %}
+                            <option value="{{ r.id }}" data-category="{{ r.category }}" data-distance="{{ r.distance_from_hq }}" data-territory="{{ r.territory_id }}" {% if suggested_route and r.id == suggested_route.route.id %}selected{% endif %}>
+                                {{ r.name }} — {{ r.get_category_display }} ({{ r.distance_from_hq }}km)
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-2 p-2 bg-light border rounded-3 mt-3" id="nightStaySection" style="display:none;">
+                    <div class="fw-bold text-secondary mb-1" style="font-size: 0.65rem;">🏨 NIGHT STAY</div>
+                    {% if is_return_day %}
+                    <div class="text-warning fw-bold mb-1" style="font-size: 0.60rem;">🔄 Expected Return Today</div>
+                    {% endif %}
+                    <div class="d-flex gap-1">
+                        <div class="flex-fill">
+                            <input type="radio" class="btn-check" name="night_stay" id="ns_yes" value="1">
+                            <label class="btn btn-outline-warning w-100 fw-bold p-1 shadow-sm" style="font-size: 0.70rem; border-radius: 6px;" for="ns_yes">🌙 Yes</label>
+                        </div>
+                        <div class="flex-fill">
+                            <input type="radio" class="btn-check" name="night_stay" id="ns_no" value="0" checked>
+                            <label class="btn btn-outline-success w-100 fw-bold p-1 shadow-sm" style="font-size: 0.70rem; border-radius: 6px;" for="ns_no">🏠 No</label>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" id="submitBtn" class="btn btn-success btn-sm w-100 mt-2 fw-bold shadow-sm" style="border-radius: 6px;" disabled>
+                    🚀 Start My Day
+                </button>
+            </form>
         </div>
     </div>
-    {% endif %}
-
-    <form method="POST">
-        {% csrf_token %}
-        
-        <div class="mb-3">
-            <label class="form-label text-muted small fw-bold">SELECT DATE</label>
-            <input type="date" class="form-control bg-light" name="date" value="{{ today_str }}" required>
-        </div>
-
-        <div class="mb-4">
-            <label class="form-label text-muted small fw-bold">SELECT TERRITORY (MTP)</label>
-            <select class="form-select bg-light" name="territory" required>
-                <option value="" disabled selected>-- Choose Territory --</option>
-                {% for terr in territories %}
-                    <option value="{{ terr.id }}">{{ terr.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <button type="submit" class="btn btn-primary w-100 fw-bold py-3 shadow">🚀 START MY DAY</button>
-    </form>
 </div>
+
+<script>
+function toggleRouteFields() {
+    let wt = document.getElementById('workType').value;
+    let routeDiv = document.getElementById('routeSelectionDiv');
+    let terrDiv = document.getElementById('territorySelectionDiv');
+    let jointDiv = document.getElementById('jointWorkDiv');
+    let routeDivDivider = document.getElementById('routeDivider');
+    let terrSelect = document.getElementById('territorySelect');
+    let routeSelect = document.getElementById('primaryRouteSelect');
+    
+    if(wt === 'Field Work') {
+        if(routeDiv) routeDiv.style.display = 'block';
+        if(terrDiv) terrDiv.style.display = 'block';
+        if(jointDiv) jointDiv.style.display = 'block';
+        if(routeDivDivider) routeDivDivider.style.display = 'block';
+        if(terrSelect) terrSelect.required = true;
+    } else {
+        if(routeDiv) routeDiv.style.display = 'none';
+        if(terrDiv) terrDiv.style.display = 'none';
+        if(routeDivDivider) routeDivDivider.style.display = 'none';
+        if(terrSelect) terrSelect.required = false;
+        if(routeSelect) routeSelect.required = false;
+        
+        if(wt === 'Strike') {
+            if(jointDiv) jointDiv.style.display = 'none';
+        } else {
+            if(jointDiv) jointDiv.style.display = 'block';
+        }
+    }
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    toggleRouteFields();
+
+    var statusDiv = document.getElementById('geo-status');
+    var submitBtn = document.getElementById('submitBtn');
+    var nightSec = document.getElementById('nightStaySection');
+    var routeSelect = document.getElementById('primaryRouteSelect');
+    var territorySelect = document.getElementById('territorySelect');
+    var myHqId = "{{ request.user.employee.headquarter_id|default:'' }}";
+
+    function checkNightStay() {
+        var selectedOpt = routeSelect.options[routeSelect.selectedIndex];
+        if (!selectedOpt || selectedOpt.value === "") {
+            nightSec.style.display = 'none'; return;
+        }
+        var cat = selectedOpt.dataset.category || '';
+        var routeTerritoryId = selectedOpt.dataset.territory || '';
+
+        if (cat === 'OUTSTATION' || (myHqId !== '' && routeTerritoryId !== '' && myHqId !== routeTerritoryId)) {
+            nightSec.style.display = 'block';
+        } else {
+            nightSec.style.display = 'none';
+        }
+    }
+
+    routeSelect.addEventListener('change', checkNightStay);
+    checkNightStay(); 
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            function(pos) {
+                document.getElementById('lat').value = pos.coords.latitude;
+                document.getElementById('lng').value = pos.coords.longitude;
+                statusDiv.className = "alert alert-success p-1 mb-2 text-center fw-bold border-0 shadow-sm";
+                statusDiv.innerHTML = "📍 Location Captured Successfully!";
+                submitBtn.disabled = false;
+            },
+            function() {
+                statusDiv.className = "alert alert-danger p-1 mb-2 text-center fw-bold border-0 shadow-sm";
+                statusDiv.innerHTML = "⚠️ GPS Enable karein!";
+                submitBtn.disabled = false; 
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    }
+
+    const allRouteOptions = Array.from(routeSelect.options);
+    territorySelect.addEventListener('change', function() {
+        const selectedTerritoryId = this.value;
+        routeSelect.value = "";
+        checkNightStay();
+        allRouteOptions.forEach(option => {
+            if (option.value === "") {
+                option.style.display = 'block'; option.disabled = false; return;
+            }
+            if (option.getAttribute('data-territory') === selectedTerritoryId) {
+                option.style.display = 'block'; option.disabled = false;
+            } else {
+                option.style.display = 'none'; option.disabled = true;
+            }
+        });
+    });
+
+    if(territorySelect.value !== "") {
+        territorySelect.dispatchEvent(new Event('change'));
+    }
+});
+</script>
+
+{% if alerts %}
+<div class="modal fade" id="complianceModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content border-0 shadow-lg" style="border-radius: 8px;">
+      <div class="modal-header bg-danger text-white py-2" style="border-top-left-radius: 8px; border-top-right-radius: 8px;">
+        <h6 class="modal-title fw-bold mb-0" style="font-size: 0.8rem;">⚠️ Attention Required!</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" style="font-size: 0.6rem;"></button>
+      </div>
+      <div class="modal-body p-2 bg-light">
+        <div class="text-secondary fw-bold mb-2" style="font-size: 0.65rem;">Day Start karne se pehle in par dhyan dein:</div>
+        <ul class="list-group list-group-flush border" style="border-radius: 6px;">
+            {% for alert in alerts %}
+            <li class="list-group-item bg-white text-danger fw-bold py-1 px-2 border-0 border-bottom" style="font-size: 0.65rem;">
+                👉 {{ alert }}
+            </li>
+            {% endfor %}
+        </ul>
+      </div>
+      <div class="modal-footer border-0 bg-light p-2">
+        <button type="button" class="btn btn-danger btn-sm w-100 fw-bold" style="border-radius: 6px;" data-bs-dismiss="modal">
+            Got it, Continue
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        var complianceModal = new bootstrap.Modal(document.getElementById('complianceModal'));
+        complianceModal.show();
+    });
+</script>
+{% endif %}
 {% endblock %}

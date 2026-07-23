@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+
+    <!-- 🌟 COMPACT HEADER WITH EXCEL BUTTON -->
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="{% url 'view_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0 flex-grow-1"><i class="bi bi-person-bounding-box text-primary me-1"></i> Dr Wise Sale</h6>
+
+        <!-- 📥 COMPACT EXCEL BUTTON -->
+        <a href="?employee_id={{ selected_emp_id }}&from_month={{ from_month }}&to_month={{ to_month }}&year={{ selected_year }}&export=excel" class="btn btn-success btn-sm fw-bold shadow-sm px-2 py-0" style="font-size: 0.75rem;">
+            📥 .XLSX
+        </a>
+    </div>
+
+    <!-- 🎛️ ULTRA COMPACT FILTERS (Auto-Submit) -->
+    <div class="card border-0 shadow-sm mb-2 bg-white mx-1" style="border-radius: 8px;">
+        <div class="card-body p-2">
+            <form method="GET" class="row g-1 align-items-end" id="filterForm">
+                {% if is_manager_view %}
+                <div class="col-12">
+                    <select name="employee_id" class="form-select form-select-sm bg-light fw-bold text-primary border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">👤 Select Employee...</option>
+                        {% for emp in team_employees %}
+                            <option value="{{ emp.id }}" {% if selected_emp_id == emp.id %}selected{% endif %}>{{ emp.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+
+                <div class="col-4">
+                    <select name="from_month" class="form-select form-select-sm bg-light fw-bold border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        {% for m_num, m_name in months_choices %}
+                            <option value="{{ m_num }}" {% if from_month == m_num %}selected{% endif %}>🟢 {{ m_name|slice:":3" }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-4">
+                    <select name="to_month" class="form-select form-select-sm bg-light fw-bold border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        {% for m_num, m_name in months_choices %}
+                            <option value="{{ m_num }}" {% if to_month == m_num %}selected{% endif %}>🔴 {{ m_name|slice:":3" }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-4">
+                    <input type="number" name="year" value="{{ selected_year }}" class="form-control form-control-sm bg-light fw-bold text-center border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 🔀 TAB SWITCH: Doctor-wise vs Product-wise -->
+    <div class="d-flex gap-2 mb-2 px-2">
+        <button type="button" class="btn btn-sm fw-bold flex-grow-1 active-tab-btn" id="btnDocTab" onclick="showTab('doc')" style="border-radius: 8px; border: 2px solid #107C41; background:#107C41; color:#fff;">👨‍⚕️ Doctor Wise</button>
+        <button type="button" class="btn btn-sm fw-bold flex-grow-1" id="btnProdTab" onclick="showTab('prod')" style="border-radius: 8px; border: 2px solid #107C41; background:#fff; color:#107C41;">💊 Product Wise</button>
+    </div>
+
+    <!-- 🎨 COMPACT TABLE CSS -->
+    <style>
+    .excel-table-wrapper { max-height: 65vh; overflow: auto; border-radius: 8px; border: 1px solid #ccc; position: relative; }
+    .excel-table { border-collapse: separate; border-spacing: 0; width: 100%; background-color: #fff; font-size: 0.70rem; }
+    .excel-table th, .excel-table td {
+        border-right: 1px solid #d4d4d4; border-bottom: 1px solid #d4d4d4;
+        padding: 6px 4px; vertical-align: middle; text-align: center; white-space: nowrap;
+    }
+    .excel-table thead tr th { position: sticky; top: 0; z-index: 20; color: #fff; background-color: #107C41; padding: 8px 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .excel-table tbody td:first-child {
+        position: sticky; left: 0; background-color: #f4f7f9; z-index: 10; text-align: left;
+        border-right: 2px solid #107C41; color: #333;
+        width: 130px; min-width: 130px; max-width: 130px;
+        white-space: normal; word-wrap: break-word; box-shadow: 3px 0 5px -1px rgba(0,0,0,0.1);
+    }
+    .excel-table thead tr th:first-child {
+        position: sticky; left: 0; z-index: 30; background-color: #0b5e31; border-right: 2px solid #0b5e31;
+        text-align: left; width: 130px; min-width: 130px; max-width: 130px; white-space: normal;
+    }
+    .excel-table tbody tr:hover td { background-color: #e6f2eb; }
+    .excel-table tbody tr:hover td:first-child { background-color: #d1e5d8; }
+    .doc-group-header td { background-color: #d1e5d8 !important; font-weight: bold; color: #0b5e31; position: sticky; left: 0; }
+    </style>
+
+    {% if not doc_grouped_data and not prod_tab_list %}
+    <div class="alert alert-warning text-center mx-1 shadow-sm" style="border-radius: 8px; font-size: 0.8rem;">
+        ⚠️ Is period ({{ from_month }}-{{ to_month }}/{{ selected_year }}) ke liye koi Classify Rx data nahi mila. Pehle "Classify Rx" se Doctor-wise sale entry karein.
+    </div>
+    {% endif %}
+
+    <!-- 📊 TAB 1: DOCTOR WISE -->
+    <div id="tabDoc" class="card border-0 shadow-sm bg-white mx-1 mb-5" style="border-radius: 8px;">
+        <div class="excel-table-wrapper" style="border-radius: 8px;">
+            <table class="excel-table">
+                <thead>
+                    <tr>
+                        <th>Chemist / Product</th>
+                        {% for m_num, m_name in months_headers %}<th>{{ m_name }}</th>{% endfor %}
+                        <th style="background-color: #0b5e31;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for grp in doc_grouped_data %}
+                    <tr class="doc-group-header">
+                        <td colspan="{{ months_headers|length|add:2 }}">
+                            👨‍⚕️ Dr. {{ grp.doctor_name }} <span class="text-muted fw-normal">({{ grp.specialty }})</span>
+                            <span class="float-end">₹{{ grp.doc_total_val|floatformat:0 }}</span>
+                        </td>
+                    </tr>
+                    {% for row in grp.items %}
+                    <tr>
+                        <td class="text-secondary ps-3" style="font-size: 0.65rem;">{{ row.chemist_name }} — {{ row.product_name }}</td>
+                        {% for m_data in row.monthly_data_list %}
+                            <td>{{ m_data.billed }}<span class="text-success">+{{ m_data.free }}</span></td>
+                        {% endfor %}
+                        <td class="fw-bold text-dark" style="background-color: #e9ecef;">₹{{ row.total_value|floatformat:0 }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% endfor %}
+                </tbody>
+                {% if gt_monthly_list %}
+                <tfoot>
+                    <tr class="fw-bold">
+                        <td style="background-color:#0b5e31; color:#fff;">GRAND TOTAL</td>
+                        {% for m_data in gt_monthly_list %}<td style="background-color:#e9ecef;">{{ m_data.billed }}<span class="text-success">+{{ m_data.free }}</span></td>{% endfor %}
+                        <td style="background-color:#0b5e31; color:#fff;">₹{{ gt_value|floatformat:0 }}</td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+
+    <!-- 📊 TAB 2: PRODUCT WISE -->
+    <div id="tabProd" class="card border-0 shadow-sm bg-white mx-1 mb-5 d-none" style="border-radius: 8px;">
+        <div class="excel-table-wrapper" style="border-radius: 8px;">
+            <table class="excel-table">
+                <thead>
+                    <tr>
+                        <th>Doctor</th>
+                        {% for m_num, m_name in months_headers %}<th>{{ m_name }}</th>{% endfor %}
+                        <th style="background-color: #0b5e31;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for prod in prod_tab_list %}
+                    <tr class="doc-group-header">
+                        <td colspan="{{ months_headers|length|add:2 }}">💊 {{ prod.product_name }} <span class="float-end">₹{{ prod.tot_val|floatformat:0 }}</span></td>
+                    </tr>
+                    {% for doc in prod.doctors_list %}
+                    <tr>
+                        <td class="text-secondary ps-3" style="font-size: 0.65rem;">Dr. {{ doc.doc_name }} <span class="text-muted">({{ doc.specialty }})</span></td>
+                        {% for m_data in doc.monthly_list %}
+                            <td>{{ m_data.billed }}<span class="text-success">+{{ m_data.free }}</span></td>
+                        {% endfor %}
+                        <td class="fw-bold text-dark" style="background-color: #e9ecef;">₹{{ doc.tot_val|floatformat:0 }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function showTab(tab) {
+    const docTab = document.getElementById('tabDoc'), prodTab = document.getElementById('tabProd');
+    const btnDoc = document.getElementById('btnDocTab'), btnProd = document.getElementById('btnProdTab');
+    if (tab === 'doc') {
+        docTab.classList.remove('d-none'); prodTab.classList.add('d-none');
+        btnDoc.style.background = '#107C41'; btnDoc.style.color = '#fff';
+        btnProd.style.background = '#fff'; btnProd.style.color = '#107C41';
+    } else {
+        prodTab.classList.remove('d-none'); docTab.classList.add('d-none');
+        btnProd.style.background = '#107C41'; btnProd.style.color = '#fff';
+        btnDoc.style.background = '#fff'; btnDoc.style.color = '#107C41';
+    }
+}
+</script>
+{% endblock %}

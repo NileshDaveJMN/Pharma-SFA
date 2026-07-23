@@ -1,0 +1,638 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-2">
+    <div class="d-flex align-items-center gap-2 mb-3 px-2">
+        <a href="{% url 'request_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-1 rounded-3 border bg-white text-secondary">⬅️</a>
+        <div>
+            <h4 class="fw-bold text-dark mb-0">🛡️ Approval Hub</h4>
+            <small class="text-muted small">Apni team ki pending requests manage karein</small>
+        </div>
+    </div>
+
+<div class="row g-2 mb-4 px-1">
+    <div class="col-3">
+        <a href="#sec_expense" class="text-decoration-none">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center position-relative" style="border-bottom: 3.5px solid #198754 !important; min-height: 62px;">
+                {% if pending_expenses %}<span class="position-absolute top-0 end-0 badge bg-danger rounded-circle mt-2 me-2" style="font-size:0.55rem; width:16px; height:16px; display:flex; align-items:center; justify-content:center;">{{ pending_expenses|length }}</span>{% endif %}
+                <span class="mb-1" style="font-size: 1.1rem;">💰</span>
+                <span class="fw-bold text-dark" style="font-size:0.55rem; line-height:1.1;">Expenses</span>
+            </div>
+        </a>
+    </div>
+    <div class="col-3">
+        <a href="#sec_mtp" class="text-decoration-none">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center position-relative" style="border-bottom: 3.5px solid #0056b3 !important; min-height: 62px;">
+                {% if pending_mtps %}<span class="position-absolute top-0 end-0 badge bg-danger rounded-circle mt-2 me-2" style="font-size:0.55rem; width:16px; height:16px; display:flex; align-items:center; justify-content:center;">{{ pending_mtps|length }}</span>{% endif %}
+                <span class="mb-1" style="font-size: 1.1rem;">📅</span>
+                <span class="fw-bold text-dark" style="font-size:0.55rem; line-height:1.1;">MTP Plan</span>
+            </div>
+        </a>
+    </div>
+    <div class="col-3">
+        <a href="#sec_doctor" class="text-decoration-none">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center position-relative" style="border-bottom: 3.5px solid #20c997 !important; min-height: 62px;">
+                {% if pending_doctors %}<span class="position-absolute top-0 end-0 badge bg-danger rounded-circle mt-2 me-2" style="font-size:0.55rem; width:16px; height:16px; display:flex; align-items:center; justify-content:center;">{{ pending_doctors|length }}</span>{% endif %}
+                <span class="mb-1" style="font-size: 1.1rem;">🩺</span>
+                <span class="fw-bold text-dark" style="font-size:0.55rem; line-height:1.1;">Doctors</span>
+            </div>
+        </a>
+    </div>
+    <div class="col-3">
+        <a href="#sec_chemist" class="text-decoration-none">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center position-relative" style="border-bottom: 3.5px solid #ffc107 !important; min-height: 62px;">
+                {% if pending_chemists %}<span class="position-absolute top-0 end-0 badge bg-danger rounded-circle mt-2 me-2" style="font-size:0.55rem; width:16px; height:16px; display:flex; align-items:center; justify-content:center;">{{ pending_chemists|length }}</span>{% endif %}
+                <span class="mb-1" style="font-size: 1.1rem;">💊</span>
+                <span class="fw-bold text-dark" style="font-size:0.55rem; line-height:1.1;">Chemists</span>
+            </div>
+        </a>
+    </div>
+    <div class="col-3">
+        <a href="#sec_route" class="text-decoration-none">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center position-relative" style="border-bottom: 3.5px solid #fd7e14 !important; min-height: 62px;">
+                {% if pending_routes %}<span class="position-absolute top-0 end-0 badge bg-danger rounded-circle mt-2 me-2" style="font-size:0.55rem; width:16px; height:16px; display:flex; align-items:center; justify-content:center;">{{ pending_routes|length }}</span>{% endif %}
+                <span class="mb-1" style="font-size: 1.1rem;">🗺️</span>
+                <span class="fw-bold text-dark" style="font-size:0.55rem; line-height:1.1;">Routes</span>
+            </div>
+        </a>
+    </div>
+    <div class="col-3">
+        <a href="#sec_target" class="text-decoration-none">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center position-relative" style="border-bottom: 3.5px solid #e83e8c !important; min-height: 62px;">
+                {% if pending_targets %}<span class="position-absolute top-0 end-0 badge bg-danger rounded-circle mt-2 me-2" style="font-size:0.55rem; width:16px; height:16px; display:flex; align-items:center; justify-content:center;">{{ pending_targets|length }}</span>{% endif %}
+                <span class="mb-1" style="font-size: 1.1rem;">🎯</span>
+                <span class="fw-bold text-dark" style="font-size:0.55rem; line-height:1.1;">Targets</span>
+            </div>
+        </a>
+    </div>
+    <div class="col-3">
+        <a href="#sec_leave" class="text-decoration-none">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center position-relative" style="border-bottom: 3.5px solid #6f42c1 !important; min-height: 62px;">
+                {% if pending_leaves %}<span class="position-absolute top-0 end-0 badge bg-danger rounded-circle mt-2 me-2" style="font-size:0.55rem; width:16px; height:16px; display:flex; align-items:center; justify-content:center;">{{ pending_leaves|length }}</span>{% endif %}
+                <span class="mb-1" style="font-size: 1.1rem;">🏖️</span>
+                <span class="fw-bold text-dark" style="font-size:0.55rem; line-height:1.1;">Leaves</span>
+            </div>
+        </a>
+    </div>
+    {% if request.user.employee.designation == 'Admin' or pending_holidays %}
+    <div class="col-3">
+        <a href="#sec_holiday" class="text-decoration-none">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center position-relative" style="border-bottom: 3.5px solid #17a2b8 !important; min-height: 62px;">
+                {% if pending_holidays %}<span class="position-absolute top-0 end-0 badge bg-danger rounded-circle mt-2 me-2" style="font-size:0.55rem; width:16px; height:16px; display:flex; align-items:center; justify-content:center;">{{ pending_holidays|length }}</span>{% endif %}
+                <span class="mb-1" style="font-size: 1.1rem;">⛱️</span>
+                <span class="fw-bold text-dark" style="font-size:0.55rem; line-height:1.1;">Holidays</span>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+    <div class="col-3">
+        <a href="#sec_free_claim" class="text-decoration-none">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center position-relative" style="border-bottom: 3.5px solid #dc3545 !important; min-height: 62px;">
+                {% if pending_free_claims %}
+                    <span class="position-absolute top-0 end-0 badge bg-danger rounded-circle mt-2 me-2" style="font-size:0.55rem; width:16px; height:16px; display:flex; align-items:center; justify-content:center;">{{ pending_free_claims|length }}</span>
+                {% endif %}
+                <span class="mb-1" style="font-size: 1.1rem;"><i class="bi bi-gift-fill text-danger"></i></span>
+                <span class="fw-bold text-dark" style="font-size:0.55rem; line-height:1.1;">Free Claims</span>
+            </div>
+        </a>
+    </div>
+    <div class="col-3">
+        <a href="#sec_gift_campaign" class="text-decoration-none">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center position-relative" style="border-bottom: 3.5px solid #6f42c1 !important; min-height: 62px;">
+                {% if pending_gift_campaigns %}
+                    <span class="position-absolute top-0 end-0 badge bg-danger rounded-circle mt-2 me-2" style="font-size:0.55rem; width:16px; height:16px; display:flex; align-items:center; justify-content:center;">{{ pending_gift_campaigns|length }}</span>
+                {% endif %}
+                <span class="mb-1" style="font-size: 1.1rem;">🎁</span>
+                <span class="fw-bold text-dark" style="font-size:0.55rem; line-height:1.1;">Gift Campaign</span>
+            </div>
+        </a>
+    </div>
+    
+    <div class="col-3">
+        <a href="#sec_edits" class="text-decoration-none">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center position-relative" style="border-bottom: 3.5px solid #ffc107 !important; min-height: 62px;">
+                {% if pending_chemist_edits or pending_doctor_edits %}
+                    <span class="position-absolute top-0 end-0 badge bg-danger rounded-circle mt-2 me-2" style="font-size:0.55rem; width:16px; height:16px; display:flex; align-items:center; justify-content:center;">{{ pending_chemist_edits|length|add:pending_doctor_edits|length }}</span>
+                {% endif %}
+                <span class="mb-1" style="font-size: 1.1rem;">✏️</span>
+                <span class="fw-bold text-dark" style="font-size:0.55rem; line-height:1.1;">Edit Requests</span>
+            </div>
+        </a>
+    </div>
+</div>
+
+<div class="px-1">
+    {% if not pending_expenses and not pending_mtps and not pending_doctors and not pending_chemists and not pending_routes and not pending_targets and not pending_leaves and not pending_holidays and not pending_gift_campaigns and not pending_free_claims and not pending_chemist_edits and not pending_doctor_edits %}
+    <div class="text-center p-5 bg-white rounded-3 shadow-sm border-0 mt-3">
+        <h1 class="mb-3" style="font-size:3rem;">🎉</h1>
+        <h5 class="fw-bold text-dark">All Caught Up!</h5>
+        <p class="text-muted small mb-0">Aapki team ki koi bhi request approval ke liye pending nahi hai.</p>
+    </div>
+    {% endif %}
+
+    {% if pending_expenses %}
+    <div id="sec_expense" class="card shadow-sm border-0 mb-4 bg-white" style="border-left: 4px solid #198754 !important;">
+        <div class="card-header bg-white fw-bold text-success border-0 pt-3 pb-1">💰 Pending Expenses</div>
+        <div class="card-body p-0">
+            <div class="list-group list-group-flush">
+                {% for exp in pending_expenses %}
+                <div class="list-group-item p-3 d-flex flex-column gap-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-0 fw-bold text-dark" style="font-size:0.95rem;">{{ exp.employee.name }}</h6>
+                            <small class="text-muted">Month: <span class="fw-bold text-primary">{{ exp.month }} / {{ exp.year }}</span></small>
+                        </div>
+                    </div>
+                    <a href="{% url 'review_expense' exp.id %}" class="btn btn-sm btn-outline-success w-100 fw-bold mt-1">🔍 Review & Approve</a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if pending_mtps %}
+    <div id="sec_mtp" class="card shadow-sm border-0 mb-4 bg-white" style="border-left: 4px solid #0056b3 !important;">
+        <div class="card-header bg-white fw-bold text-primary border-0 pt-3 pb-1">📅 Pending Tour Programs</div>
+        <div class="card-body p-0">
+            <div class="list-group list-group-flush">
+                {% for mtp in pending_mtps %}
+                <div class="list-group-item p-3 d-flex flex-column gap-2">
+                    <div>
+                        <h6 class="mb-0 fw-bold text-dark" style="font-size:0.95rem;">{{ mtp.employee.name }}</h6>
+                        <small class="text-muted">Month: {{ mtp.month }} / {{ mtp.year }}</small>
+                    </div>
+                    <a href="{% url 'review_mtp' mtp.id %}" class="btn btn-sm btn-outline-primary w-100 fw-bold mt-1">🔍 Review & Approve</a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+   {% if pending_targets %}
+<div id="sec_target" class="card shadow-sm border-0 mb-4 bg-white" style="border-left: 4px solid #6f42c1 !important;">
+    <div class="card-header bg-white fw-bold text-dark border-0 pt-3 pb-1" style="color: #59339d !important;">🎯 Pending Targets</div>
+    <div class="card-body p-0">
+        <div class="list-group list-group-flush">
+            {% for target in pending_targets %}
+            <div class="list-group-item p-3">
+                <div class="d-flex justify-content-between mb-2">
+                    <div>
+                        <h6 class="mb-1 fw-bold text-dark">Target: Month {{ target.month }} / {{ target.year }}</h6>
+                        <span class="text-muted d-block mt-1" style="font-size:0.75rem;">👤 Employee: {{ target.employee.name }}</span>
+                        <span class="text-muted d-block" style="font-size:0.75rem;">📊 Current Status: {{ target.get_status_display|default:target.status }}</span>
+                    </div>
+                    <span class="badge bg-warning text-dark align-self-start px-2 py-1">Action Req.</span>
+                </div>
+                
+                <div class="mt-2 w-100">
+                    <a href="{% url 'review_target' target.id %}" class="btn btn-primary w-100 fw-bold shadow-sm" style="background-color: #6f42c1; border-color: #6f42c1;">
+                        🔍 Review & Update Target
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% if pending_gift_campaigns %}
+<div id="sec_gift_campaign" class="card shadow-sm border-0 mb-4 bg-white" style="border-left: 4px solid #6f42c1 !important;">
+    <div class="card-header bg-white fw-bold border-0 pt-3 pb-1" style="color:#6f42c1;">🎁 Pending Gift Campaigns</div>
+    <div class="card-body p-0">
+        <div class="list-group list-group-flush">
+    {% for plan in pending_gift_campaigns %}
+    <div class="list-group-item p-3">
+        <div class="d-flex justify-content-between align-items-start mb-1">
+            <div>
+                <div class="fw-bold small text-dark">{{ plan.employee.name }}</div>
+                <div class="text-muted" style="font-size:0.7rem;">
+                    🎁 {{ plan.item.name }} (₹{{ plan.item.price }}) → Dr. {{ plan.doctor.name }}
+                </div>
+                <div class="text-muted" style="font-size:0.7rem;">
+                    {{ plan.month }}/{{ plan.year }}
+                </div>
+            </div>
+            <span class="badge bg-warning text-dark align-self-start px-2 py-1">Pending</span>
+        </div>
+        <form method="POST" class="mt-1">
+            {% csrf_token %}
+            <input type="hidden" name="item_type" value="gift_campaign">
+            <input type="hidden" name="item_id" value="{{ plan.id }}">
+            <input type="text" name="remark" placeholder="Remark (optional)" 
+                   class="form-control form-control-sm rounded-3 mb-1" style="font-size:0.75rem;">
+            <div class="d-flex gap-1">
+                <button type="submit" name="action" value="approve" class="btn btn-success btn-sm flex-fill rounded-3" style="font-size:0.7rem;">✅ Approve</button>
+                <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm flex-fill rounded-3" style="font-size:0.7rem;">❌ Reject</button>
+            </div>
+        </form>
+    </div>
+    {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% if pending_free_claims %}
+<div id="sec_free_claim" class="mb-5">
+    <div class="d-flex align-items-center justify-content-between mb-3 px-1">
+        <h5 class="fw-bold text-dark mb-0"><i class="bi bi-gift-fill text-danger me-2"></i> Free Claims Approval</h5>
+        <span class="badge bg-danger rounded-pill px-3">{{ pending_free_claims|length }} Pending</span>
+    </div>
+    
+    <div class="accordion shadow-sm" id="freeClaimAccordion">
+        {% for claim in pending_free_claims %}
+        <div class="accordion-item border-0 mb-2 rounded bg-white">
+            <h2 class="accordion-header" id="heading_fc_{{ claim.id }}">
+                <button class="accordion-button collapsed fw-bold text-dark rounded" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_fc_{{ claim.id }}">
+                    <div class="d-flex flex-column w-100 me-3">
+                        <span>👤 {{ claim.employee.name }} ({{ claim.employee.designation }})</span>
+                        <span class="text-muted fw-normal" style="font-size: 0.8rem;">Month: {{ claim.month }}/{{ claim.year }}</span>
+                    </div>
+                </button>
+            </h2>
+            <div id="collapse_fc_{{ claim.id }}" class="accordion-collapse collapse" data-bs-parent="#freeClaimAccordion">
+                <div class="accordion-body p-3 bg-light">
+                    
+                    <div class="table-responsive mb-3 rounded bg-white shadow-sm">
+                        <table class="table table-sm table-hover mb-0 align-middle">
+                            <thead class="table-light text-muted small">
+                                <tr>
+                                    <th>Stockist</th>
+                                    <th>Product</th>
+                                    <th class="text-center">Free Qty</th>
+                                    <th class="text-end">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody class="small">
+                                {% for line in claim.claim_lines.all %}
+                                <tr>
+                                    <td class="fw-bold text-dark">{{ line.stockist.name }}</td>
+                                    <td>{{ line.product.name }}</td>
+                                    <td class="text-center text-danger fw-bold">{{ line.total_free_qty }}</td>
+                                    <td class="text-end text-success fw-bold">₹{{ line.claim_value }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <form method="POST" class="d-flex flex-column gap-2 mt-3">
+                        {% csrf_token %}
+                        <input type="hidden" name="item_type" value="free_claim"> 
+                        <input type="hidden" name="item_id" value="{{ claim.id }}">
+                        
+                        <input type="text" name="remark" class="form-control form-control-sm border-0 shadow-sm" placeholder="Add remark (optional)...">
+                        
+                        <div class="d-flex gap-2 w-100 mt-2">
+                            <button type="submit" name="action" value="approve" class="btn btn-success w-50 fw-bold py-2"><i class="bi bi-check-circle"></i> Approve</button>
+                            <button type="submit" name="action" value="reject" class="btn btn-outline-danger w-50 fw-bold py-2" onclick="return confirm('Are you sure you want to reject this claim?');"><i class="bi bi-x-circle"></i> Reject</button>
+                        </div>
+                    </form>
+
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+       {% if pending_leaves %}
+    <div id="sec_leave" class="card shadow-sm border-0 mb-4 bg-white" style="border-left: 4px solid #6f42c1 !important;">
+        <div class="card-header bg-white fw-bold border-0 pt-3 pb-1" style="color:#6f42c1;">🏖️ Pending Leave Requests</div>
+        <div class="card-body p-0">
+            <div class="list-group list-group-flush">
+                {% for l in pending_leaves %}
+                <div class="list-group-item p-3">
+                    <div class="d-flex justify-content-between mb-2">
+                        <div>
+                            <h6 class="mb-1 fw-bold text-dark">{{ l.employee.name }} <small class="text-muted fw-normal">({{ l.employee.designation }})</small></h6>
+                            <span class="text-primary fw-bold" style="font-size:0.8rem;">{{ l.leave_type }} for {{ l.no_of_days }} Day(s)</span>
+                            <div class="text-secondary mt-1" style="font-size:0.75rem;">📅 {{ l.start_date|date:"d M Y" }} to {{ l.end_date|date:"d M Y" }}</div>
+                            <div class="text-muted mt-1 fst-italic" style="font-size:0.75rem;">"{{ l.reason }}"</div>
+                        </div>
+                        <span class="badge bg-warning text-dark align-self-start px-2 py-1">Pending</span>
+                    </div>
+                    <form method="POST" class="d-flex gap-2 mt-2 w-100">
+                        {% csrf_token %}
+                        <input type="hidden" name="item_type" value="leave">
+                        <input type="hidden" name="item_id" value="{{ l.id }}">
+                        <button type="submit" name="action" value="approve" class="btn btn-success w-50 fw-bold">✅ Approve</button>
+                        <button type="submit" name="action" value="reject" class="btn btn-outline-danger w-50 fw-bold" onclick="return confirm('Reject this leave?');">❌ Reject</button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if pending_holidays %}
+    <div id="sec_holiday" class="card shadow-sm border-0 mb-4 bg-white" style="border-left: 4px solid #17a2b8 !important;">
+        <div class="card-header bg-white fw-bold border-0 pt-3 pb-1" style="color:#17a2b8;">⛱️ Pending Holidays</div>
+        <div class="card-body p-0">
+            <div class="list-group list-group-flush">
+                {% for h in pending_holidays %}
+                <div class="list-group-item p-3">
+                    <div class="d-flex justify-content-between mb-2">
+                        <div>
+                            <h6 class="mb-1 fw-bold text-dark text-uppercase">{{ h.name }}</h6>
+                            <span class="text-secondary d-block mt-1" style="font-size:0.78rem;">📅 {{ h.date|date:"d M Y, l" }}</span>
+                            <span class="text-primary d-block mt-1" style="font-size:0.75rem;">👤 Proposed by: {{ h.proposed_by.name }} ({{ h.proposed_by.designation }})</span>
+                        </div>
+                        <span class="badge bg-warning text-dark align-self-start px-2 py-1">Pending</span>
+                    </div>
+                    <form method="POST" class="d-flex gap-2 mt-2 w-100">
+                        {% csrf_token %}
+                        <input type="hidden" name="item_type" value="holiday">
+                        <input type="hidden" name="item_id" value="{{ h.id }}">
+                        <button type="submit" name="action" value="approve" class="btn btn-success w-50 fw-bold">✅ Approve</button>
+                        <button type="submit" name="action" value="reject" class="btn btn-outline-danger w-50 fw-bold" onclick="return confirm('Reject this holiday?');">❌ Reject</button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if pending_doctors %}
+    <div id="sec_doctor" class="card shadow-sm border-0 mb-4 bg-white" style="border-left: 4px solid #20c997 !important;">
+        <div class="card-header bg-white fw-bold text-success border-0 pt-3 pb-1">🩺 Pending Doctors</div>
+        <div class="card-body p-0">
+            <div class="list-group list-group-flush">
+                {% for doc in pending_doctors %}
+                <div class="list-group-item p-3">
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                        {% if doc.photo %}
+                        <img src="{{ doc.photo.url }}" class="rounded-circle border" style="width:52px; height:52px; object-fit:cover;">
+                        {% else %}
+                        <div class="rounded-circle bg-success bg-opacity-10 d-flex align-items-center justify-content-center border border-success" style="width:52px; height:52px; font-size:1.4rem;">🩺</div>
+                        {% endif %}
+                        <div>
+                            <h6 class="mb-0 fw-bold text-dark">Dr. {{ doc.name }}</h6>
+                            <small class="text-muted">
+                                {% if doc.degree %}{{ doc.degree }}{% endif %}
+                                {% if doc.specialty %} · {{ doc.specialty }}{% endif %}
+                            </small>
+                        </div>
+                        {% if doc.category %}
+                        <span class="badge ms-auto fw-bold px-2
+                            {% if doc.category == 'A' %}bg-danger
+                            {% elif doc.category == 'B' %}bg-warning text-dark
+                            {% else %}bg-secondary{% endif %}">
+                            Cat {{ doc.category }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <div class="bg-light rounded-3 p-2 mb-2" style="font-size:0.78rem;">
+                        <div class="row g-1">
+                            {% if doc.mobile %}
+                            <div class="col-6">
+                                <span class="text-muted">📞</span>
+                                <span class="fw-semibold text-dark">{{ doc.mobile }}</span>
+                            </div>
+                            {% endif %}
+                            {% if doc.email %}
+                            <div class="col-6">
+                                <span class="text-muted">✉️</span>
+                                <span class="fw-semibold text-dark">{{ doc.email }}</span>
+                            </div>
+                            {% endif %}
+                            {% if doc.dob %}
+                            <div class="col-6">
+                                <span class="text-muted">🎂 DoB:</span>
+                                <span class="fw-semibold text-dark">{{ doc.dob|date:"d M Y" }}</span>
+                            </div>
+                            {% endif %}
+                            {% if doc.route %}
+                            <div class="col-6">
+                                <span class="text-muted">🗺️</span>
+                                <span class="fw-semibold text-dark">{{ doc.route.name }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="text-muted mb-2" style="font-size:0.72rem;">
+                        👤 Added by: <span class="fw-bold text-dark">{{ doc.allocated_to.name }}</span>
+                        · Territory: {{ doc.territory.name }}
+                    </div>
+                    <form method="POST" class="d-flex gap-2 w-100">
+                        {% csrf_token %}
+                        <input type="hidden" name="item_type" value="doctor">
+                        <input type="hidden" name="item_id" value="{{ doc.id }}">
+                        <button type="submit" name="action" value="approve" class="btn btn-success w-50 fw-bold">✅ Approve</button>
+                        <button type="submit" name="action" value="reject" class="btn btn-outline-danger w-50 fw-bold">❌ Reject</button>
+                    </form>
+                </div>
+                {% endfor %}
+             </div>
+        </div>
+    </div>
+    {% endif %}
+     {% if pending_chemists %}
+    <div id="sec_chemist" class="card shadow-sm border-0 mb-4 bg-white" style="border-left: 4px solid #ffc107 !important;">
+        <div class="card-header bg-white fw-bold text-dark border-0 pt-3 pb-1" style="color: #d39e00 !important;">💊 Pending Chemists</div>
+        <div class="card-body p-0">
+            <div class="list-group list-group-flush">
+                {% for chem in pending_chemists %}
+                <div class="list-group-item p-3">
+                    <div class="d-flex justify-content-between mb-2">
+                        <div>
+                            <h6 class="mb-1 fw-bold text-dark">{{ chem.name }}</h6>
+                            <span class="text-muted d-block mt-1" style="font-size:0.75rem;">👤 Added by: {{ chem.allocated_to.name }}</span>
+                            {% if chem.territory %}
+                            <span class="text-muted d-block" style="font-size:0.75rem;">📍 Territory: {{ chem.territory.name }}</span>
+                            {% endif %}
+                        </div>
+                        <span class="badge bg-warning text-dark align-self-start px-2 py-1">Pending</span>
+                    </div>
+                    <form method="POST" class="d-flex gap-2 mt-2 w-100">
+                        {% csrf_token %}
+                        <input type="hidden" name="item_type" value="chemist">
+                        <input type="hidden" name="item_id" value="{{ chem.id }}">
+                        <button type="submit" name="action" value="approve" class="btn btn-success w-50 fw-bold">✅ Approve</button>
+                        <button type="submit" name="action" value="reject" class="btn btn-outline-danger w-50 fw-bold" onclick="return confirm('Reject this chemist?');">❌ Reject</button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+       {% if pending_routes %}
+<div id="sec_route" class="card shadow-sm border-0 mb-4 bg-white" style="border-left: 4px solid #0dcaf0 !important;">
+    <div class="card-header bg-white fw-bold text-dark border-0 pt-3 pb-1" style="color: #087990 !important;">🗺️ Pending Routes</div>
+    <div class="card-body p-0">
+        <div class="list-group list-group-flush">
+            {% for route in pending_routes %}
+            <div class="list-group-item p-3">
+                <div class="d-flex justify-content-between mb-2">
+                    <div>
+                        <h6 class="mb-1 fw-bold text-dark">{{ route.name }}</h6>
+                        <span class="text-muted d-block mt-1" style="font-size:0.75rem;">👤 Requested by: {{ route.requested_by.name }}</span>
+                        {% if route.territory %}
+                        <span class="text-muted d-block" style="font-size:0.75rem;">📍 Territory: {{ route.territory.name }}</span>
+                        {% endif %}
+                    </div>
+                    <span class="badge bg-warning text-dark align-self-start px-2 py-1">Pending</span>
+                </div>
+                <form method="POST" class="d-flex gap-2 mt-2 w-100">
+                    {% csrf_token %}
+                    <input type="hidden" name="item_type" value="route">
+                    <input type="hidden" name="item_id" value="{{ route.id }}">
+                    <button type="submit" name="action" value="approve" class="btn btn-success w-50 fw-bold">✅ Approve</button>
+                    <button type="submit" name="action" value="reject" class="btn btn-outline-danger w-50 fw-bold" onclick="return confirm('Reject this route?');">❌ Reject</button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div id="sec_edits">
+    {% if pending_chemist_edits %}
+    <div class="card shadow-sm border-0 mb-4 bg-white" style="border-left: 4px solid #ffc107 !important;">
+        <div class="card-header bg-white fw-bold text-dark border-0 pt-3 pb-1" style="color: #d39e00 !important;"><i class="bi bi-shop"></i> Chemist Edit Requests</div>
+        <div class="card-body p-0">
+            <div class="list-group list-group-flush">
+                {% for req in pending_chemist_edits %}
+                <div class="list-group-item p-3">
+                    <span class="badge bg-warning text-dark mb-2">Requested by: {{ req.employee.name }}</span>
+                    <h6 class="fw-bold text-dark mb-2">Target: {{ req.chemist.name }}</h6>
+                    
+                    <table class="table table-sm table-bordered mb-3" style="font-size: 0.8rem;">
+                        <thead class="table-light"><tr><th>Field</th><th>Original Data</th><th>Requested Change</th></tr></thead>
+                        <tbody>
+                            <tr>
+                                <td>Name</td>
+                                <td class="text-muted">{{ req.chemist.name }}</td>
+                                <td class="fw-bold {% if req.chemist.name != req.req_name %}text-danger{% else %}text-success{% endif %}">{{ req.req_name }}</td>
+                            </tr>
+                            <tr>
+                                <td>Address</td>
+                                <td class="text-muted">{{ req.chemist.address|default:'-' }}</td>
+                                <td class="fw-bold {% if req.chemist.address != req.req_address %}text-danger{% else %}text-success{% endif %}">{{ req.req_address|default:'-' }}</td>
+                            </tr>
+                            <tr>
+                                <td>Phone</td>
+                                <td class="text-muted">{{ req.chemist.phone|default:'-' }}</td>
+                                <td class="fw-bold {% if req.chemist.phone != req.req_phone %}text-danger{% else %}text-success{% endif %}">{{ req.req_phone|default:'-' }}</td>
+                            </tr>
+                            <tr>
+                                <td>Territory</td>
+                                <td class="text-muted">{{ req.chemist.territory.name|default:'-' }}</td>
+                                <td class="fw-bold {% if req.chemist.territory_id != req.req_territory_id %}text-danger{% else %}text-success{% endif %}">{{ req.req_territory.name|default:'-' }}</td>
+                            </tr>
+                            <tr>
+                                <td>Route</td>
+                                <td class="text-muted">{{ req.chemist.route.name|default:'-' }}</td>
+                                <td class="fw-bold {% if req.chemist.route_id != req.req_route_id %}text-danger{% else %}text-success{% endif %}">{{ req.req_route.name|default:'-' }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <form method="POST" class="d-flex gap-2">
+                        {% csrf_token %}
+                        <input type="hidden" name="item_type" value="chemist_edit">
+                        <input type="hidden" name="item_id" value="{{ req.id }}">
+                        <button type="submit" name="action" value="approve" class="btn btn-success btn-sm w-100 fw-bold">✅ Approve</button>
+                        <button type="submit" name="action" value="reject" class="btn btn-outline-danger btn-sm w-100 fw-bold">❌ Reject</button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if pending_doctor_edits %}
+    <div class="card shadow-sm border-0 mb-4 bg-white" style="border-left: 4px solid #20c997 !important;">
+        <div class="card-header bg-white fw-bold text-success border-0 pt-3 pb-1"><i class="bi bi-person-heart"></i> Doctor Edit Requests</div>
+        <div class="card-body p-0">
+            <div class="list-group list-group-flush">
+                {% for req in pending_doctor_edits %}
+                <div class="list-group-item p-3">
+                    <span class="badge bg-warning text-dark mb-2">Requested by: {{ req.employee.name }}</span>
+                    <h6 class="fw-bold text-dark mb-2">Target: Dr. {{ req.doctor.name }}</h6>
+                    
+                    <table class="table table-sm table-bordered mb-3" style="font-size: 0.8rem;">
+                        <thead class="table-light"><tr><th>Field</th><th>Original Data</th><th>Requested Change</th></tr></thead>
+                        <tbody>
+                            <tr>
+                                <td>Name</td>
+                                <td class="text-muted">{{ req.doctor.name }}</td>
+                                <td class="fw-bold {% if req.doctor.name != req.req_name %}text-danger{% else %}text-success{% endif %}">{{ req.req_name }}</td>
+                            </tr>
+                            <tr>
+                                <td>Degree</td>
+                                <td class="text-muted">{{ req.doctor.degree|default:'-' }}</td>
+                                <td class="fw-bold {% if req.doctor.degree != req.req_degree %}text-danger{% else %}text-success{% endif %}">{{ req.req_degree|default:'-' }}</td>
+                            </tr>
+                            <tr>
+                                <td>Specialty</td>
+                                <td class="text-muted">{{ req.doctor.specialty|default:'-' }}</td>
+                                <td class="fw-bold {% if req.doctor.specialty != req.req_specialty %}text-danger{% else %}text-success{% endif %}">{{ req.req_specialty|default:'-' }}</td>
+                            </tr>
+                            <tr>
+                                <td>Category</td>
+                                <td class="text-muted">{{ req.doctor.category|default:'-' }}</td>
+                                <td class="fw-bold {% if req.doctor.category != req.req_category %}text-danger{% else %}text-success{% endif %}">{{ req.req_category|default:'-' }}</td>
+                            </tr>
+                            <tr>
+                                <td>Territory</td>
+                                <td class="text-muted">{{ req.doctor.territory.name|default:'-' }}</td>
+                                <td class="fw-bold {% if req.doctor.territory_id != req.req_territory_id %}text-danger{% else %}text-success{% endif %}">{{ req.req_territory.name|default:'-' }}</td>
+                            </tr>
+                            <tr>
+                                <td>Route</td>
+                                <td class="text-muted">{{ req.doctor.route.name|default:'-' }}</td>
+                                <td class="fw-bold {% if req.doctor.route_id != req.req_route_id %}text-danger{% else %}text-success{% endif %}">{{ req.req_route.name|default:'-' }}</td>
+                            </tr>
+                            <tr>
+                                <td>Mobile</td>
+                                <td class="text-muted">{{ req.doctor.mobile|default:'-' }}</td>
+                                <td class="fw-bold {% if req.doctor.mobile != req.req_mobile %}text-danger{% else %}text-success{% endif %}">{{ req.req_mobile|default:'-' }}</td>
+                            </tr>
+                            <tr>
+                                <td>Email</td>
+                                <td class="text-muted">{{ req.doctor.email|default:'-' }}</td>
+                                <td class="fw-bold {% if req.doctor.email != req.req_email %}text-danger{% else %}text-success{% endif %}">{{ req.req_email|default:'-' }}</td>
+                            </tr>
+                            <tr>
+                                <td>DoB</td>
+                                <td class="text-muted">{{ req.doctor.dob|date:"d-M-Y"|default:'-' }}</td>
+                                <td class="fw-bold {% if req.doctor.dob != req.req_dob %}text-danger{% else %}text-success{% endif %}">{{ req.req_dob|date:"d-M-Y"|default:'-' }}</td>
+                            </tr>
+                            <tr>
+                                <td>Photo</td>
+                                <td class="text-muted">
+                                    {% if req.doctor.photo %}<a href="{{ req.doctor.photo.url }}" target="_blank">View Old</a>{% else %}None{% endif %}
+                                </td>
+                                <td class="fw-bold {% if req.req_photo %}text-danger{% else %}text-success{% endif %}">
+                                    {% if req.req_photo %}<a href="{{ req.req_photo.url }}" target="_blank" class="text-danger">View New</a>{% else %}No Change{% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+
+                    <form method="POST" class="d-flex gap-2">
+                        {% csrf_token %}
+                        <input type="hidden" name="item_type" value="doctor_edit">
+                        <input type="hidden" name="item_id" value="{{ req.id }}">
+                        <button type="submit" name="action" value="approve" class="btn btn-success btn-sm w-100 fw-bold">✅ Approve</button>
+                        <button type="submit" name="action" value="reject" class="btn btn-outline-danger btn-sm w-100 fw-bold">❌ Reject</button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+    
+</div>
+{% endblock %}

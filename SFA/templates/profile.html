@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-2">
+    <div class="d-flex align-items-center justify-content-between mb-2 px-2">
+        <h5 class="fw-bold text-dark mb-0" style="font-size: 1.1rem;">👤 My Profile</h5>
+        <button class="btn btn-sm btn-light border text-primary fw-bold shadow-sm px-3" style="border-radius: 8px; font-size: 0.75rem;" data-bs-toggle="modal" data-bs-target="#editProfileModal">
+            <i class="bi bi-pencil-square"></i> Edit
+        </button>
+    </div>
+
+    <div class="mx-1">
+        <div class="card border-0 shadow-sm bg-white" style="border-radius: 12px; border-top: 4px solid #0056b3 !important;">
+            <div class="card-body p-2">
+                
+                <div class="d-flex align-items-center gap-3 mb-2 px-1 mt-1">
+                    <div class="d-flex justify-content-center align-items-center border shadow-sm" style="width: 52px; height: 52px; border-radius: 50%; overflow: hidden; background-color: #eef5ff;">
+                        {% if request.user.employee.photo %}
+                            <img src="{{ request.user.employee.photo.url }}" alt="Profile" style="width: 100%; height: 100%; object-fit: cover;">
+                        {% else %}
+                            <span style="font-size: 1.8rem; padding-top: 2px;">👨‍💼</span>
+                        {% endif %}
+                    </div>
+                    <div style="line-height: 1.2;">
+                        <h6 class="fw-bold text-dark mb-1 fs-6">{{ request.user.employee.name|default:"Employee Name" }}</h6>
+                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25" style="font-size: 0.65rem;">{{ request.user.employee.designation|default:"MR" }}</span>
+                    </div>
+                </div>
+
+                <hr class="text-muted opacity-25 my-2">
+
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <div class="bg-light border rounded p-2 h-100">
+                            <span class="text-muted fw-bold d-block mb-1" style="font-size: 0.65rem;">📍 HQ / Territory</span>
+                            <span class="text-dark fw-bold text-truncate d-block" style="font-size: 0.75rem;">{{ request.user.employee.headquarter.name|default:"-" }}</span>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="bg-light border rounded p-2 h-100">
+                            <span class="text-muted fw-bold d-block mb-1" style="font-size: 0.65rem;">📞 My Mobile</span>
+                            <a href="tel:{{ request.user.employee.phone|default:'' }}" class="text-success text-decoration-none fw-bold d-block" style="font-size: 0.75rem;">
+                                {{ request.user.employee.phone|default:"-" }}
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="bg-light border rounded p-2 h-100">
+                            <span class="text-muted fw-bold d-block mb-1" style="font-size: 0.65rem;">👔 Manager</span>
+                            <span class="text-dark fw-bold text-truncate d-block" style="font-size: 0.75rem;">{{ request.user.employee.manager.name|default:"N/A" }}</span>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="bg-light border rounded p-2 h-100">
+                            <span class="text-muted fw-bold d-block mb-1" style="font-size: 0.65rem;">📲 Manager No.</span>
+                            <a href="tel:{{ request.user.employee.manager.phone|default:'' }}" class="text-primary text-decoration-none fw-bold d-block" style="font-size: 0.75rem;">
+                                {{ request.user.employee.manager.phone|default:"N/A" }}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-light border rounded p-2 mb-3">
+                    <span class="text-muted fw-bold d-block mb-1" style="font-size: 0.65rem;">🏠 Home Address</span>
+                    <p class="text-dark fw-bold mb-0" style="font-size: 0.70rem; line-height: 1.3;">
+                        {{ request.user.employee.address|default:"Address not updated" }}
+                    </p>
+                </div>
+
+                {% if tree %}
+                <div class="border rounded p-2 mb-3" style="background: #f8f9ff;">
+                    <span class="text-muted fw-bold d-block mb-2" style="font-size: 0.65rem;">🧑‍🤝‍🧑 My Team</span>
+                    {% for node in tree %}
+                        {% include "partials/team_node.html" with node=node depth=0 %}
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div class="row g-2">
+                    <div class="col-6">
+                        <button type="button" class="btn btn-light border w-100 fw-bold shadow-sm py-1 d-flex justify-content-center align-items-center gap-1" style="border-radius: 8px; font-size: 0.75rem; height: 32px;" data-bs-toggle="modal" data-bs-target="#changePasswordModal">
+                            <i class="bi bi-key-fill text-warning"></i> Password
+                        </button>
+                    </div>
+                    <div class="col-6">
+                        <a href="{% url 'logout' %}" class="btn w-100 fw-bold shadow-sm py-1 d-flex justify-content-center align-items-center gap-1" style="background-color: #ffe5e5; color: #dc3545; border: 1px solid #ffcccc; border-radius: 8px; font-size: 0.75rem; height: 32px;" onclick="return confirm('Kya aap sach mein logout karna chahte hain?');">
+                            <i class="bi bi-power"></i> Logout
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="editProfileModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered px-3">
+        <div class="modal-content border-0 shadow" style="border-radius: 16px;">
+            <form method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update_profile">
+                
+                <div class="modal-header bg-light border-bottom-0" style="border-top-left-radius: 16px; border-top-right-radius: 16px; padding: 12px 16px;">
+                    <h6 class="modal-title fw-bold text-dark fs-6">✏️ Edit Profile</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" style="font-size: 0.75rem;"></button>
+                </div>
+                
+                <div class="modal-body p-3">
+                    <div class="mb-3">
+                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.75rem;">Profile Photo</label>
+                        <input type="file" name="photo" class="form-control shadow-sm" accept="image/*" style="font-size: 0.8rem;">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.75rem;">My Mobile No.</label>
+                        <input type="text" name="phone" class="form-control shadow-sm fw-bold" style="font-size: 0.85rem;" value="{{ request.user.employee.phone|default:'' }}">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.75rem;">Home Address</label>
+                        <textarea name="address" class="form-control shadow-sm fw-bold" rows="2" style="font-size: 0.85rem;">{{ request.user.employee.address|default:'' }}</textarea>
+                    </div>
+                </div>
+                
+                <div class="modal-footer border-top-0 p-3 pt-0">
+                    <button type="submit" class="btn btn-primary w-100 fw-bold shadow-sm py-2" style="border-radius: 8px;">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="changePasswordModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered px-3">
+        <div class="modal-content border-0 shadow" style="border-radius: 16px;">
+            <form method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="change_password">
+                
+                <div class="modal-header bg-light border-bottom-0" style="border-top-left-radius: 16px; border-top-right-radius: 16px; padding: 12px 16px;">
+                    <h6 class="modal-title fw-bold text-dark fs-6">🔐 Change Password</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" style="font-size: 0.75rem;"></button>
+                </div>
+                
+                <div class="modal-body p-3">
+                    <div class="mb-3">
+                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.75rem;">Old Password</label>
+                        <input type="password" name="old_password" class="form-control shadow-sm" style="font-size: 0.85rem;" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.75rem;">New Password</label>
+                        <input type="password" name="new_password" class="form-control shadow-sm" style="font-size: 0.85rem;" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.75rem;">Confirm New Password</label>
+                        <input type="password" name="confirm_password" class="form-control shadow-sm" style="font-size: 0.85rem;" required>
+                    </div>
+                </div>
+                
+                <div class="modal-footer border-top-0 p-3 pt-0">
+                    <button type="submit" class="btn btn-warning w-100 fw-bold shadow-sm py-2 text-dark" style="border-radius: 8px;">Update Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

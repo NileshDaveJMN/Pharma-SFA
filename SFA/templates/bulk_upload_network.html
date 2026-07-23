@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-2">
+    <div class="d-flex align-items-center gap-2 mb-4 px-2">
+        <a href="{% url 'request_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-1 rounded-3 border bg-white text-secondary">
+            <span class="fs-5 fw-bold">⬅️</span>
+        </a>
+        <div>
+            <h4 class="fw-bold text-dark mb-0">📤 Bulk Upload Network</h4>
+            <small class="text-muted small">Doctors aur Chemists ka data CSV ya Excel mein upload karein.</small>
+        </div>
+    </div>
+
+    <!-- 🌟 YAHAN SE DUPLICATE MESSAGE WALA BLOCK HATA DIYA GAYA HAI -->
+
+    <div class="card border-0 shadow-sm mx-2 bg-white" style="border-radius: 12px; border-left: 4px solid #6f42c1 !important;">
+        <div class="card-body p-4">
+            <form method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark">📌 Select Upload Type</label>
+                    <select name="upload_type" class="form-select bg-light border-0 shadow-none" style="border-radius: 8px; padding: 10px;" required>
+                        <option value="" disabled selected>-- Select Type --</option>
+                        <option value="doctor">Doctors</option>
+                        <option value="chemist">Chemists</option>
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark">👤 Assign To (Employee)</label>
+                    <select name="employee_id" class="form-select bg-light border-0 shadow-none" style="border-radius: 8px; padding: 10px;" required>
+                        <option value="" disabled selected>-- Select Employee --</option>
+                        {% for emp in employees %}
+                            <option value="{{ emp.id }}">{{ emp.name }} ({{ emp.designation }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-dark">📁 Choose CSV or Excel File</label>
+                    <input type="file" name="upload_file" accept=".csv, .xlsx, .xls" class="form-control bg-light border-0 shadow-none" style="border-radius: 8px; padding: 10px;" required>
+                    <small class="text-muted d-block mt-2">
+                        💡 Ab aap <b>.csv</b> aur <b>.xlsx</b> (Excel) dono format bina kisi jhanjhat ke upload kar sakte hain!
+                    </small>
+                </div>
+
+                <button type="submit" class="btn w-100 fw-bold shadow-sm py-2 text-white" style="background-color: #6f42c1; border-radius: 8px; font-size: 1.1rem;">
+                    🚀 Upload Data
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mx-2 mt-4 bg-white" style="border-radius: 12px;">
+        <div class="card-header bg-white border-bottom py-3 fw-bold text-secondary">
+            📋 Required Columns Format (Excel / CSV)
+        </div>
+        <div class="card-body p-3 small">
+            <div class="mb-3">
+                <strong class="text-primary d-block mb-1">For Doctors:</strong>
+                <code>name, specialty, mobile, category, degree, address, territory_name, route_name</code>
+            </div>
+            <div>
+                <strong class="text-success d-block mb-1">For Chemists:</strong>
+                <code>name, phone, territory_name, route_name</code>
+            </div>
+            <hr>
+            <div class="text-muted" style="font-size: 0.75rem;">
+                <strong>Note:</strong> Aapki file ki pehli row (Header) exactly yahi honi chahiye (choti ABCD mein aur spaces ki jagah underscore '_'). Data upload karte waqt system <code>territory_name</code> aur <code>route_name</code> ko database se match karega.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,30 +1,101 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="card p-4 shadow-sm border-0 bg-white rounded-3">
-    <h5 class="fw-bold text-primary mb-3">🧪 Add New Chemist</h5>
-    <form method="POST">
-        {% csrf_token %}
-        <div class="mb-3">
-            <label class="form-label text-muted small fw-bold">CHEMIST NAME</label>
-            <input type="text" class="form-control bg-light" name="name" placeholder="Enter Shop/Chemist Name" required>
+<div class="container-fluid p-0 mb-4 mt-2">
+    <div class="d-flex align-items-center gap-2 mb-3 px-2">
+        <a href="{% url 'request_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-1 rounded-3 border bg-white text-secondary">⬅️</a>
+        <div>
+            <h4 class="fw-bold text-dark mb-0">🧑‍🔬 Add Chemist</h4>
+            <small class="text-muted small">Naya chemist record create karein.</small>
         </div>
-        <div class="mb-3">
-            <label class="form-label text-muted small fw-bold">PHONE NUMBER</label>
-            <input type="text" class="form-control bg-light" name="phone" placeholder="Enter Mobile No." required>
+    </div>
+
+    <div class="card border-0 shadow-sm bg-white mx-2" style="border-top: 4px solid #20c997 !important; border-radius: 12px;">
+        <div class="card-body p-3">
+            <form method="POST">
+                {% csrf_token %}
+                
+                <h6 class="fw-bold text-secondary mb-3 border-bottom pb-1" style="font-size: 0.85rem;">📋 BASIC INFO</h6>
+                {% if is_manager_view %}
+                <div class="mb-3">
+                    <label class="form-label fw-bold text-primary">Assign To (Select MR) <span class="text-danger">*</span></label>
+                    <select name="allocated_to" class="form-select border-primary" required>
+                        <option value="">-- Select Team Member --</option>
+                        {% for emp in team_employees %}
+                            <option value="{{ emp.id }}">{{ emp.name }} ({{ emp.designation }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+
+                                <div class="mb-3">
+                    <label class="form-label text-secondary small fw-bold mb-1">Shop / Chemist Name</label>
+                    <input type="text" class="form-control bg-light border-0 shadow-none text-dark fw-bold" name="name" placeholder="Enter Shop Name" style="border-radius: 8px; padding: 10px 15px;" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label text-secondary small fw-bold mb-1">Phone Number</label>
+                    <input type="text" class="form-control bg-light border-0 shadow-none text-dark fw-bold" name="phone" placeholder="Enter Mobile No." style="border-radius: 8px; padding: 10px 15px;" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label text-secondary small fw-bold mb-1">Shop Address</label>
+                    <textarea class="form-control bg-light border-0 shadow-none text-dark fw-bold" name="address" placeholder="Chemist ka pura address..." rows="2" style="border-radius: 8px; padding: 10px 15px;"></textarea>
+                </div>
+
+                
+                <h6 class="fw-bold text-secondary mb-3 mt-4 border-bottom pb-1" style="font-size: 0.85rem;">📍 LOCATION & ROUTE</h6>
+                <div class="mb-3">
+                    <label class="form-label text-secondary small fw-bold mb-1">Territory</label>
+                    <select id="id_territory" class="form-select bg-light border-0 shadow-none text-dark fw-bold" name="territory" style="border-radius: 8px; padding: 10px 15px;" onchange="filterRoutes()" required>
+                        <option value="">-- Select Territory --</option>
+                        {% for t in territories %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label text-secondary small fw-bold mb-1">Route</label>
+                    <select id="id_route" class="form-select bg-light border-0 shadow-none text-dark fw-bold" name="route" style="border-radius: 8px; padding: 10px 15px;" required>
+                        <option value="">-- Select Route --</option>
+                        {% for r in routes %}<option value="{{ r.id }}" data-territory="{{ r.territory.id }}">{{ r.name }} — {{ r.territory.name }}</option>{% endfor %}
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-success w-100 fw-bold py-2 rounded-3 shadow-sm" style="background-color: #20c997; border-color: #20c997;">💾 Save Chemist</button>
+            </form>
         </div>
-        <div class="mb-3">
-            <label class="form-label text-muted small fw-bold">TERRITORY</label>
-            <select class="form-select bg-light" name="territory" required>
-                {% for t in territories %}<option value="{{ t.id }}">{{ t.name }}</option>{% endfor %}
-            </select>
-        </div>
-        <div class="mb-4">
-            <label class="form-label text-muted small fw-bold">ROUTE</label>
-            <select class="form-select bg-light" name="route" required>
-                {% for r in routes %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
-            </select>
-        </div>
-        <button type="submit" class="btn btn-primary w-100 fw-bold py-3 shadow">Save Chemist</button>
-    </form>
+    </div>
 </div>
+
+<script>
+function filterRoutes() {
+    var territoryId = document.getElementById("id_territory").value;
+    var routeSelect = document.getElementById("id_route");
+    var options = routeSelect.options;
+
+    // Jaise hi territory change ho, purana route clear kar do
+    routeSelect.value = "";
+
+    for (var i = 0; i < options.length; i++) {
+        var option = options[i];
+        
+        // Placeholder option ko hamesha dikhao
+        if (option.value === "") {
+            option.style.display = "block";
+            continue;
+        }
+
+        var routeTerritoryId = option.getAttribute("data-territory");
+        
+        // Agar territory match hoti hai, toh dikhao, warna chupao
+        if (territoryId === "" || routeTerritoryId === territoryId) {
+            option.style.display = "block";
+        } else {
+            option.style.display = "none";
+        }
+    }
+}
+
+// Page load hone par ek baar run kar lo
+document.addEventListener("DOMContentLoaded", function() {
+    filterRoutes();
+});
+</script>
 {% endblock %}

@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+    
+    <!-- 🌟 COMPACT HEADER -->
+    <div class="d-flex align-items-center gap-2 mb-1 px-2">
+        <a href="{% url 'request_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0 flex-grow-1"><i class="bi bi-building text-primary me-1"></i> Party Wise Sale</h6>
+    </div>
+    <div class="px-2 mb-2">
+        <small class="text-muted" style="font-size: 0.70rem;">Stockist: <strong class="text-primary">{{ selected_stockist_name }}</strong> | {{ current_month }}/{{ current_year }}</small>
+    </div>
+
+    <!-- 🗂️ COMPACT TABS / BUTTONS -->
+    <div class="d-flex bg-white p-1 rounded-2 shadow-sm mb-2 border mx-1">
+        <a href="{% url 'party_wise_sale_entry' %}?stockist_id={{ selected_stockist_id }}&employee_id={{ selected_emp_id }}" class="btn btn-sm w-50 fw-bold py-1 rounded-2 btn-primary text-white shadow-sm" style="font-size: 0.8rem;">
+            🛒 1. Chemist Sale
+        </a>
+        <a href="{% url 'classify_rx_entry' %}?stockist_id={{ selected_stockist_id }}&month={{ current_month }}&year={{ current_year }}&employee_id={{ selected_emp_id }}" class="btn btn-sm w-50 fw-bold py-1 rounded-2 btn-light text-secondary" style="font-size: 0.8rem;">
+            👨‍⚕️ 2. Dr Wise
+        </a>
+    </div>
+
+    <!-- 🎛️ ULTRA COMPACT FILTERS (Auto-Submit) -->
+    <div class="card border-0 shadow-sm mb-2 bg-white mx-1" style="border-radius: 8px;">
+        <div class="card-body p-2">
+            <form method="GET" class="row g-1 align-items-end" id="filterForm">
+                {% if is_manager_view %}
+                <div class="col-12">
+                    <select name="employee_id" class="form-select form-select-sm bg-light border-0 shadow-none fw-bold text-dark" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">👤 Select Team Member...</option>
+                        {% for emp in team_employees %}
+                            <option value="{{ emp.id }}" {% if emp.id == selected_emp_id %}selected{% endif %}>{{ emp.name }} ({{ emp.designation }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+
+                <div class="col-12">
+                    <select name="stockist_id" class="form-select form-select-sm bg-light border-0 shadow-none fw-bold text-primary" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">📦 Select Stockist...</option>
+                        {% for st in available_stockists %}
+                            <option value="{{ st.id }}" {% if st.id == selected_stockist_id %}selected{% endif %}>{{ st.name }}</option>
+                        {% empty %}
+                            <option value="">-- No Stockist Available --</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if selected_stockist_id %}
+    <!-- 📊 COMPACT AVAILABLE BALANCES TABLE -->
+    <div class="card border-0 shadow-sm mb-2 mx-1" style="border-radius: 8px;">
+        <div class="card-header bg-light border-bottom py-2" style="border-radius: 8px 8px 0 0;">
+            <h6 class="fw-bold text-dark mb-0" style="font-size: 0.75rem;">📊 Available Stockist Balances</h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 25vh; overflow-y: auto;">
+                <table class="table table-sm mb-0 text-center align-middle" style="font-size: 0.70rem;">
+                    <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
+                        <tr>
+                            <th class="text-start ps-2 py-1 text-secondary">Product</th>
+                            <th class="py-1 text-secondary">Total Sale</th>
+                            <th class="py-1 text-secondary">Billed</th>
+                            <th class="py-1 text-primary fw-bold">Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for bal in balances %}
+                        <tr>
+                            <td class="text-start ps-2 py-1 fw-bold text-dark">{{ bal.product_name }}</td>
+                            <td class="py-1 text-muted">{{ bal.total_sale }}</td>
+                            <td class="py-1 text-muted">{{ bal.billed }}</td>
+                            <td class="py-1 fw-bold text-primary">{{ bal.balance }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-muted py-2">Koi primary stock nahi mila.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ➕ COMPACT SALE ENTRY FORM -->
+    <div class="card border-0 shadow-sm mb-4 bg-white mx-1" style="border-top: 3px solid #198754 !important; border-radius: 8px;">
+        <div class="card-body p-2">
+            <h6 class="fw-bold text-success mb-2 border-bottom pb-1" style="font-size: 0.8rem;">➕ New Chemist Sale Entry</h6>
+            <form method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="stockist_id" value="{{ selected_stockist_id }}">
+                <input type="hidden" name="employee_id" value="{{ selected_emp_id }}"> 
+                
+                <div class="mb-2">
+                    <select name="chemist_id" class="form-select form-select-sm bg-light border-0 shadow-none fw-bold text-dark" style="border-radius: 6px;" required>
+                        <option value="">🏥 -- Choose Chemist --</option>
+                        {% for ch in chemists %}
+                            <option value="{{ ch.id }}">{{ ch.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="table-responsive rounded-2 border" style="max-height: 40vh; overflow-y: auto;">
+                    <table class="table table-sm mb-0 text-center align-middle" style="font-size: 0.75rem;">
+                        <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
+                            <tr>
+                                <th class="text-start ps-2 py-1 text-secondary">Product</th>
+                                <th class="py-1 text-secondary" style="width: 70px;">Billed Qty</th>
+                                <th class="py-1 text-secondary" style="width: 70px;">Free Qty</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in products %}
+                            <tr>
+                                <td class="text-start ps-2 py-1 fw-bold text-dark">{{ p.name }}</td>
+                                <td class="py-1 px-1">
+                                    <input type="number" name="billed_{{ p.id }}" class="form-control form-control-sm text-center bg-light border-0 shadow-none fw-bold p-1" style="border-radius: 4px; font-size: 0.75rem;" min="0" placeholder="0">
+                                </td>
+                                <td class="py-1 px-1">
+                                    <input type="number" name="free_{{ p.id }}" class="form-control form-control-sm text-center bg-light border-0 shadow-none fw-bold p-1" style="border-radius: 4px; font-size: 0.75rem;" min="0" placeholder="0">
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <button type="submit" class="btn btn-success btn-sm w-100 fw-bold shadow-sm py-1 mt-2" style="border-radius: 6px; font-size: 0.8rem;">
+                    💾 Save Sale Entry
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

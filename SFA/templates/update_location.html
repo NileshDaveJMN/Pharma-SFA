@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="card border-0 shadow-sm mb-4 bg-white" style="border-top: 4px solid #198754;">
+    <div class="card-body p-4 text-center">
+        <span class="fs-1 d-block mb-3">📍</span>
+        <h4 class="fw-bold text-dark mb-1">Set Location</h4>
+        <p class="text-muted small mb-4">
+            Aap <strong>{{ target.name }}</strong> ({{ role|title }}) ki location update kar rahe hain. Kripya unke clinic/shop par khade rah kar hi yeh submit karein.
+        </p>
+
+        <form method="POST" id="locationForm">
+            {% csrf_token %}
+            <input type="hidden" name="latitude" id="lat">
+            <input type="hidden" name="longitude" id="lng">
+            <input type="hidden" name="employee_id" value="{{ employee_id }}">
+
+            <!-- GPS Status -->
+            <div id="gpsStatus" class="alert alert-warning small fw-bold mb-4">
+                ⏳ GPS Signal dhoondh raha hai... kripya rukiye.
+            </div>
+
+            <button type="submit" id="submitBtn" class="btn btn-success w-100 py-3 fw-bold shadow-sm" style="border-radius: 10px;" disabled>
+                ✅ Save Current Location
+            </button>
+            <a href="{% url 'network_report' %}?employee_id={{ employee_id }}&tab={{ role }}" class="btn btn-light w-100 py-2 mt-2 fw-bold text-secondary border">Cancel</a>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    let latInput = document.getElementById('lat');
+    let lngInput = document.getElementById('lng');
+    let statusDiv = document.getElementById('gpsStatus');
+    let submitBtn = document.getElementById('submitBtn');
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                latInput.value = position.coords.latitude;
+                lngInput.value = position.coords.longitude;
+                statusDiv.className = "alert alert-success small fw-bold mb-4";
+                statusDiv.innerHTML = "✅ GPS Tracked: " + position.coords.latitude.toFixed(4) + ", " + position.coords.longitude.toFixed(4);
+                submitBtn.disabled = false;
+            },
+            function(error) {
+                statusDiv.className = "alert alert-danger small fw-bold mb-4";
+                statusDiv.innerHTML = "❌ GPS Error. Kripya phone ki Location/GPS ON karein aur page refresh karein.";
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    } else {
+        statusDiv.innerHTML = "Aapka browser GPS support nahi karta.";
+    }
+});
+</script>
+
+{% endblock %}

@@ -1,0 +1,288 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+    
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="{% url 'view_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0 flex-grow-1"><i class="bi bi-graph-up-arrow text-primary me-1"></i> Sales Summary</h6>
+        
+        <a href="?employee_id={{ selected_emp_id }}&from_month={{ from_month }}&to_month={{ to_month }}&year={{ selected_year }}&export=excel" class="btn btn-success btn-sm fw-bold shadow-sm px-2 py-0" style="font-size: 0.75rem;">
+            📥 .XLSX
+        </a>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-2 bg-white mx-1" style="border-radius: 8px;">
+        <div class="card-body p-2">
+            <form method="GET" class="row g-1 align-items-end" id="filterForm">
+                {% if is_manager_view %}
+                <div class="col-12">
+                    <select name="employee_id" class="form-select form-select-sm bg-light fw-bold text-primary border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">👤 Select Employee...</option>
+                        {% for emp in team_employees %}
+                            <option value="{{ emp.id }}" {% if selected_emp_id == emp.id %}selected{% endif %}>{{ emp.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                
+                <div class="col-4">
+                    <select name="from_month" class="form-select form-select-sm bg-light fw-bold border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        {% for m_num, m_name in months_choices %}
+                            <option value="{{ m_num }}" {% if from_month == m_num %}selected{% endif %}>🟢 {{ m_name|slice:":3" }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-4">
+                    <select name="to_month" class="form-select form-select-sm bg-light fw-bold border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        {% for m_num, m_name in months_choices %}
+                            <option value="{{ m_num }}" {% if to_month == m_num %}selected{% endif %}>🔴 {{ m_name|slice:":3" }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-4">
+                    <input type="number" name="year" value="{{ selected_year }}" class="form-control form-control-sm bg-light fw-bold text-center border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <style>
+    .excel-table-wrapper {
+        max-height: 65vh; overflow: auto; border-radius: 8px; border: 1px solid #ccc; position: relative;
+    }
+    .excel-table {
+        border-collapse: separate; border-spacing: 0; width: 100%; background-color: #fff; font-size: 0.70rem;
+    }
+    .excel-table th, .excel-table td {
+        border-right: 1px solid #d4d4d4; border-bottom: 1px solid #d4d4d4;
+        padding: 5px 6px; vertical-align: middle; text-align: center; white-space: nowrap;
+    }
+    .excel-table thead tr:nth-child(1) th { position: sticky; top: 0; z-index: 20; color: #fff; background-color: #107C41;}
+    .excel-table thead tr:nth-child(2) th { position: sticky; z-index: 18; color: #fff; }
+    
+    /* 🌟 COMPACT FIRST COLUMN */
+    .excel-table tbody td:first-child {
+        position: sticky; left: 0; background-color: #f4f7f9; z-index: 10; text-align: left; 
+        width: 85px; min-width: 85px; max-width: 85px; white-space: normal; word-wrap: break-word; font-size: 0.7rem;
+        border-right: 2px solid #107C41; color: #333; font-weight: bold;
+        box-shadow: 2px 0 4px -1px rgba(0,0,0,0.1);
+    }
+    .excel-table thead tr:nth-child(1) th:first-child {
+        position: sticky; left: 0; z-index: 30; background-color: #0b5e31; border-right: 2px solid #0b5e31; text-align: left;
+        width: 85px; min-width: 85px; max-width: 85px; white-space: normal; font-size: 0.7rem;
+    }
+    .excel-table tfoot td {
+        position: sticky; bottom: -1px; z-index: 18; background-color: #d1e5d8; color: #107C41; font-weight: 900;
+        border-top: 2px solid #107C41; text-align: center; box-shadow: 0 -2px 4px -1px rgba(0,0,0,0.1);
+    }
+    .excel-table tfoot td:first-child {
+        position: sticky; left: 0; z-index: 25; background-color: #b9d8c8; border-right: 2px solid #107C41; text-align: left;
+        width: 85px; min-width: 85px; max-width: 85px; white-space: normal; font-size: 0.7rem;
+    }
+    
+    .excel-table tbody tr:hover td { background-color: #e6f2eb; }
+    .excel-table tbody tr:hover td:first-child { background-color: #d1e5d8; }
+    </style>
+
+    <div class="card border-0 shadow-sm bg-white mx-1 mb-5" style="border-radius: 8px;">
+        <div class="excel-table-wrapper" style="border-radius: 8px;">
+            <table class="excel-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="background-color: #0b5e31; color: white;">Product Name</th>
+                        
+                        {% for m_num, m_name in months_headers %}
+                            <th colspan="6" style="background-color: #107C41; color: white;">{{ m_name }} DATA</th>
+                        {% endfor %}
+                        
+                        <th colspan="12" style="background-color: #495057; color: white;">OVERALL GRAND TOTAL</th>
+                    </tr>
+                    <tr>
+                        {% for m_num, m_name in months_headers %}
+                            <th style="background-color: #6c757d; color: white;">Tgt Qty</th>
+                            <th style="background-color: #6c757d; color: white;">Tgt (₹)</th>
+                            <th style="background-color: #159b53; color: white;">Pri Qty</th>
+                            <th style="background-color: #159b53; color: white;">Pri (₹)</th>
+                            <th style="background-color: #0f7a40; color: white;">Sec Qty</th>
+                            <th style="background-color: #0f7a40; color: white;">Sec (₹)</th>
+                        {% endfor %}
+                        
+                        <th style="background-color: #6c757d; color: white;">Tot Tgt Qty</th>
+                        <th style="background-color: #6c757d; color: white;">Tot Tgt (₹)</th>
+                        <th style="background-color: #159b53; color: white;">Tot Pri Qty</th>
+                        <th style="background-color: #159b53; color: white;">Tot Pri (₹)</th>
+                        <th style="background-color: #0f7a40; color: white;">Tot Sec Qty</th>
+                        <th style="background-color: #0f7a40; color: white;">Tot Sec (₹)</th>
+                        
+                        <th style="background-color: #159b53; color: white;">Pri Ach%</th>
+                        <th style="background-color: #159b53; color: white;">Pri M2M%</th>
+                        <th style="background-color: #159b53; color: white;">Pri Y2Y%</th>
+                        
+                        <th style="background-color: #0f7a40; color: white;">Sec Ach%</th>
+                        <th style="background-color: #0f7a40; color: white;">Sec M2M%</th>
+                        <th style="background-color: #0f7a40; color: white;">Sec Y2Y%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report_data %}
+                        <tr>
+                            <td title="{{ row.name }}">{{ row.name }}</td>
+                            
+                            {% for m_data in row.monthly_list %}
+                                <td class="fw-bold text-secondary" style="background-color: #f8f9fa;">{{ m_data.t_qty }}</td>
+                                <td class="text-secondary" style="background-color: #f8f9fa;">₹{{ m_data.t_val|floatformat:0 }}</td>
+                                
+                                <td class="fw-bold text-success" style="background-color: #e8f5e9;">{{ m_data.p_qty }}</td>
+                                <td class="fw-bold text-success" style="background-color: #e8f5e9;">₹{{ m_data.p_val|floatformat:0 }}</td>
+                                
+                                <td class="fw-bold text-success" style="background-color: #e2f0e6;">{{ m_data.s_qty }}</td>
+                                <td class="fw-bold text-success" style="background-color: #e2f0e6;">₹{{ m_data.s_val|floatformat:0 }}</td>
+                            {% endfor %}
+
+                            <td class="fw-bold text-secondary" style="background-color: #f8f9fa;">{{ row.curr_t_qty }}</td>
+                            <td class="text-secondary fw-bold" style="background-color: #f8f9fa;">₹{{ row.curr_t_val|floatformat:0 }}</td>
+                            
+                            <td class="fw-bold text-success" style="background-color: #e8f5e9;">{{ row.curr_p_qty }}</td>
+                            <td class="fw-bold text-success" style="background-color: #e8f5e9;">₹{{ row.curr_p_val|floatformat:0 }}</td>
+                            
+                            <td class="fw-bold text-success" style="background-color: #e2f0e6;">{{ row.curr_s_qty }}</td>
+                            <td class="fw-bold text-success" style="background-color: #e2f0e6;">₹{{ row.curr_s_val|floatformat:0 }}</td>
+                            
+                            <td class="fw-bold {% if row.p_ach >= 100 %}text-success{% else %}text-danger{% endif %}">{{ row.p_ach|floatformat:1 }}%</td>
+                            <td class="fw-bold {% if row.p_m2m >= 0 %}text-success{% else %}text-danger{% endif %}">{% if row.p_m2m > 0 %}+{% endif %}{{ row.p_m2m|floatformat:1 }}%</td>
+                            <td class="fw-bold {% if row.p_y2y >= 0 %}text-success{% else %}text-danger{% endif %}">{% if row.p_y2y > 0 %}+{% endif %}{{ row.p_y2y|floatformat:1 }}%</td>
+                            
+                            <td class="fw-bold {% if row.s_ach >= 100 %}text-success{% else %}text-danger{% endif %}">{{ row.s_ach|floatformat:1 }}%</td>
+                            <td class="fw-bold {% if row.s_m2m >= 0 %}text-success{% else %}text-danger{% endif %}">{% if row.s_m2m > 0 %}+{% endif %}{{ row.s_m2m|floatformat:1 }}%</td>
+                            <td class="fw-bold {% if row.s_y2y >= 0 %}text-success{% else %}text-danger{% endif %}">{% if row.s_y2y > 0 %}+{% endif %}{{ row.s_y2y|floatformat:1 }}%</td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="100%" class="text-center text-muted py-4" style="font-size: 0.8rem;">Is period me koi data nahi hai.</td></tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td style="font-size: 0.65rem;">GRAND TOTAL</td>
+                        
+                        {% for m_gt in gt.monthly_list %}
+                            <td style="color: #495057;">{{ m_gt.t_qty }}</td>
+                            <td>₹{{ m_gt.t_val|floatformat:0 }}</td>
+                            
+                            <td style="background-color: #b9d8c8; color: #107C41;">{{ m_gt.p_qty }}</td>
+                            <td style="background-color: #b9d8c8; color: #107C41;">₹{{ m_gt.p_val|floatformat:0 }}</td>
+                            
+                            <td style="background-color: #a3cfb6; color: #107C41;">{{ m_gt.s_qty }}</td>
+                            <td style="background-color: #a3cfb6; color: #107C41;">₹{{ m_gt.s_val|floatformat:0 }}</td>
+                        {% endfor %}
+
+                        <td style="color: #495057;">{{ gt.t_qty }}</td>
+                        <td>₹{{ gt.t_val|floatformat:0 }}</td>
+                        
+                        <td style="background-color: #b9d8c8; color: #107C41;">{{ gt.p_qty }}</td>
+                        <td style="background-color: #b9d8c8; color: #107C41;">₹{{ gt.p_val|floatformat:0 }}</td>
+                        
+                        <td style="background-color: #a3cfb6; color: #107C41;">{{ gt.s_qty }}</td>
+                        <td style="background-color: #a3cfb6; color: #107C41;">₹{{ gt.s_val|floatformat:0 }}</td>
+                        
+                        <td class="{% if gt.p_ach >= 100 %}text-success{% else %}text-danger{% endif %}">{{ gt.p_ach|floatformat:1 }}%</td>
+                        <td class="{% if gt.p_m2m >= 0 %}text-success{% else %}text-danger{% endif %}">{% if gt.p_m2m > 0 %}+{% endif %}{{ gt.p_m2m|floatformat:1 }}%</td>
+                        <td class="{% if gt.p_y2y >= 0 %}text-success{% else %}text-danger{% endif %}">{% if gt.p_y2y > 0 %}+{% endif %}{{ gt.p_y2y|floatformat:1 }}%</td>
+                        
+                        <td class="{% if gt.s_ach >= 100 %}text-success{% else %}text-danger{% endif %}">{{ gt.s_ach|floatformat:1 }}%</td>
+                        <td class="{% if gt.s_m2m >= 0 %}text-success{% else %}text-danger{% endif %}">{% if gt.s_m2m > 0 %}+{% endif %}{{ gt.s_m2m|floatformat:1 }}%</td>
+                        <td class="{% if gt.s_y2y >= 0 %}text-success{% else %}text-danger{% endif %}">{% if gt.s_y2y > 0 %}+{% endif %}{{ gt.s_y2y|floatformat:1 }}%</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+    <div class="row mt-4 mb-5 justify-content-center mx-1">
+        <div class="col-md-6 col-12">
+            <div class="card border-0 shadow-sm" style="border-radius: 12px; background-color: #fcfcfc;">
+                <div class="card-body text-center p-4">
+                    <h6 class="fw-bold text-dark mb-4"><i class="bi bi-pie-chart-fill text-primary"></i> Overall Business Performance</h6>
+                    
+                    <div style="position: relative; height: 260px; width: 100%;">
+                        <canvas id="businessWheelChart"></canvas>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div> <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('businessWheelChart').getContext('2d');
+    
+    // Backend se Grand Total ka data uthana (StringFormat "f" commas hata dega taaki JS samajh sake)
+    const targetVal = {{ gt.t_val|stringformat:"f"|default:"0" }};
+    const primaryVal = {{ gt.p_val|stringformat:"f"|default:"0" }};
+    const secondaryVal = {{ gt.s_val|stringformat:"f"|default:"0" }};
+
+    new Chart(ctx, {
+        type: 'doughnut', // Ye Wheel jaisa design banayega
+        data: {
+            labels: ['🎯 Target', '🏢 Primary Sale', '💊 Secondary Sale'],
+            datasets: [{
+                data: [targetVal, primaryVal, secondaryVal],
+                backgroundColor: [
+                    '#495057', // Grey for Target
+                    '#fd7e14', // Orange for Primary
+                    '#107C41'  // Green for Secondary
+                ],
+                borderWidth: 3,
+                borderColor: '#ffffff',
+                hoverOffset: 8 // Hover karne par slice bahar aayega
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '70%', // Wheel ki motai (70% khokhla)
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        font: { size: 12, weight: 'bold', family: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" },
+                        padding: 20,
+                        usePointStyle: true // Legend ko gol (circle) shape dega
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    titleFont: { size: 13 },
+                    bodyFont: { size: 14, weight: 'bold' },
+                    padding: 10,
+                    callbacks: {
+                        label: function(context) {
+                            let value = context.raw;
+                            // Indian currency format mein commas lagane ke liye
+                            return ' ₹ ' + value.toLocaleString('en-IN');
+                        }
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Ye script second header row ko exactly first row ke neeche sticky karti hai
+    const row1 = document.querySelector('.excel-table thead tr:nth-child(1)');
+    const row2cells = document.querySelectorAll('.excel-table thead tr:nth-child(2) th');
+    if (row1 && row2cells.length) {
+        const h = row1.getBoundingClientRect().height;
+        row2cells.forEach(th => th.style.top = h + 'px');
+    }
+});
+</script>
+{% endblock %}

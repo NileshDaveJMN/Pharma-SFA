@@ -1,0 +1,203 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+    
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="{% url 'view_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0 flex-grow-1"><i class="bi bi-diagram-3 text-primary me-1"></i> Mapped Network</h6>
+        
+        <a href="?employee_id={{ selected_emp_id }}&tab={{ active_tab }}&route={{ selected_route }}&specialty={{ selected_specialty }}&category={{ selected_category }}&export=excel" class="btn btn-success btn-sm fw-bold shadow-sm px-2 py-0" style="font-size: 0.75rem;">
+            📥 .XLSX
+        </a>
+    </div>
+
+    
+    <div class="card border-0 shadow-sm mb-2 bg-white mx-1" style="border-radius: 8px;">
+        <div class="card-body p-2">
+            <form method="GET" class="row g-1 align-items-end" id="filterForm">
+                <input type="hidden" name="tab" value="{{ active_tab }}">
+                
+                {% if is_manager_view %}
+                <div class="col-12">
+                    <select name="employee_id" class="form-select form-select-sm bg-light border-0 fw-bold text-primary" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">👤 Select Employee...</option>
+                        {% for emp in team_employees %}
+                            <option value="{{ emp.id }}" {% if emp.id|stringformat:"s" == selected_emp_id|stringformat:"s" %}selected{% endif %}>
+                                {{ emp.name }} ({{ emp.designation }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                
+                <div class="col-12">
+                    <select name="route" class="form-select form-select-sm bg-light border-0 fw-bold text-dark" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">🗺️ -- All Routes --</option>
+                        {% for r in routes %}
+                        <option value="{{ r.id }}" {% if selected_route|stringformat:"s" == r.id|stringformat:"s" %}selected{% endif %}>{{ r.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                {% if active_tab == 'doctor' %}
+                <div class="col-6">
+                    <select name="specialty" class="form-select form-select-sm bg-light border-0 fw-bold text-secondary" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">🩺 All Specialties</option>
+                        {% for key, val in specialty_choices %}
+                        <option value="{{ key }}" {% if selected_specialty == key %}selected{% endif %}>{{ val }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6">
+                    <select name="category" class="form-select form-select-sm bg-light border-0 fw-bold text-secondary" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">📊 All Categories</option>
+                        {% for key, val in category_choices %}
+                        <option value="{{ key }}" {% if selected_category == key %}selected{% endif %}>Cat: {{ val }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+<div class="px-2 mb-2">
+        <input type="text" id="searchInput" class="form-control form-control-sm shadow-sm" 
+               placeholder="🔍 Dr. ya Chemist ka naam search karein..." 
+               onkeyup="searchNetwork()">
+    </div>
+
+    <ul class="nav nav-pills mx-1 mb-2 shadow-sm bg-white p-1" style="border-radius: 8px;">
+        <li class="nav-item flex-fill text-center">
+            <a href="?employee_id={{ selected_emp_id }}&tab=doctor&route={{ selected_route }}&specialty={{ selected_specialty }}&category={{ selected_category }}" 
+               class="nav-link w-100 fw-bold py-1 {% if active_tab == 'doctor' %}active bg-success text-white{% endif %}" 
+               style="border-radius: 6px; font-size: 0.75rem;">
+               👨‍⚕️ Doctors
+            </a>
+        </li>
+        <li class="nav-item flex-fill text-center">
+            <a href="?employee_id={{ selected_emp_id }}&tab=chemist&route={{ selected_route }}" 
+               class="nav-link w-100 fw-bold py-1 {% if active_tab == 'chemist' %}active bg-success text-white{% endif %}" 
+               style="border-radius: 6px; font-size: 0.75rem;">
+               🧪 Chemists
+            </a>
+        </li>
+    </ul>
+
+    <style>
+        .nav-pills .nav-link { color: #6c757d; border: none; }
+        .nav-pills .nav-link.active { background-color: #107C41 !important; color: white !important; }
+        .excel-table-wrapper { max-height: 62vh; overflow: auto; border-radius: 8px; border: 1px solid #ccc; position: relative; }
+        .excel-table { border-collapse: separate; border-spacing: 0; width: 100%; background-color: #fff; font-size: 0.70rem; }
+        .excel-table th, .excel-table td { border-right: 1px solid #d4d4d4; border-bottom: 1px solid #d4d4d4; padding: 6px 4px; vertical-align: middle; text-align: center; white-space: nowrap; }
+        .excel-table thead th { background-color: #107C41; color: #ffffff; font-weight: 600; position: sticky; top: 0; z-index: 20; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 8px 4px; }
+        .excel-table thead th:first-child { position: sticky; left: 0; z-index: 30; background-color: #0b5e31; border-right: 2px solid #0b5e31; text-align: left; width: 105px; }
+        .excel-table tbody td:first-child { position: sticky; left: 0; background-color: #f4f7f9; z-index: 10; font-weight: bold; color: #333; text-align: left; border-right: 2px solid #107C41; width: 105px; box-shadow: 3px 0 5px -1px rgba(0,0,0,0.1); }
+        .doc-table thead th:nth-child(2) { width: 70px; }
+        .doc-table tbody td:nth-child(2) { width: 70px; }
+        .excel-table tbody tr:hover td { background-color: #e6f2eb; }
+    </style>
+
+    <div class="mx-1 mb-5">
+        {% if active_tab == 'doctor' %}
+            <div class="d-flex justify-content-end mb-1 px-1">
+                <span class="badge shadow-sm" style="background-color: #107C41; font-size: 0.70rem; border-radius: 6px; padding: 4px 8px;">
+                    📋 Total Doctors: {{ doctors|length }}
+                </span>
+            </div>
+
+            <div class="card border-0 shadow-sm bg-white" style="border-radius: 8px;">
+                <div class="excel-table-wrapper">
+                    <table class="excel-table doc-table">
+                        <thead>
+                            <tr>
+                                <th>Doctor Name</th>
+                                <th>Specialty</th>
+                                <th>Category</th>
+                                <th>Route</th>
+                                <th style="background-color: #159b53;">GPS Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="networkTableBody">
+                            {% for doc in doctors %}
+                            <tr>
+                                <td class="text-start" title="Dr. {{ doc.name }}">
+                                    <a href="{% url 'view_doctor_profile' doc.id %}" class="fw-bold text-decoration-none" style="color: #0b5e31;">Dr. {{ doc.name }}</a>
+                                </td>
+                                <td class="text-secondary fw-medium">{{ doc.get_specialty_display|default:doc.specialty|default:"-" }}</td>
+                                <td class="fw-bold text-primary">{{ doc.category|default:"-" }}</td>
+                                <td class="text-muted">{{ doc.route.name|default:"-" }}</td>
+                                <td>
+                                    {% if not doc.latitude %}
+                                        <a href="{% url 'update_location' 'doctor' doc.id %}?employee_id={{ selected_emp_id }}" class="btn btn-sm btn-outline-danger fw-bold py-0 px-2 shadow-sm" style="font-size: 0.60rem; border-radius: 4px;">📍 Set GPS</a>
+                                    {% elif allow_location_capture %}
+                                        <a href="{% url 'update_location' 'doctor' doc.id %}?employee_id={{ selected_emp_id }}" class="btn btn-sm btn-outline-success fw-bold py-0 px-2 shadow-sm" style="font-size: 0.60rem; border-radius: 4px;">📍 Update</a>
+                                    {% else %}
+                                        <span class="text-success fw-bold" style="font-size: 0.65rem;">✅ Mapped</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5" class="text-center text-muted py-4">Koi Doctor nahi mila.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% else %}
+            <div class="d-flex justify-content-end mb-1 px-1">
+                <span class="badge shadow-sm" style="background-color: #107C41; font-size: 0.70rem; border-radius: 6px; padding: 4px 8px;">
+                    📋 Total Chemists: {{ chemists|length }}
+                </span>
+            </div>
+
+            <div class="card border-0 shadow-sm bg-white" style="border-radius: 8px;">
+                <div class="excel-table-wrapper">
+                    <table class="excel-table">
+                        <thead>
+                            <tr>
+                                <th>Chemist Name</th>
+                                <th>Route</th>
+                                <th style="background-color: #159b53;">GPS Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="networkTableBody">
+                            {% for chem in chemists %}
+                            <tr>
+                                <td class="fw-bold text-dark text-start" title="{{ chem.name }}">{{ chem.name }}</td>
+                                <td class="text-secondary">{{ chem.route.name|default:"-" }}</td>
+                                <td>
+                                    {% if not chem.latitude %}
+                                        <a href="{% url 'update_location' 'chemist' chem.id %}?employee_id={{ selected_emp_id }}" class="btn btn-sm btn-outline-danger fw-bold py-0 px-2 shadow-sm" style="font-size: 0.60rem; border-radius: 4px;">📍 Set GPS</a>
+                                    {% elif allow_location_capture %}
+                                        <a href="{% url 'update_location' 'chemist' chem.id %}?employee_id={{ selected_emp_id }}" class="btn btn-sm btn-outline-success fw-bold py-0 px-2 shadow-sm" style="font-size: 0.60rem; border-radius: 4px;">📍 Update</a>
+                                    {% else %}
+                                        <span class="text-success fw-bold" style="font-size: 0.65rem;">✅ Mapped</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="3" class="text-center text-muted py-4">Koi Chemist nahi mila.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function searchNetwork() {
+    let input = document.getElementById("searchInput").value.toLowerCase();
+    let tableBody = document.getElementById("networkTableBody");
+    let rows = tableBody.getElementsByTagName("tr");
+    for (let i = 0; i < rows.length; i++) {
+        let nameCell = rows[i].getElementsByTagName("td")[0];
+        if (nameCell) {
+            let nameValue = nameCell.textContent || nameCell.innerText;
+            rows[i].style.display = nameValue.toLowerCase().indexOf(input) > -1 ? "" : "none";
+        }
+    }
+}
+</script>
+{% endblock %}

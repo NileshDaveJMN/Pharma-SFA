@@ -1,45 +1,87 @@
 {% extends 'base.html' %}
-
 {% block content %}
-<div class="card p-3 shadow-sm border-0 mb-4 bg-white rounded-3">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
-            <h5 class="fw-bold text-dark mb-0">🧪 {{ chemist.name }}</h5>
-            <small class="text-muted">Ph: {{ chemist.phone }}</small>
+<div class="container-fluid p-0 mb-4 mt-1">
+    <div class="card border-0 shadow-sm mx-1 bg-white" style="border-radius: 8px;">
+        <div class="card-body p-2">
+            
+            <!-- 🌟 COMPACT HEADER -->
+            <div class="d-flex justify-content-between align-items-center border-bottom pb-1 mb-2">
+                <div>
+                    <h6 class="fw-bold text-dark mb-0" style="font-size: 0.85rem;">🧪 {{ chemist.name }}</h6>
+                    <small class="text-muted fw-bold" style="font-size: 0.60rem;">📞 Ph: {{ chemist.phone }}</small>
+                </div>
+                <span class="badge bg-success-subtle text-success border border-success px-2 py-1 shadow-sm" style="font-size: 0.60rem; border-radius: 4px;">Order Booking</span>
+            </div>
+
+            <form method="POST" id="chemistVisitForm" class="m-0">
+                {% csrf_token %}
+                
+                <!-- 📍 GPS Hidden Fields & Status Alert -->
+                <input type="hidden" name="latitude" id="lat">
+                <input type="hidden" name="longitude" id="lng">
+                <div id="geo-status" class="alert alert-warning p-1 mb-2 text-center fw-bold shadow-sm border-0" style="font-size: 0.65rem; border-radius: 6px;">
+                    ⏳ GPS Location fetch ho rahi hai...
+                </div>
+
+                <!-- 🛒 COMPACT ORDER TABLE -->
+                <div class="table-responsive border mb-2" style="border-radius: 6px;">
+                    <table class="table table-sm align-middle mb-0" style="font-size: 0.70rem;">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-2 py-1 text-secondary fw-bold" style="width: 75%;">Product Details</th>
+                                <th class="text-center pe-2 py-1 text-secondary fw-bold" style="width: 25%;">Order</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product in products %}
+                            <tr>
+                                <td class="ps-2 py-1">
+                                    <span class="fw-bold text-dark d-block mb-0">{{ product.name }}</span>
+                                    <small class="text-muted fw-bold" style="font-size: 0.55rem;">Price: ₹{{ product.price }}</small>
+                                </td>
+                                <td class="pe-2 py-1">
+                                    <input type="number" name="order_{{ product.id }}" class="form-control form-control-sm text-center fw-bold bg-light border-0 shadow-sm" placeholder="0" min="0" style="border-radius: 4px; height: 26px; font-size: 0.70rem;">
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 🛑 COMPACT BUTTONS -->
+                <div class="d-flex gap-2 mt-2">
+                    <button type="submit" id="submitBtn" class="btn btn-primary btn-sm flex-fill fw-bold shadow-sm" style="border-radius: 6px;" disabled>✅ Submit Order</button>
+                    <a href="{% url 'mr_dashboard' %}" class="btn btn-light border btn-sm fw-bold text-secondary shadow-sm" style="border-radius: 6px;">Cancel</a>
+                </div>
+            </form>
         </div>
-        <span class="badge bg-primary px-3 py-2">Order Booking</span>
     </div>
-
-    <form method="POST">
-        {% csrf_token %}
-        <div class="table-responsive">
-            <table class="table table-bordered align-middle">
-                <thead class="table-light">
-                    <tr>
-                        <th style="width: 60%;">Product</th>
-                        <th class="text-center" style="width: 40%;">Order Qty</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for product in products %}
-                    <tr>
-                        <td>
-                            <span class="fw-bold d-block text-dark">{{ product.name }}</span>
-                            <small class="text-muted">₹{{ product.price }}</small>
-                        </td>
-                        <td>
-                            <input type="number" name="order_{{ product.id }}" class="form-control text-center" placeholder="0" min="0">
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="mt-4">
-            <button type="submit" class="btn btn-success w-100 fw-bold py-3 shadow">✅ Submit Chemist Order</button>
-            <a href="{% url 'mr_dashboard' %}" class="btn btn-outline-secondary w-100 fw-bold py-2 mt-2">Cancel</a>
-        </div>
-    </form>
 </div>
+
+<!-- 📍 GPS Logic Script -->
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        var statusDiv = document.getElementById('geo-status');
+        var submitBtn = document.getElementById('submitBtn');
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    document.getElementById('lat').value = position.coords.latitude;
+                    document.getElementById('lng').value = position.coords.longitude;
+                    statusDiv.className = "alert alert-success p-1 mb-2 text-center fw-bold shadow-sm border-0";
+                    statusDiv.innerHTML = "📍 Location Captured Successfully!";
+                    submitBtn.disabled = false;
+                }, 
+                function(error) {
+                    statusDiv.className = "alert alert-danger p-1 mb-2 text-center fw-bold shadow-sm border-0";
+                    statusDiv.innerHTML = "⚠️ Error: GPS Enable karein!";
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        } else {
+            statusDiv.innerHTML = "GPS Not Supported.";
+        }
+    });
+</script>
 {% endblock %}

@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+    
+    <!-- 🌟 COMPACT HEADER WITH EXCEL BUTTON -->
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="{% url 'view_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0 flex-grow-1"><i class="bi bi-geo-alt text-primary me-1"></i> Route Report</h6>
+        
+        <!-- 📥 COMPACT EXCEL BUTTON (Moved to Top) -->
+        <a href="?employee_id={{ selected_emp_id }}&export=excel" class="btn btn-success btn-sm fw-bold shadow-sm px-2 py-0" style="font-size: 0.75rem;">
+            📥 .XLSX
+        </a>
+    </div>
+
+    <!-- 🎛️ ULTRA COMPACT FILTERS (Auto-Submit - Only for Managers) -->
+    {% if is_manager_view %}
+    <div class="card border-0 shadow-sm mb-2 bg-white mx-1" style="border-radius: 8px;">
+        <div class="card-body p-2">
+            <form method="GET" class="row g-1 align-items-end" id="filterForm">
+                <div class="col-12">
+                    <select name="employee_id" class="form-select form-select-sm bg-light fw-bold text-primary border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">👤 Select Employee...</option>
+                        {% for emp in team_employees %}
+                            <option value="{{ emp.id }}" {% if selected_emp_id == emp.id %}selected{% endif %}>{{ emp.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 🎨 COMPACT TABLE CSS -->
+    <style>
+    .excel-table-wrapper { max-height: 65vh; overflow: auto; border-radius: 8px; border: 1px solid #ccc; position: relative; }
+    .excel-table { border-collapse: separate; border-spacing: 0; width: 100%; background-color: #fff; font-size: 0.70rem; }
+    .excel-table th, .excel-table td { border-right: 1px solid #d4d4d4; border-bottom: 1px solid #d4d4d4; padding: 6px 4px; vertical-align: middle; text-align: center; white-space: nowrap; }
+    
+    .excel-table thead tr th { position: sticky; top: 0; z-index: 20; color: #fff; background-color: #107C41; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 8px 4px; }
+    
+    /* 🌟 COMPACT FIRST COLUMN */
+    .excel-table thead tr th:first-child { position: sticky; left: 0; z-index: 30; background-color: #0b5e31; width: 90px; min-width: 90px; max-width: 90px; border-right: 2px solid #0b5e31; white-space: normal; }
+    .excel-table tbody td:first-child { 
+        position: sticky; left: 0; background-color: #f4f7f9; z-index: 10; 
+        width: 90px; min-width: 90px; max-width: 90px; 
+        border-right: 2px solid #107C41; box-shadow: 3px 0 5px -1px rgba(0,0,0,0.1); 
+        overflow: hidden; white-space: normal; word-wrap: break-word; text-align: left;
+    }
+    
+    .excel-table tfoot tr td { position: sticky; bottom: -1px; background-color: #e2e8f0; z-index: 20; border-top: 2px solid #107C41; box-shadow: 0 -3px 5px -1px rgba(0,0,0,0.1); }
+    .excel-table tfoot tr td:first-child { left: 0; z-index: 30; background-color: #cbd5e1; border-right: 2px solid #107C41; width: 90px; min-width: 90px; max-width: 90px; text-align: left;}
+    
+    .excel-table tbody tr:hover td { background-color: #e6f2eb; }
+    .excel-table tbody tr:hover td:first-child { background-color: #d1e5d8; }
+    </style>
+
+    <div class="card border-0 shadow-sm bg-white mx-1 mb-5" style="border-radius: 8px;">
+        <div class="excel-table-wrapper" style="border-radius: 8px;">
+            <table class="excel-table">
+                <thead>
+                    <tr>
+                        <th style="background-color: #0b5e31; color: white;">Route Name</th>
+                        <th style="background-color: #107C41; color: white;">Territory/HQ</th>
+                        <th style="background-color: #107C41; color: white;">Category</th>
+                        <th style="background-color: #107C41; color: white;">Dist. (KM)</th>
+                        <th style="background-color: #159b53; color: white;">👨‍⚕️ Docs</th>
+                        <th style="background-color: #159b53; color: white;">💊 Chems</th>
+                        <th style="background-color: #0f7a40; color: white;">👥 Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report_data %}
+                    <tr>
+                        <td class="fw-bold text-dark">{{ row.route_name }}</td>
+                        <td class="text-secondary" style="white-space: normal;">{{ row.territory }}</td>
+                        <td>
+                            {% if row.category == 'Headquarter' %}<span class="badge bg-success" style="font-size: 0.55rem;">HQ</span>
+                            {% elif row.category == 'Ex-Headquarter' %}<span class="badge bg-info text-dark" style="font-size: 0.55rem;">EX-HQ</span>
+                            {% else %}<span class="badge bg-warning text-dark" style="font-size: 0.55rem;">OS</span>{% endif %}
+                        </td>
+                        <td class="fw-bold text-dark">{{ row.distance }}</td>
+                        <td class="fw-bold" style="color: #0d6efd;">{{ row.doc_count }}</td>
+                        <td class="fw-bold" style="color: #6610f2;">{{ row.chem_count }}</td>
+                        <td class="fw-bold text-success" style="background-color: #e8f5e9;">{{ row.total_customers }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="100%" class="text-center text-muted py-4" style="font-size: 0.8rem;">Koi routes assigned nahi hain.</td></tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td style="font-size: 0.65rem;">GRAND TOTAL</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td style="background-color: #b9d8c8; color: #107C41;">{{ gt_docs }}</td>
+                        <td style="background-color: #b9d8c8; color: #107C41;">{{ gt_chems }}</td>
+                        <td style="background-color: #a3cfb6; color: #107C41;">{{ gt_total }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

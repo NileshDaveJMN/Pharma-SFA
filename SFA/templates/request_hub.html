@@ -1,34 +1,237 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="mb-4">
-    <h4 class="fw-bold text-dark mb-1">➕ Request Hub</h4>
-    <small class="text-muted">Naya data add karne ya MTP submit karne ke liye select karein</small>
-</div>
+<div class="container-fluid p-0 mb-4 mt-1">
 
-<div class="list-group shadow-sm border-0 rounded-3 overflow-hidden mb-4">
-    <a href="{% url 'add_tour_program' %}" class="list-group-item list-group-item-action d-flex align-items-center p-3">
-        <div class="fs-3 me-3">📅</div>
-        <div>
-            <h6 class="mb-0 fw-bold text-dark">Submit New Tour Program (MTP)</h6>
-            <small class="text-muted">Agli dates ke liye route plan bhejein</small>
-        </div>
-    </a>
+   
 
-    <a href="{% url 'add_doctor' %}" class="list-group-item list-group-item-action d-flex align-items-center p-3">
-        <div class="fs-3 me-3">🧑‍⚕️</div>
-        <div>
-            <h6 class="mb-0 fw-bold text-dark">Add New Doctor</h6>
-            <small class="text-muted">Apne list mein naya doctor jodein</small>
+    {% if request.user.employee.designation != 'System Administrator' and request.user.employee.designation != 'Admin' %}
+    <h6 class="fw-bold text-secondary mb-1 px-2 mt-2" style="font-size: 0.65rem; letter-spacing: 0.5px;">📝 CORE OPERATIONS</h6>
+    <div class="row g-1 mb-2 px-2">
+        
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #0056b3 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'mr_dashboard' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">📝</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">New<br>DCR</span>
+            </div>
         </div>
-    </a>
 
-    <a href="{% url 'add_chemist' %}" class="list-group-item list-group-item-action d-flex align-items-center p-3">
-        <div class="fs-3 me-3">🧪</div>
-        <div>
-            <h6 class="mb-0 fw-bold text-dark">Add New Chemist</h6>
-            <small class="text-muted">Apne list mein naya chemist jodein</small>
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #ffc107 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'add_tour_program' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">📅</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Submit<br>MTP</span>
+            </div>
         </div>
-    </a>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #198754 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'expense_hub' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">💸</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Claim<br>Expense</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #dc3545 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'apply_leave' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🏖️</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Apply<br>Leave</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <h6 class="fw-bold text-secondary mb-1 px-2 mt-3" style="font-size: 0.65rem; letter-spacing: 0.5px;">🏥 NETWORK & MASTERS</h6>
+    <div class="row g-1 mb-2 px-2">
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #6f42c1 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'add_doctor' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🩺</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Add<br>Doctor</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #20c997 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'add_chemist' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🧪</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Add<br>Chemist</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #0056b3 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'add_route' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🗺️</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Add<br>Route</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #8fa0b3 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'edit_hub' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">✏️</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Edit<br>Hub</span>
+            </div>
+        </div>
+    </div>
+
+    {% if request.user.employee.designation != 'System Administrator' and request.user.employee.designation != 'Admin' %}
+    <h6 class="fw-bold text-secondary mb-1 px-2 mt-3" style="font-size: 0.65rem; letter-spacing: 0.5px;">📈 SALES & CLAIMS</h6>
+    <div class="row g-1 mb-2 px-2">
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #00a8cc !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'party_wise_sale_entry' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">✍️</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Party<br>Sale</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #6f42c1 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'classify_rx_entry' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">👨‍⚕️</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Classify<br>Rx</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #dc3545 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'free_claim_report' %}';">
+                <span class="mb-1" style="font-size: 1.1rem text-danger">🎁</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Free<br>Claim</span>
+            </div>
+        </div>
+
+        {% if request.user.employee.designation == 'MR' %}
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #ffc107 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'target_setting' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🎯</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Set<br>Target</span>
+            </div>
+        </div>
+        
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #198754 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'gift_campaign' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🎁</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Gift<br>Campaign</span>
+            </div>
+        </div>
+        {% endif %}
+        
+    </div>
+    {% endif %}
+
+
+    {% if request.user.employee.designation != 'MR' %}
+    <h6 class="fw-bold text-secondary mb-1 px-2 mt-3" style="font-size: 0.65rem; letter-spacing: 0.5px;">🛡️ TEAM & ADMIN</h6>
+    <div class="row g-1 mb-2 px-2">
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #fd7e14 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'manager_approvals' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🛡️</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Team<br>Approvals</span>
+            </div>
+        </div>
+
+        {% if request.user.employee.designation in 'RBM, ZBM, NSM, Admin' %}
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #dc3545 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'request_holiday' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">⛱️</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Propose<br>Holiday</span>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if request.user.employee.designation == 'System Administrator' or request.user.employee.designation == 'Admin' %}
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #0dcaf0 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'upload_primary_sales' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">📤</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Upload<br>Primary</span>
+            </div>
+        </div>
+        
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #e83e8c !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'bulk_network_upload' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">📥</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Upload<br>Network</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #fd7e14 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'promo_dispatch' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🚚</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Dispatch<br>Promo</span>
+            </div>
+        </div>
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #198754 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'notice_board' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">📢</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Notice<br>Board</span>
+            </div>
+        </div>
+                 <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #ffc107 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'transfer_data' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🔄</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Data<br>Handover</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #dc3545 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'resign_employee' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🚪</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Resign<br>Employee</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #6610f2 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'promote_employee' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">⬆️</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Promote<br>Employee</span>
+            </div>
+        </div>
+
+        {% endif %}
+        
+    </div>
+    {% endif %}
+
 </div>
 {% endblock %}

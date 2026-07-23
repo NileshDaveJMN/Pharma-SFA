@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4 mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="mb-0 text-success"><i class="bi bi-box2-heart-fill"></i> Approve Free Claims</h4>
+        <a href="{% url 'request_hub' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Back</a>
+    </div>
+
+    <h5 class="fw-bold mb-3">Pending Approvals ({{ pending_claims|length }})</h5>
+    {% if pending_claims %}
+        <div class="accordion mb-5" id="pendingAccordion">
+            {% for claim in pending_claims %}
+            <div class="accordion-item border-0 shadow-sm mb-3 rounded">
+                <h2 class="accordion-header" id="heading{{ claim.id }}">
+                    <button class="accordion-button collapsed rounded fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ claim.id }}">
+                        {{ claim.employee.name }} ({{ claim.employee.designation }}) - {{ claim.month }}/{{ claim.year }}
+                    </button>
+                </h2>
+                <div id="collapse{{ claim.id }}" class="accordion-collapse collapse" data-bs-parent="#pendingAccordion">
+                    <div class="accordion-body bg-light">
+                        
+                        <div class="table-responsive bg-white rounded shadow-sm mb-3">
+                            <table class="table table-sm table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Stockist</th>
+                                        <th>Product</th>
+                                        <th class="text-center text-danger">Free Qty</th>
+                                        <th class="text-end">Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for line in claim.claim_lines.all %}
+                                    <tr>
+                                        <td class="fw-bold small">{{ line.stockist.name }}</td>
+                                        <td class="small">{{ line.product.name }}</td>
+                                        <td class="text-center fw-bold text-danger">{{ line.total_free_qty }}</td>
+                                        <td class="text-end fw-bold text-success">₹{{ line.claim_value }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <form method="POST" class="d-flex align-items-center gap-2">
+                            {% csrf_token %}
+                            <input type="hidden" name="claim_id" value="{{ claim.id }}">
+                            <input type="text" name="remark" class="form-control form-control-sm border-0 shadow-sm" placeholder="Add remark (optional)...">
+                            
+                            <button type="submit" name="action" value="approve" class="btn btn-success btn-sm fw-bold px-3">
+                                <i class="bi bi-check-circle"></i> Approve
+                            </button>
+                            <button type="submit" name="action" value="reject" class="btn btn-danger btn-sm fw-bold px-3">
+                                <i class="bi bi-x-circle"></i> Reject
+                            </button>
+                        </form>
+
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-light border-0 shadow-sm text-center py-4 mb-5 text-muted">
+            <i class="bi bi-emoji-smile fs-3 d-block mb-2"></i> Koi naya claim approval ke liye pending nahi hai.
+        </div>
+    {% endif %}
+
+    <h5 class="fw-bold mb-3 text-muted">Recent History</h5>
+    <div class="list-group shadow-sm border-0">
+        {% for claim in history_claims %}
+            <div class="list-group-item d-flex justify-content-between align-items-center bg-light border-0 mb-1 rounded">
+                <div>
+                    <span class="fw-bold d-block">{{ claim.employee.name }}</span>
+                    <small class="text-muted">Month: {{ claim.month }}/{{ claim.year }}</small>
+                </div>
+                <div>
+                    {% if claim.status == 'Approved' %}
+                        <span class="badge bg-success">Approved ✅</span>
+                    {% elif claim.status == 'Rejected' %}
+                        <span class="badge bg-danger">Rejected ❌</span>
+                    {% else %}
+                        <span class="badge bg-info text-dark">Sent to Admin ⏳</span>
+                    {% endif %}
+                </div>
+            </div>
+        {% empty %}
+            <div class="text-muted small">Koi history nahi hai.</div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

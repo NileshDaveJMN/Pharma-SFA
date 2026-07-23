@@ -1,89 +1,230 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="mb-4">
-    <h4 class="fw-bold text-dark mb-1">👁️ View Dashboard</h4>
-    <small class="text-muted">Apne saare records aur MTP status check karein</small>
+<div class="container-fluid mb-4 mt-1 p-0">
+
+    <h6 class="fw-bold text-secondary mb-1 px-2 mt-2" style="font-size: 0.65rem; letter-spacing: 0.5px;">📅 DAILY OPERATIONS</h6>
+    <div class="row g-1 mb-2 px-2">
+        
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #ffc107 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'tour_plan_report' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">📅</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Tour<br>Plan</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #0056b3 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'dcr_report' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">📊</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">DCR<br>Report</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #198754 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'expense_report' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">💸</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Expense</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #17a2b8 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'holiday_list' %}?employee_id={{ selected_emp_id }}';">
+                <span class="mb-1" style="font-size: 1.1rem">🌴</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Holiday<br>List</span>
+            </div>
+        </div>
+    </div>
+
+    <h6 class="fw-bold text-secondary mb-1 px-2 mt-3" style="font-size: 0.65rem; letter-spacing: 0.5px;">📈 SALES & ANALYTICS</h6>
+    <div class="row g-1 mb-2 px-2">
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #ff5722 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'sales_summary_report' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">📈</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Sales<br>Summary</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #343a40 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'primary_sales_report' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🚚</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Primary<br>Report</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #0056b3 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'smart_secondary_statement' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">📉</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Sec.<br>Sale</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #00a8cc !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'product_report' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">📦</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">POB<br>Report</span>
+            </div>
+        </div>
+
+        <div class="col-3 mt-1">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #0dcaf0 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'dr_wise_sale_report' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">👨‍⚕️</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Dr Wise<br>Sale</span>
+            </div>
+        </div>
+
+        <div class="col-3 mt-1">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #20c997 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'party_rx_report' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🏬</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Party<br>Product wise sale</span>
+            </div>
+        </div>
+        
+        <div class="col-3 mt-1">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #6f42c1 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'doctor_roi_report' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">👨‍⚕️📈</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Doctor<br>ROI</span>
+            </div>
+        </div>
+            
+        <div class="col-3 mt-1">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #6610f2 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'analysis_hub' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🧠</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Analysis<br>Hub</span>
+            </div>
+        </div>
+        
+    </div>
+
+    <h6 class="fw-bold text-secondary mb-1 px-2 mt-3" style="font-size: 0.65rem; letter-spacing: 0.5px;">📂 NETWORK & INVENTORY</h6>
+    <div class="row g-1 mb-2 px-2">
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #6f42c1 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'network_report' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🏥</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Dr &<br>Chemist</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #0dcaf0 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'dr_visit_history' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">📅</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Visit<br>History</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #fd7e14 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'route_report' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🗺️</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Routes</span>
+            </div>
+        </div>
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #d63384 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'product_master' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">💊</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Products</span>
+            </div>
+        </div>
+
+        <div class="col-3 mt-1">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #20c997 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'mr_inventory' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🎒</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">My<br>Inventory</span>
+            </div>
+        </div>
+
+        <div class="col-3 mt-1">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #e83e8c !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'gift_distribution_report' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🎁</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Gift<br>Report</span>
+            </div>
+        </div>
+
+       
+         {% if request.user.employee.designation != 'MR' %}
+        <div class="col-3 mt-1">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #ffc107 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'vacancy_list' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🪑</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Vacancy<br>Status</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="col-3 mt-1">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #28a745 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'free_claim_view_readonly' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🎁</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Free<br>Claims</span>
+            </div>
+        </div>
+        
+    </div>
+      <h6 class="fw-bold text-secondary mb-1 px-2 mt-3" style="font-size: 0.65rem; letter-spacing: 0.5px;">📝 MY TRACKERS & STATUS</h6>
+    <div class="row g-1 mb-2 px-2">
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #198754 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'leave_status' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">⛱️</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Leave<br>Status</span>
+            </div>
+        </div>
+
+
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor: pointer; border-bottom: 3px solid #0dcaf0 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'my_requests' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">📋</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">My<br>Requests</span>
+            </div>
+        </div>
+
+    </div>
+
+
+    </div>
+
 </div>
-
-<div class="accordion shadow-sm border-0" id="viewAccordion">
-    
-    <div class="accordion-item">
-        <h2 class="accordion-header" id="headingMTP">
-            <button class="accordion-button fw-bold text-primary" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMTP" aria-expanded="true" aria-controls="collapseMTP">
-                📅 My Tour Programs (MTP)
-            </button>
-        </h2>
-        <div id="collapseMTP" class="accordion-collapse collapse show" aria-labelledby="headingMTP" data-bs-parent="#viewAccordion">
-            <div class="accordion-body p-0">
-                <div class="list-group list-group-flush">
-                    {% for tp in my_tps %}
-                        <div class="list-group-item d-flex justify-content-between align-items-center p-3">
-                            <div>
-                                <h6 class="mb-0 fw-bold">{{ tp.date }}</h6>
-                                <small class="text-muted">Route: {{ tp.route.name }}</small>
-                            </div>
-                            {% if tp.status == 'Approved' %}
-                                <span class="badge bg-success">Approved</span>
-                            {% elif tp.status == 'Pending' %}
-                                <span class="badge bg-warning text-dark">Pending</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{{ tp.status }}</span>
-                            {% endif %}
-                        </div>
-                    {% empty %}
-                        <div class="p-3 text-center text-muted">Koi Tour Program nahi mila.</div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="accordion-item">
-        <h2 class="accordion-header" id="headingDoctors">
-            <button class="accordion-button collapsed fw-bold text-dark" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDoctors" aria-expanded="false" aria-controls="collapseDoctors">
-                🧑‍⚕️ My Doctors List
-            </button>
-        </h2>
-        <div id="collapseDoctors" class="accordion-collapse collapse" aria-labelledby="headingDoctors" data-bs-parent="#viewAccordion">
-            <div class="accordion-body p-0">
-                <div class="list-group list-group-flush">
-                    {% for doc in my_doctors %}
-                        <div class="list-group-item p-3">
-                            <h6 class="mb-0 fw-bold">Dr. {{ doc.name }}</h6>
-                            <small class="text-muted">{{ doc.specialty }} | {{ doc.route.name }}</small>
-                        </div>
-                    {% empty %}
-                        <div class="p-3 text-center text-muted">Koi Doctor map nahi hai.</div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="accordion-item">
-        <h2 class="accordion-header" id="headingChemists">
-            <button class="accordion-button collapsed fw-bold text-dark" type="button" data-bs-toggle="collapse" data-bs-target="#collapseChemists" aria-expanded="false" aria-controls="collapseChemists">
-                🧪 My Chemists List
-            </button>
-        </h2>
-        <div id="collapseChemists" class="accordion-collapse collapse" aria-labelledby="headingChemists" data-bs-parent="#viewAccordion">
-            <div class="accordion-body p-0">
-                <div class="list-group list-group-flush">
-                    {% for chem in my_chemists %}
-                        <div class="list-group-item p-3">
-                            <h6 class="mb-0 fw-bold">{{ chem.name }}</h6>
-                            <small class="text-muted">Ph: {{ chem.phone }} | {{ chem.route.name }}</small>
-                        </div>
-                    {% empty %}
-                        <div class="p-3 text-center text-muted">Koi Chemist map nahi hai.</div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-    </div>
-
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 {% endblock %}

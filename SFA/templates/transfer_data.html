@@ -1,0 +1,102 @@
+{% extends 'base.html' %}{% block content %}
+<div class="container-fluid p-0 mb-4 mt-2">
+<a href="{% url 'request_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-1 rounded-3 border bg-white text-secondary"><span class="fs-5 fw-bold">⬅️</span></a>
+<div class="d-flex align-items-center mb-3 px-2"><h5 class="fw-bold text-dark mb-0" style="font-size: 1.2rem;">Data Handover (Migration)</h5></div>
+<div class="mx-2">
+<div class="alert alert-warning border-warning shadow-sm" style="border-radius: 12px; font-size: 0.8rem;"><strong class="text-dark"><i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> Dhyan Dein:</strong> <br> Ye process Old Employee ke saare data naye Employee ko transfer kar dega, aur Old Employee ka account <strong>hamesha ke liye block (Inactive)</strong> kar dega. Is action ko undo nahi kiya ja sakta!</div>
+
+<div class="card border-0 shadow-sm bg-white" style="border-radius: 12px; border-top: 4px solid #dc3545 !important;">
+<div class="card-body p-3">
+<form method="POST" onsubmit="return confirm('⚠️ FINAL WARNING: Transfer karna chahte hain?');">{% csrf_token %}
+    
+    <div class="mb-2"><label class="form-label fw-bold text-danger mb-1" style="font-size: 0.85rem;"><i class="bi bi-person-dash-fill me-1"></i> Old Employee</label>
+    <select name="old_employee" class="form-select border-danger bg-danger bg-opacity-10 fw-bold text-dark shadow-sm" required>
+        <option value="">-- Select Old --</option>
+        {% for emp in old_employees %}<option value="{{ emp.id }}">{{ emp.name }} {% if not emp.is_active %}[INACTIVE]{% endif %} ({{ emp.headquarter.name|default:"No HQ" }})</option>{% endfor %}
+    </select></div>
+
+        <div id="statsBox" class="d-none mt-3 mb-4">
+        <h6 class="text-secondary fw-bold mb-2 px-1" style="font-size: 0.75rem; letter-spacing: 0.5px;">
+            <i class="bi bi-pie-chart-fill me-1"></i> ASSETS TO BE TRANSFERRED
+        </h6>
+        <div class="row g-2 text-center">
+            <div class="col-4">
+                <div class="p-2 border border-primary border-opacity-25 rounded-3 shadow-sm" style="background: linear-gradient(to bottom, #ffffff, #f0f8ff);">
+                    <div class="fs-4 text-primary mb-1"><i class="bi bi-heart-pulse-fill"></i></div>
+                    <div class="fw-bold fs-5 text-dark lh-1" id="s_doc">0</div>
+                    <div class="text-muted fw-bold mt-1" style="font-size: 0.60rem; letter-spacing: 0.5px;">DOCTORS</div>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="p-2 border border-success border-opacity-25 rounded-3 shadow-sm" style="background: linear-gradient(to bottom, #ffffff, #f0fff4);">
+                    <div class="fs-4 text-success mb-1"><i class="bi bi-prescription2"></i></div>
+                    <div class="fw-bold fs-5 text-dark lh-1" id="s_chem">0</div>
+                    <div class="text-muted fw-bold mt-1" style="font-size: 0.60rem; letter-spacing: 0.5px;">CHEMISTS</div>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="p-2 border border-warning border-opacity-25 rounded-3 shadow-sm" style="background: linear-gradient(to bottom, #ffffff, #fffdf0);">
+                    <div class="fs-4 text-warning mb-1" style="text-shadow: 1px 1px 2px rgba(0,0,0,0.1);"><i class="bi bi-people-fill"></i></div>
+                    <div class="fw-bold fs-5 text-dark lh-1" id="s_team">0</div>
+                    <div class="text-muted fw-bold mt-1" style="font-size: 0.60rem; letter-spacing: 0.5px;">TEAM</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="mb-4"><label class="form-label fw-bold text-secondary mb-1" style="font-size: 0.85rem;"><i class="bi bi-tag-fill me-1"></i> Old Employee ka Naya Status</label>
+    <select name="old_emp_status" class="form-select border-secondary shadow-sm" required>
+        <option value="Resigned">Resigned (Chhod diya)</option><option value="Terminated">Terminated (Nikal diya)</option><option value="Transferred">Transferred (Doosri jagah bhej diya)</option><option value="Retired">Retired</option>
+    </select></div>
+
+    <div class="text-center mb-3 text-muted"><i class="bi bi-arrow-down-circle-fill text-primary" style="font-size: 1.5rem;"></i></div>
+    
+    <div class="mb-4"><label class="form-label fw-bold text-success mb-1" style="font-size: 0.85rem;"><i class="bi bi-person-plus-fill me-1"></i> New Employee</label>
+    <select name="new_employee" class="form-select border-success bg-success bg-opacity-10 fw-bold text-dark shadow-sm" required>
+        <option value="">-- Select New --</option>
+        {% for emp in new_employees %}<option value="{{ emp.id }}">{{ emp.name }} ({{ emp.headquarter.name|default:"No HQ" }})</option>{% endfor %}
+    </select></div>
+
+    <hr class="text-muted opacity-25 mb-3">
+    <button type="submit" class="btn w-100 fw-bold shadow-sm py-2 text-white" style="background: linear-gradient(135deg, #dc3545, #ff6b6b); border-radius: 8px;"><i class="bi bi-rocket-takeoff-fill me-1"></i> Transfer & Deactivate</button>
+</form>
+</div></div>
+
+{% if recent_logs %}
+<div class="mt-4 card border-0 shadow-sm bg-white" style="border-radius: 12px;">
+    <div class="card-header bg-light fw-bold text-secondary" style="border-radius: 12px 12px 0 0; font-size: 0.85rem;"><i class="bi bi-clock-history me-1"></i> Recent Transfer Logs</div>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0" style="font-size: 0.75rem;">
+            <thead class="table-light text-muted"><tr><th>Date</th><th>Old Employee</th><th>Transferred To</th><th>Action By</th><th>Details</th></tr></thead>
+            <tbody>{% for log in recent_logs %}<tr>
+                <td class="text-nowrap">{{ log.transfer_date|date:"d M Y, h:i A" }}</td>
+                <td class="text-danger fw-bold">{{ log.old_employee_name }}</td>
+                <td class="text-success fw-bold">{{ log.new_employee.name|default:"N/A" }}</td>
+                <td>{{ log.transferred_by.name|default:"System" }}</td>
+                <td class="text-muted text-wrap" style="min-width: 250px;">{{ log.details }}</td>
+            </tr>{% endfor %}</tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+</div></div>
+
+<script>
+document.querySelector('select[name="old_employee"]').addEventListener('change', function() {
+    let empId = this.value;
+    let box = document.getElementById('statsBox');
+    if(!empId) { box.classList.add('d-none'); return; }
+    fetch(`?get_stats=1&emp_id=${empId}`)
+    .then(response => response.json())
+    .then(data => {
+        if(data.success) {
+            document.getElementById('s_doc').innerText = data.doctors;
+            document.getElementById('s_chem').innerText = data.chemists;
+            document.getElementById('s_team').innerText = data.team;
+            box.classList.remove('d-none');
+        }
+    });
+});
+</script>
+{% endblock %}

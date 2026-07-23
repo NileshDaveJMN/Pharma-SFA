@@ -1,0 +1,59 @@
+{% extends 'base.html' %} <!-- Agar aap base.html use kar rahe hain to -->
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4>DCR Report: {{ daily_dcr.date|date:"d M, Y" }}</h4>
+        <a href="{% url 'view_hub' %}" class="btn btn-secondary btn-sm">🔙 Back to View Hub</a>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body">
+            <table class="table table-bordered table-striped text-center align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Customer Name</th>
+                        <th>Type</th>
+                        <th>Remark</th>
+                        <th>Products (Detail / Samples / Orders)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for visit in visits %}
+                    <tr>
+                        <td class="text-start fw-bold">
+                            {% if visit.doctor %}{{ visit.doctor.name }}{% else %}{{ visit.chemist.name }}{% endif %}
+                        </td>
+                        <td>
+                            {% if visit.doctor %}<span class="badge bg-primary">Doctor</span>
+                            {% else %}<span class="badge bg-success">Chemist</span>{% endif %}
+                        </td>
+                        <td>{{ visit.remark|default:"-" }}</td>
+                        <td class="text-start">
+                            {% if visit.product_details.all %}
+                                <ul class="mb-0" style="list-style-type: none; padding-left: 0;">
+                                {% for detail in visit.product_details.all %}
+                                    <li class="small border-bottom pb-1 mb-1">
+                                        <strong>{{ detail.product.name }}</strong><br>
+                                        {% if detail.is_detailed %}<span class="badge bg-info text-dark">Detailed</span>{% endif %}
+                                        {% if detail.sample_qty > 0 %}<span class="badge bg-warning text-dark">Spl: {{ detail.sample_qty }}</span>{% endif %}
+                                        {% if detail.order_qty > 0 %}<span class="badge bg-success">Ord: {{ detail.order_qty }}</span>{% endif %}
+                                    </li>
+                                {% endfor %}
+                                </ul>
+                            {% else %}
+                                <span class="text-muted small">No products detailed</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-muted">Is DCR mein koi visit nahi hai.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

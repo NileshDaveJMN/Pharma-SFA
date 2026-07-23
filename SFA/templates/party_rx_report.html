@@ -1,0 +1,334 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+    
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="{% url 'view_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0 flex-grow-1"><i class="bi bi-capsule text-primary me-1"></i> Party Sales Report</h6>
+        
+        <a href="?employee_id={{ selected_emp_id }}&stockist_id={{ selected_stockist_id }}&from_month={{ from_month }}&to_month={{ to_month }}&year={{ selected_year }}&export=excel" class="btn btn-success btn-sm fw-bold shadow-sm px-2 py-0" style="font-size: 0.75rem;">
+            📥 .XLSX
+        </a>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-2 bg-white mx-1" style="border-radius: 8px;">
+        <div class="card-body p-2">
+            <form method="GET" class="row g-1 align-items-end" id="filterForm">
+                {% if is_manager_view %}
+                <div class="col-12">
+                    <select name="employee_id" class="form-select form-select-sm bg-light fw-bold text-primary border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">👤 Select Employee...</option>
+                        {% for emp in team_employees %}
+                            <option value="{{ emp.id }}" {% if selected_emp_id == emp.id %}selected{% endif %}>{{ emp.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+
+                <div class="col-12">
+                    <select name="stockist_id" class="form-select form-select-sm bg-light fw-bold border-0 text-secondary" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">📦 -- All Stockists --</option>
+                        {% for st in stockists %}
+                            <option value="{{ st.id }}" {% if selected_stockist_id == st.id %}selected{% endif %}>{{ st.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-4">
+                    <select name="from_month" class="form-select form-select-sm bg-light fw-bold border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        {% for m_num, m_name in months_choices %}
+                            <option value="{{ m_num }}" {% if from_month == m_num %}selected{% endif %}>🟢 {{ m_name|slice:":3" }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-4">
+                    <select name="to_month" class="form-select form-select-sm bg-light fw-bold border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        {% for m_num, m_name in months_choices %}
+                            <option value="{{ m_num }}" {% if to_month == m_num %}selected{% endif %}>🔴 {{ m_name|slice:":3" }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-4">
+                    <input type="number" name="year" value="{{ selected_year }}" class="form-control form-control-sm bg-light fw-bold text-center border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <ul class="nav nav-pills mx-1 mb-2 shadow-sm bg-white p-1" style="border-radius: 8px;" id="partyTabs" role="tablist">
+        <li class="nav-item flex-fill text-center" role="presentation">
+            <button class="nav-link active w-100 fw-bold py-1" style="border-radius: 6px;" id="party-tab" data-bs-toggle="tab" data-bs-target="#party" type="button" role="tab">💊 Chemist</button>
+        </li>
+        <li class="nav-item flex-fill text-center" role="presentation">
+            <button class="nav-link w-100 fw-bold py-1" style="border-radius: 6px;" id="product-tab" data-bs-toggle="tab" data-bs-target="#product" type="button" role="tab">📦 Product</button>
+        </li>
+        <li class="nav-item flex-fill text-center" role="presentation">
+            <button class="nav-link w-100 fw-bold py-1" style="border-radius: 6px;" id="raw-tab" data-bs-toggle="tab" data-bs-target="#raw" type="button" role="tab">📄 Raw</button>
+        </li>
+    </ul>
+
+    <style>
+    .nav-pills .nav-link { font-size: 0.70rem; color: #6c757d; border: none; padding: 6px 2px; }
+    .nav-pills .nav-link.active { background-color: #107C41 !important; color: white !important; }
+    
+    .excel-table-wrapper { max-height: 60vh; overflow: auto; border-radius: 8px; border: 1px solid #ccc; position: relative; }
+    .excel-table { border-collapse: separate; border-spacing: 0; width: 100%; background-color: #fff; font-size: 0.70rem; }
+    .excel-table th, .excel-table td { border-right: 1px solid #d4d4d4; border-bottom: 1px solid #d4d4d4; padding: 6px 4px; vertical-align: middle; text-align: center; white-space: nowrap; }
+    
+    .excel-table thead tr:nth-child(1) th { position: sticky; top: 0; z-index: 20; color: #fff; }
+    .excel-table thead tr:nth-child(2) th { position: sticky; z-index: 18; color: #fff; }
+    
+    /* 🌟 COMPACT FIRST COLUMN */
+    .excel-table tbody td:first-child {
+        position: sticky; left: 0; background-color: #f4f7f9; z-index: 10; text-align: left; 
+        width: 100px; min-width: 100px; max-width: 100px; white-space: normal; word-wrap: break-word; 
+        border-right: 2px solid #107C41; color: #333; font-weight: bold; box-shadow: 2px 0 4px -1px rgba(0,0,0,0.1);
+    }
+    .excel-table thead tr:nth-child(1) th:first-child {
+        position: sticky; left: 0; z-index: 30; background-color: #0b5e31; border-right: 2px solid #0b5e31; text-align: left;
+        width: 100px; min-width: 100px; max-width: 100px; white-space: normal;
+    }
+    
+    .excel-table tfoot td { position: sticky; bottom: -1px; z-index: 18; background-color: #d1e5d8; color: #107C41; font-weight: 900; border-top: 2px solid #107C41; text-align: center; box-shadow: 0 -2px 4px -1px rgba(0,0,0,0.1); }
+    .excel-table tfoot td:first-child { position: sticky; left: 0; z-index: 25; background-color: #b9d8c8; border-right: 2px solid #107C41; text-align: left; width: 100px; min-width: 100px; max-width: 100px; white-space: normal; }
+    
+    .excel-table tbody tr:hover td { background-color: #e6f2eb; }
+    .excel-table tbody tr:hover td:first-child { background-color: #d1e5d8; }
+
+    /* 🌟 NAYA: Group header row (Chemist/Product ka naam, poori row span karke) */
+    .excel-table tbody tr.group-header td:first-child {
+        position: static !important; left: auto !important; box-shadow: none !important;
+        width: auto !important; min-width: 0 !important; max-width: none !important;
+        background-color: #0b5e31 !important; color: #fff !important; text-align: left !important;
+        font-weight: 800; font-size: 0.72rem; padding: 6px 8px;
+    }
+    /* 🌟 NAYA: Subtotal row (har group ke end me) */
+    .excel-table tbody tr.subtotal-row td { background-color: #eef6f1 !important; font-weight: 800 !important; border-top: 2px solid #9cc7ab; }
+    .excel-table tbody tr.subtotal-row td:first-child { background-color: #d9ecdf !important; }
+    </style>
+
+    <div class="tab-content mx-1" id="partyTabsContent">
+        
+        <div class="tab-pane fade show active" id="party" role="tabpanel">
+            <div class="card border-0 shadow-sm bg-white mb-5" style="border-radius: 8px;">
+                <div class="excel-table-wrapper" style="border-radius: 8px;">
+                    <table class="excel-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2" style="background-color: #0b5e31;">Product</th>
+                                
+                                {% for m_num, m_name in months_headers %}
+                                    <th colspan="3" style="background-color: #107C41;">{{ m_name }}</th>
+                                {% endfor %}
+                                
+                                <th colspan="3" style="background-color: #495057;">GRAND TOTAL</th>
+                            </tr>
+                            <tr>
+                                {% for m_num, m_name in months_headers %}
+                                    <th style="background-color: #159b53;">Billed</th>
+                                    <th style="background-color: #159b53;">Free</th>
+                                    <th style="background-color: #159b53;">Val (₹)</th>
+                                {% endfor %}
+                                <th style="background-color: #6c757d;">Billed</th>
+                                <th style="background-color: #6c757d;">Free</th>
+                                <th style="background-color: #6c757d;">Val (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for party in party_list %}
+                                <tr class="group-header">
+                                    <td colspan="100%">💊 {{ party.chemist_name }} <span class="fw-normal" style="opacity:0.8; font-size:0.65rem;">— {{ party.stockist_name }}</span></td>
+                                </tr>
+                                {% for prod in party.products %}
+                                <tr>
+                                    <td title="{{ prod.name }}">{{ prod.name }}</td>
+
+                                    {% for m_data in prod.monthly_list %}
+                                        <td class="fw-bold text-success" style="background-color: #f8f9fa;">{{ m_data.b_qty }}</td>
+                                        <td class="text-secondary" style="background-color: #f8f9fa;">{{ m_data.f_qty }}</td>
+                                        <td class="text-dark" style="background-color: #f8f9fa;">₹{{ m_data.val|floatformat:0 }}</td>
+                                    {% endfor %}
+
+                                    <td class="fw-bold" style="color: #107C41; background-color: #e2f0e6;">{{ prod.tot_b }}</td>
+                                    <td class="text-secondary" style="background-color: #e2f0e6;">{{ prod.tot_f }}</td>
+                                    <td class="fw-bold" style="color: #e83e8c; background-color: #e2f0e6;">₹{{ prod.tot_val|floatformat:0 }}</td>
+                                </tr>
+                                {% endfor %}
+                                <tr class="subtotal-row">
+                                    <td>Subtotal</td>
+                                    {% for m_data in party.monthly_list %}
+                                        <td>{{ m_data.b_qty }}</td>
+                                        <td>{{ m_data.f_qty }}</td>
+                                        <td>₹{{ m_data.val|floatformat:0 }}</td>
+                                    {% endfor %}
+                                    <td>{{ party.tot_b }}</td>
+                                    <td>{{ party.tot_f }}</td>
+                                    <td>₹{{ party.tot_val|floatformat:0 }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="100%" class="text-center text-muted py-4">Is period me koi data nahi mila.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td style="font-size: 0.65rem;">GRAND TOTAL</td>
+
+                                {% for m_gt in gt_monthly_list %}
+                                    <td>{{ m_gt.b_qty }}</td>
+                                    <td>{{ m_gt.f_qty }}</td>
+                                    <td>₹{{ m_gt.val|floatformat:0 }}</td>
+                                {% endfor %}
+                                <td style="background-color: #b9d8c8;">{{ gt_b_qty }}</td>
+                                <td style="background-color: #b9d8c8;">{{ gt_f_qty }}</td>
+                                <td style="background-color: #b9d8c8;" class="text-dark">₹{{ gt_val|floatformat:0 }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="product" role="tabpanel">
+            <div class="card border-0 shadow-sm bg-white mb-5" style="border-radius: 8px;">
+                <div class="excel-table-wrapper" style="border-radius: 8px;">
+                    <table class="excel-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2" style="background-color: #0b5e31;">Chemist Name</th>
+                                <th rowspan="2" style="background-color: #0b5e31;">Stockist</th>
+                                {% for m_num, m_name in months_headers %}
+                                    <th colspan="3" style="background-color: #107C41;">{{ m_name }}</th>
+                                {% endfor %}
+                                <th colspan="3" style="background-color: #495057;">GRAND TOTAL</th>
+                            </tr>
+                            <tr>
+                                {% for m_num, m_name in months_headers %}
+                                    <th style="background-color: #159b53;">Billed</th>
+                                    <th style="background-color: #159b53;">Free</th>
+                                    <th style="background-color: #159b53;">Val (₹)</th>
+                                {% endfor %}
+                                <th style="background-color: #6c757d;">Billed</th>
+                                <th style="background-color: #6c757d;">Free</th>
+                                <th style="background-color: #6c757d;">Val (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for prod in product_list_grouped %}
+                                <tr class="group-header">
+                                    <td colspan="100%">📦 {{ prod.product_name }}</td>
+                                </tr>
+                                {% for chem in prod.chemists %}
+                                <tr>
+                                    <td title="{{ chem.chemist_name }}">{{ chem.chemist_name }}</td>
+                                    <td class="text-secondary" style="font-size: 0.65rem; white-space: normal;">{{ chem.stockist_name }}</td>
+
+                                    {% for m_data in chem.monthly_list %}
+                                        <td class="fw-bold text-success" style="background-color: #f8f9fa;">{{ m_data.b_qty }}</td>
+                                        <td class="text-secondary" style="background-color: #f8f9fa;">{{ m_data.f_qty }}</td>
+                                        <td class="text-dark" style="background-color: #f8f9fa;">₹{{ m_data.val|floatformat:0 }}</td>
+                                    {% endfor %}
+
+                                    <td class="fw-bold" style="color: #107C41; background-color: #e2f0e6;">{{ chem.tot_b }}</td>
+                                    <td class="text-secondary" style="background-color: #e2f0e6;">{{ chem.tot_f }}</td>
+                                    <td class="fw-bold" style="color: #e83e8c; background-color: #e2f0e6;">₹{{ chem.tot_val|floatformat:0 }}</td>
+                                </tr>
+                                {% endfor %}
+                                <tr class="subtotal-row">
+                                    <td>Subtotal</td>
+                                    <td></td>
+                                    {% for m_data in prod.monthly_list %}
+                                        <td>{{ m_data.b_qty }}</td>
+                                        <td>{{ m_data.f_qty }}</td>
+                                        <td>₹{{ m_data.val|floatformat:0 }}</td>
+                                    {% endfor %}
+                                    <td>{{ prod.tot_b }}</td>
+                                    <td>{{ prod.tot_f }}</td>
+                                    <td>₹{{ prod.tot_val|floatformat:0 }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="100%" class="text-center text-muted py-4">Is period me koi data nahi mila.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td style="font-size: 0.65rem;">GRAND TOTAL</td>
+                                <td></td>
+                                {% for m_gt in gt_monthly_list %}
+                                    <td>{{ m_gt.b_qty }}</td>
+                                    <td>{{ m_gt.f_qty }}</td>
+                                    <td>₹{{ m_gt.val|floatformat:0 }}</td>
+                                {% endfor %}
+                                <td style="background-color: #b9d8c8;">{{ gt_b_qty }}</td>
+                                <td style="background-color: #b9d8c8;">{{ gt_f_qty }}</td>
+                                <td style="background-color: #b9d8c8;" class="text-dark">₹{{ gt_val|floatformat:0 }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="raw" role="tabpanel">
+            <div class="card border-0 shadow-sm bg-white mb-5" style="border-radius: 8px;">
+                <div class="excel-table-wrapper" style="border-radius: 8px;">
+                    <table class="excel-table">
+                        <thead>
+                            <tr>
+                                <th style="background-color: #0b5e31;">Date</th>
+                                <th style="background-color: #0b5e31;">Chemist</th>
+                                <th style="background-color: #0b5e31;">Stockist</th>
+                                <th style="background-color: #0b5e31;">Product</th>
+                                <th style="background-color: #159b53;">Billed</th>
+                                <th style="background-color: #0b5e31;">Free</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in raw_logs %}
+                            <tr>
+                                <td class="text-dark fw-bold">{{ log.date }}</td>
+                                <td class="text-start" style="white-space: normal;">{{ log.chemist }}</td>
+                                <td class="text-secondary" style="font-size: 0.65rem; white-space: normal;">{{ log.stockist }}</td>
+                                <td class="fw-bold text-primary text-start" style="white-space: normal;">{{ log.product }}</td>
+                                <td class="text-center fw-bold text-success">{{ log.billed }}</td>
+                                <td class="text-center text-muted">{{ log.free }}</td>
+                            </tr>
+                            {% empty %}
+                                <tr><td colspan="6" class="text-center text-muted py-4">No raw logs found.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Ye script second header row ko exactly first row ke neeche sticky karti hai
+    function fixStickyHeaders(targetId) {
+        const row1 = document.querySelector(`${targetId} .excel-table thead tr:nth-child(1)`);
+        const row2cells = document.querySelectorAll(`${targetId} .excel-table thead tr:nth-child(2) th`);
+        if (row1 && row2cells.length) {
+            const h = row1.getBoundingClientRect().height;
+            row2cells.forEach(th => th.style.top = h + 'px');
+        }
+    }
+    
+    // Initial fix for active tab
+    fixStickyHeaders('#party');
+    
+    // Tab change fix for sticky headers (Bootstrap 5 event)
+    const tabs = document.querySelectorAll('button[data-bs-toggle="tab"]');
+    tabs.forEach(tab => {
+        tab.addEventListener('shown.bs.tab', event => {
+            const targetId = event.target.getAttribute('data-bs-target');
+            fixStickyHeaders(targetId);
+        });
+    });
+});
+</script>
+{% endblock %}

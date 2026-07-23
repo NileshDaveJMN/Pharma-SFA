@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+    
+    <!-- 🌟 COMPACT GREETING HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-2 px-2">
+        <div>
+            <h6 class="fw-bold text-dark mb-0 fs-6">Hi, {{ employee.name }} 👋</h6>
+            <small class="text-muted fw-bold" style="font-size: 0.65rem;">{{ today|date:"l, d M Y" }}</small>
+        </div>
+        
+        <!-- Status Badge -->
+        {% if request.user.employee.designation != 'System Administrator' and request.user.employee.designation != 'Admin' %}
+            {% if is_day_started and not is_day_ended %}
+                <span class="badge bg-success-subtle text-success border border-success px-2 py-1 shadow-sm" style="font-size: 0.65rem; border-radius: 6px;">Day Active 🟢</span>
+            {% elif is_day_ended %}
+                <span class="badge bg-danger-subtle text-danger border border-danger px-2 py-1 shadow-sm" style="font-size: 0.65rem; border-radius: 6px;">Day Closed 🛑</span>
+            {% endif %}
+        {% endif %}
+    </div>
+
+    <!-- 📢 COMPACT NOTICE MARQUEE -->
+    {% if company_notices %}
+    <a href="{% url 'notice_board' %}" style="text-decoration: none; color: inherit;">
+    <div class="alert alert-warning p-1 mb-2 shadow-sm border-0 d-flex align-items-center mx-1" style="border-radius: 6px;">
+        <span class="me-1" style="font-size: 0.75rem;">📢</span>
+        <marquee behavior="scroll" direction="left" class="fw-bold text-dark mb-0" style="font-size: 0.70rem;">
+            {% for n in company_notices %}{{ n.title }}: {{ n.message }} &bull; {% endfor %}
+        </marquee>
+    </div>
+    </a>
+    {% endif %}
+
+    <!-- 📊 HEADER STATS -->
+    {% if request.user.employee.designation != 'System Administrator' and request.user.employee.designation != 'Admin' %}
+    <div class="mx-1 mb-2">
+        {% include 'partials/_header_stats.html' with dr_count=today_dr_visits chem_count=today_chem_visits sample_count=today_samples pob_value=today_pob %}
+    </div>
+    {% endif %}
+
+    <!-- ========================================== -->
+    <!-- 🌟 ADMIN WORKSPACE CARD -->
+    <!-- ========================================== -->
+    {% if request.user.employee.designation == 'System Administrator' or request.user.employee.designation == 'Admin' %}
+        <div class="card border-0 shadow-sm text-center p-3 bg-white mx-1 mt-2" style="border-top: 3px solid #0dcaf0 !important; border-radius: 8px;">
+            <div class="mb-1"><span class="fs-1">🛡️</span></div>
+            <h6 class="fw-bold text-dark mb-1">Admin Workspace</h6>
+            <p class="text-muted mb-0" style="font-size: 0.65rem;">System ka full access active hai.<br>Kripya <b class="text-primary">Request</b> aur <b class="text-primary">View</b> tabs ka upyog karein.</p>
+        </div>
+
+    <!-- ========================================== -->
+    <!-- 📝 NON-ADMINS KE LIYE VIEWS -->
+    <!-- ========================================== -->
+    {% elif not is_day_started %}
+        <div class="card border-0 shadow-sm text-center p-3 bg-white mx-1 mt-2" style="border-top: 3px solid #198754 !important; border-radius: 8px;">
+            <div class="mb-1"><span class="fs-1">🌅</span></div>
+            <h6 class="fw-bold text-dark mb-1">Good Morning!</h6>
+            <p class="text-muted mb-2" style="font-size: 0.70rem;">Aapne apna din start nahi kiya hai.</p>
+            <a href="{% url 'day_start' %}" class="btn btn-primary btn-sm w-100 fw-bold shadow-sm" style="border-radius: 6px;">🚀 Start Day Now</a>
+        </div>
+
+    {% elif is_day_ended %}
+        <div class="card border-0 shadow-sm text-center p-3 bg-white mx-1 mt-2" style="border-top: 3px solid #dc3545 !important; border-radius: 8px;">
+            <div class="mb-1"><span class="fs-1">🌙</span></div>
+            <h6 class="fw-bold text-dark mb-1">Day Completed</h6>
+            <p class="text-muted mb-0" style="font-size: 0.70rem;">Aapka aaj ka din close ho chuka hai.</p>
+        </div>
+
+    {% elif open_day and open_day.work_type != 'Field Work' %}
+        <div class="card border-0 shadow-sm text-center p-3 bg-white mx-1 mt-2" style="border-top: 3px solid #ffc107 !important; border-radius: 8px;">
+            <div class="mb-1"><span class="fs-1">
+                {% if open_day.work_type == 'Meeting' %}🤝
+                {% elif open_day.work_type == 'Transit' %}🚗
+                {% elif open_day.work_type == 'Holiday' %}⛱️
+                {% elif open_day.work_type == 'Leave' %}🏖️
+                {% else %}🏢{% endif %}
+            </span></div>
+            <h6 class="fw-bold text-dark mb-1">{{ open_day.work_type }} Day</h6>
+            <p class="text-muted mb-2" style="font-size: 0.65rem;">Visits allowed nahi hain. Din khtam hone par close karein.</p>
+            <a href="{% url 'day_end' %}" class="btn btn-warning btn-sm w-100 fw-bold text-dark shadow-sm" style="border-radius: 6px;">🛑 Go to End Day</a>
+        </div>
+
+    {% else %}
+        <!-- 🗺️ ACTIVE ROUTES & ADD BUTTON IN SAME LINE -->
+        <div class="d-flex justify-content-between align-items-center mx-1 mb-2 bg-white p-1 shadow-sm border" style="border-radius: 6px;">
+            <div class="d-flex flex-wrap gap-1 px-1">
+                {% for route in active_routes %}
+                    <span class="badge bg-primary text-white shadow-sm" style="font-size:0.65rem; border-radius: 4px;"><i class="bi bi-geo-alt-fill me-1"></i>{{ route.name }}</span>
+                {% empty %}
+                    <span class="badge bg-warning text-dark shadow-sm" style="font-size:0.65rem; border-radius: 4px;">⚠️ No Route</span>
+                {% endfor %}
+            </div>
+            <button class="btn btn-light border btn-sm fw-bold shadow-sm py-0 px-2 text-primary" style="font-size: 0.60rem; border-radius: 4px;" data-bs-toggle="modal" data-bs-target="#addRouteModal">
+                ➕ Add Route
+            </button>
+        </div>
+
+        <div class="mx-1">
+            
+            <!-- ⏳ PENDING VISITS -->
+            <h6 class="fw-bold text-secondary mb-1 border-bottom pb-1 px-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">⏳ PENDING VISITS</h6>
+            
+            <div class="row g-1 mb-3">
+                {% for doc in pending_doctors %}
+                <div class="col-12">
+                    <div class="card border-0 shadow-sm bg-white" style="border-left: 3px solid #6f42c1; border-radius: 6px;">
+                        <div class="card-body p-1 px-2 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold text-dark mb-0" style="font-size: 0.80rem;">Dr. {{ doc.name }}</h6>
+                                <small class="text-muted fw-bold" style="font-size: 0.60rem;">{{ doc.specialty|default:"Specialty NA" }}</small>
+                            </div>
+                            <a href="{% url 'doctor_visit' doc.id %}" class="btn btn-primary btn-sm py-0 px-2 fw-bold shadow-sm" style="font-size: 0.65rem; background-color: #0056b3; border: none; border-radius: 4px;">Report</a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+
+                {% for chem in pending_chemists %}
+                <div class="col-12">
+                    <div class="card border-0 shadow-sm bg-white" style="border-left: 3px solid #20c997; border-radius: 6px;">
+                        <div class="card-body p-1 px-2 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold text-dark mb-0" style="font-size: 0.80rem;">{{ chem.name }}</h6>
+                                <small class="text-muted fw-bold" style="font-size: 0.60rem;">Chemist</small>
+                            </div>
+                            <a href="{% url 'chemist_visit' chem.id %}" class="btn btn-success btn-sm py-0 px-2 fw-bold shadow-sm text-white" style="font-size: 0.65rem; background-color: #198754; border: none; border-radius: 4px;">Report</a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                {% if not pending_doctors and not pending_chemists %}
+                <div class="col-12">
+                    <div class="alert alert-light text-center text-muted p-2 border-0 shadow-sm mb-0" style="font-size: 0.70rem; border-radius: 6px;">
+                        🎉 Sabhi pending visits complete ho gayi!
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- ✅ VISITED TODAY -->
+            <h6 class="fw-bold text-success mb-1 border-bottom pb-1 px-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">✅ VISITED TODAY</h6>
+            
+            <div class="row g-1 mb-2">
+                {% for v in visited_doctors %}
+                <div class="col-12">
+                    <div class="card border-0 shadow-sm bg-white" style="border-left: 3px solid #8fa0b3; border-radius: 6px;">
+                        <div class="card-body p-1 px-2 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold text-secondary mb-0" style="font-size: 0.75rem;">Dr. {{ v.doctor.name }}</h6>
+                                <small class="text-muted fw-bold" style="font-size: 0.55rem;">{{ v.created_at|time:"h:i A" }}</small>
+                            </div>
+                            <div>
+                                <a href="{% url 'edit_visit' v.id %}" class="btn btn-light border btn-sm px-2 py-0 me-1 shadow-sm" style="font-size: 0.65rem; border-radius: 4px;">✏️</a>
+                                <a href="{% url 'delete_visit' v.id %}" class="btn btn-danger btn-sm px-2 py-0 shadow-sm" style="font-size: 0.65rem; border-radius: 4px;" onclick="return confirm('Sach mein delete karna hai?')">🗑️</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+
+                {% for v in visited_chemists %}
+                <div class="col-12">
+                    <div class="card border-0 shadow-sm bg-white" style="border-left: 3px solid #8fa0b3; border-radius: 6px;">
+                        <div class="card-body p-1 px-2 d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="fw-bold text-secondary mb-0" style="font-size: 0.75rem;">{{ v.chemist.name }}</h6>
+                                <small class="text-muted fw-bold" style="font-size: 0.55rem;">{{ v.created_at|time:"h:i A" }}</small>
+                            </div>
+                            <div>
+                                <a href="{% url 'edit_visit' v.id %}" class="btn btn-light border btn-sm px-2 py-0 me-1 shadow-sm" style="font-size: 0.65rem; border-radius: 4px;">✏️</a>
+                                <a href="{% url 'delete_visit' v.id %}" class="btn btn-danger btn-sm px-2 py-0 shadow-sm" style="font-size: 0.65rem; border-radius: 4px;" onclick="return confirm('Sach mein delete karna hai?')">🗑️</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                {% if not visited_doctors and not visited_chemists %}
+                <div class="col-12">
+                    <div class="alert alert-light text-center text-muted p-2 border-0 shadow-sm mb-0" style="font-size: 0.70rem; border-radius: 6px;">
+                        📭 Abhi tak koi visit nahi hui hai.
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+        </div>
+
+        <!-- ➕ ADD ROUTE MODAL -->
+        <div class="modal fade" id="addRouteModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered modal-sm">
+                <div class="modal-content border-0 shadow" style="border-radius: 8px;">
+                    <div class="modal-header bg-light border-0 py-2">
+                        <h6 class="modal-title fw-bold text-dark fs-6">Add Extra Route</h6>
+                        <button type="button" class="btn-close" style="font-size: 0.6rem;" data-bs-dismiss="modal"></button>
+                    </div>
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="modal-body p-2">
+                            <label class="form-label fw-bold text-secondary mb-1" style="font-size: 0.65rem;">🗺️ Select Route</label>
+                            <select name="extra_route" class="form-select form-select-sm bg-light border-0 fw-bold" style="border-radius: 6px;" required>
+                                <option value="">-- Route Chunein --</option>
+                                {% for r in available_routes %}
+                                    <option value="{{ r.id }}">{{ r.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="modal-footer border-0 p-2">
+                            <button type="submit" name="add_extra_route" class="btn btn-primary btn-sm w-100 fw-bold shadow-sm" style="border-radius: 6px;">➕ Add Route</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-5 mt-1">
+    
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="{% url 'request_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <div>
+            <h6 class="fw-bold text-dark mb-0"><i class="bi bi-gift text-primary me-1"></i> Free Claim Report</h6>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-2 bg-white mx-1" style="border-radius: 8px;">
+        <div class="card-body p-2">
+            <form method="GET" class="row g-1 align-items-end" id="filterForm">
+                {% if is_manager_view %}
+                <div class="col-12">
+                    <select name="employee_id" class="form-select form-select-sm bg-light fw-bold text-primary border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">👤 Select Employee...</option>
+                        {% for emp in team_employees %}
+                            <option value="{{ emp.id }}" {% if selected_emp_id == emp.id %}selected{% endif %}>{{ emp.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% else %}
+                    <input type="hidden" name="employee_id" value="{{ selected_emp_id }}">
+                {% endif %}
+
+                <div class="col-12">
+                    <select name="stockist_id" class="form-select form-select-sm bg-light fw-bold text-dark border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">🏪 Select Stockist...</option>
+                        {% for st in available_stockists %}
+                            <option value="{{ st.id }}" {% if selected_stockist_id|stringformat:"s" == st.id|stringformat:"s" %}selected{% endif %}>{{ st.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-7">
+                    <select name="month" class="form-select form-select-sm bg-light fw-bold border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        {% for m_num, m_name in months_choices %}
+                            <option value="{{ m_num }}" {% if m_num == selected_month %}selected{% endif %}>🗓️ {{ m_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-5">
+                    <input type="number" name="year" class="form-control form-control-sm bg-light fw-bold text-center border-0" style="border-radius: 6px;" value="{{ selected_year }}" onchange="this.form.submit()">
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="mx-1 mb-3">
+        {% if not master %}
+            <div class="card border-0 shadow-sm text-center py-4 bg-white" style="border-radius: 8px;">
+                <h6 class="text-muted mb-2">Claim report is not generated yet.</h6>
+                <form method="POST" class="mt-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="employee_id" value="{{ selected_emp_id }}">
+                    <input type="hidden" name="stockist_id" value="{{ selected_stockist_id }}">
+                    <input type="hidden" name="action" value="generate">
+                    <button type="submit" class="btn btn-primary btn-sm px-3 py-1 fw-bold shadow-sm" style="border-radius: 6px;" {% if not selected_stockist_id %}disabled{% endif %}>
+                        <i class="bi bi-magic"></i> Auto-Generate
+                    </button>
+                </form>
+            </div>
+        {% else %}
+            <div class="card shadow-sm border-0 bg-white" style="border-radius: 8px;">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-2 px-2" style="border-radius: 8px 8px 0 0;">
+                    <div class="fw-bold" style="font-size: 0.75rem;">Status: 
+                        {% if master.status == 'Draft' %}<span class="badge bg-secondary">Draft</span>
+                        {% elif master.status == 'Pending_Manager' %}<span class="badge bg-warning text-dark">Pending</span>
+                        {% elif master.status == 'Pending_Admin' %}<span class="badge bg-info text-dark">Pending</span>
+                        {% elif master.status == 'Approved' %}<span class="badge bg-success">Approved ✅</span>
+                        {% elif master.status == 'Rejected' %}<span class="badge bg-danger">Rejected ❌</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="d-flex gap-1">
+                        {% if master.status == 'Draft' or master.status == 'Rejected' %}
+                            <form method="POST" class="m-0">
+                                {% csrf_token %}
+                                <input type="hidden" name="employee_id" value="{{ selected_emp_id }}">
+                                <input type="hidden" name="stockist_id" value="{{ selected_stockist_id }}">
+                                <input type="hidden" name="action" value="generate">
+                                <button type="submit" class="btn btn-outline-primary btn-sm px-2 py-0 fw-bold shadow-sm" style="font-size:0.75rem;">🔄 Sync</button>
+                            </form>
+                            <form method="POST" class="m-0">
+                                {% csrf_token %}
+                                <input type="hidden" name="employee_id" value="{{ selected_emp_id }}">
+                                <input type="hidden" name="stockist_id" value="{{ selected_stockist_id }}">
+                                <input type="hidden" name="action" value="submit">
+                                <button type="submit" class="btn btn-success btn-sm px-2 py-0 fw-bold shadow-sm" style="font-size:0.75rem;">Submit <i class="bi bi-send"></i></button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if lines %}
+                <div class="excel-table-wrapper" style="border-radius: 0 0 8px 8px; border: none; border-top: 1px solid #ccc;">
+                    <table class="excel-table">
+                        <thead>
+                            <tr>
+                                <th style="background-color: #0b5e31; text-align: left;">Product Name</th>
+                                <th style="background-color: #159b53; line-height: 1.1;">Billed<br>Qty</th>
+                                <th style="background-color: #d9534f; line-height: 1.1;">Free<br>Qty</th>
+                                <th style="background-color: #0f7a40; line-height: 1.1;">Value<br>(₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for line in lines %}
+                            <tr>
+                                <td class="fw-bold text-start">{{ line.product.name }}</td>
+                                <td class="text-center fw-bold text-success">{{ line.total_billed_qty }}</td>
+                                <td class="text-center fw-bold text-danger">{{ line.total_free_qty }}</td>
+                                <td class="text-end fw-bold text-dark">₹{{ line.claim_value|floatformat:2 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td class="text-start fw-bold text-dark" style="font-size: 0.70rem;">GRAND TOTAL</td>
+                                <td colspan="2"></td>
+                                <td class="text-end fw-bold text-success" style="font-size: 0.85rem;">₹{{ grand_total|floatformat:2 }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-3 text-center text-muted" style="font-size: 0.8rem;">Koi claim data nahi mila.</div>
+                {% endif %}
+            </div>
+
+            {% if master.manager_remark or master.admin_remark %}
+            <div class="alert alert-info mt-2 py-2 px-3 border-0 shadow-sm mx-1" style="border-radius: 8px; font-size:0.75rem;">
+                {% if master.manager_remark %}<strong>Manager:</strong> {{ master.manager_remark }}<br>{% endif %}
+                {% if master.admin_remark %}<strong>Admin:</strong> {{ master.admin_remark }}{% endif %}
+            </div>
+            {% endif %}
+
+        {% endif %}
+    </div>
+</div>
+
+<style>
+/* 🌟 COMPACT EXCEL TABLE SETTINGS */
+.excel-table-wrapper { max-height: 60vh; overflow: auto; position: relative; } /* Height badha di */
+.excel-table { border-collapse: separate; border-spacing: 0; width: 100%; background-color: #fff; font-size: 0.70rem; }
+
+.excel-table th, .excel-table td { 
+    border-right: 1px solid #d4d4d4; 
+    border-bottom: 1px solid #d4d4d4; 
+    padding: 6px 4px; 
+    vertical-align: middle; 
+    text-align: center; 
+    white-space: normal; 
+    word-wrap: break-word; 
+}
+
+.excel-table thead tr th { position: sticky; top: 0; z-index: 20; color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 8px 4px; }
+.excel-table thead tr th:first-child { position: sticky; left: 0; z-index: 30; background-color: #0b5e31; width: 115px; min-width: 115px; max-width: 115px; border-right: 2px solid #0b5e31; }
+
+.excel-table tbody td:first-child { 
+    position: sticky; left: 0; background-color: #f4f7f9; z-index: 10; 
+    width: 115px; min-width: 115px; max-width: 115px; 
+    border-right: 2px solid #107C41; 
+    box-shadow: 3px 0 5px -1px rgba(0,0,0,0.1); 
+    text-align: left;
+}
+
+.excel-table tfoot tr td { position: sticky; bottom: -1px; background-color: #e2e8f0; z-index: 20; border-top: 2px solid #107C41; box-shadow: 0 -3px 5px -1px rgba(0,0,0,0.1); }
+.excel-table tfoot tr td:first-child { left: 0; z-index: 30; background-color: #cbd5e1; border-right: 2px solid #107C41; width: 115px; min-width: 115px; max-width: 115px; text-align: left; }
+</style>
+{% endblock %}

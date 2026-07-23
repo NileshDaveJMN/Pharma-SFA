@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+    
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="{% url 'view_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0 flex-grow-1"><i class="bi bi-calendar-check text-primary me-1"></i> Tour Plan Report</h6>
+        <a href="?employee_id={{ selected_emp_id }}&month={{ selected_month }}&year={{ selected_year }}&export=csv" class="btn btn-success btn-sm fw-bold shadow-sm px-2 py-0" style="font-size: 0.75rem;">
+            📥 .CSV
+        </a>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-2 bg-white mx-1" style="border-radius: 8px;">
+        <div class="card-body p-2">
+            <form method="GET" class="row g-1 align-items-end">
+                <div class="col-12">
+                    <select name="employee_id" class="form-select form-select-sm fw-bold text-primary bg-light border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">👤 Select Employee...</option>
+                        {% for emp in team_employees %}
+                            <option value="{{ emp.id }}" {% if emp.id|stringformat:"s" == selected_emp_id|stringformat:"s" %}selected{% endif %}>
+                                {{ emp.name }} ({{ emp.designation }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-7">
+                    <select name="month" class="form-select form-select-sm bg-light border-0 fw-bold" style="border-radius: 6px;" onchange="this.form.submit()">
+                        {% for m_id, m_name in months %}
+                            <option value="{{ m_id }}" {% if m_id == selected_month %}selected{% endif %}>🗓️ {{ m_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-5">
+                    <input type="number" name="year" class="form-control form-control-sm bg-light border-0 text-center fw-bold" style="border-radius: 6px;" value="{{ selected_year }}" onchange="this.form.submit()">
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-2 bg-white px-2 py-2 mx-1 d-flex flex-row justify-content-between align-items-center" style="border-radius: 8px;">
+        <div>
+            <span class="text-muted d-block" style="font-size: 0.65rem;">Status for {{ selected_month }}/{{ selected_year }}</span>
+            <span class="fw-bold text-dark" style="font-size: 0.75rem;">{{ selected_employee_name }}</span>
+        </div>
+        <div class="text-end">
+            {% if mtp_status == 'Approved' %}
+                <span class="badge bg-success fs-6 px-2 py-1 fw-bold" style="border-radius: 4px;">Approved ✅</span>
+            {% elif mtp_status == 'Pending' %}
+                <span class="badge bg-warning text-dark px-2 py-1 fw-bold" style="border-radius: 4px; font-size: 0.70rem;">Pending</span>
+            {% elif mtp_status == 'Rejected' %}
+                <span class="badge bg-danger px-2 py-1 fw-bold mb-1" style="border-radius: 4px; font-size: 0.70rem;">Rejected ❌</span>
+                {% if selected_emp_id|stringformat:"s" == request.user.employee.id|stringformat:"s" %}
+                    <a href="{% url 'add_tour_program' %}" class="btn btn-outline-danger btn-sm py-0 px-2 fw-bold d-block" style="font-size: 0.65rem;">✏️ Edit</a>
+                {% endif %}
+            {% else %}
+                <span class="badge bg-secondary px-2 py-1 fw-bold" style="border-radius: 4px; font-size: 0.70rem;">{{ mtp_status }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm bg-white mx-1" style="border-radius: 8px;">
+        <div class="table-responsive" style="max-height: 55vh; overflow-y: auto; border-radius: 8px;">
+            <table class="table table-sm table-striped align-middle mb-0" style="font-size: 0.75rem;">
+                <thead class="table-dark" style="position: sticky; top: 0; z-index: 10;">
+                    <tr>
+                        <th class="ps-2" style="width: 35%;">Date & Day</th>
+                        <th class="text-start">Planned Route</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report_data %}
+                    <tr>
+                        <td class="ps-2 text-muted fw-bold">{{ row.date_str }}</td>
+                        <td class="text-start fw-bold {% if row.route_name == 'No Plan / Weekly Off' %}text-muted fw-normal{% else %}text-primary{% endif %}" style="white-space: normal;">
+                            {{ row.route_name }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

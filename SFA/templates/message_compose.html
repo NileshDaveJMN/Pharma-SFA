@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+
+    <!-- 🌟 COMPACT HEADER -->
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="{% url 'web_inbox' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0 flex-grow-1"><i class="bi bi-pencil-square text-primary me-1"></i> Compose Mail</h6>
+    </div>
+
+    <!-- ✉️ COMPOSE FORM -->
+    <div class="card border-0 shadow-sm bg-white mx-1 mb-2" style="border-radius: 8px;">
+        <div class="card-body p-3">
+            <form method="POST" enctype="multipart/form-data" class="m-0">
+                {% csrf_token %}
+                
+                <div class="mb-2">
+                    <label class="fw-bold text-secondary mb-1" style="font-size: 0.70rem;">To:</label>
+                    <select name="receiver_id" class="form-select form-select-sm bg-light border-0 fw-bold" style="border-radius: 6px; font-size: 0.75rem;" required>
+                        <option value="" disabled selected>👤 Select Recipient</option>
+                        {% for c in contacts %}
+                            {# 🌟 REPLY LOGIC: Agar reply ho rahi hai, toh sender auto-select ho jaye #}
+                            <option value="{{ c.id }}" {% if reply_to_msg and c.id == reply_to_msg.sender_id %}selected{% endif %}>
+                                {{ c.name }} ({{ c.get_designation_display|default:c.designation }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-2">
+                    <label class="fw-bold text-secondary mb-1" style="font-size: 0.70rem;">Subject:</label>
+                    {# 🌟 REPLY/FORWARD LOGIC: Subject pre-fill #}
+                    <input type="text" name="subject" class="form-control form-control-sm bg-light border-0 fw-bold" 
+                        value="{% if reply_to_msg %}Re: {{ reply_to_msg.subject }}{% elif forward_to_msg %}Fwd: {{ forward_to_msg.subject }}{% endif %}" 
+                        placeholder="Enter subject" style="border-radius: 6px; font-size: 0.75rem;" required>
+                </div>
+
+                <div class="mb-2">
+                    <label class="fw-bold text-secondary mb-1" style="font-size: 0.70rem;">Message:</label>
+                    {# 🌟 REPLY/FORWARD LOGIC: Body pre-fill #}
+                    <textarea name="body" class="form-control form-control-sm bg-light border-0" rows="5" placeholder="Type your message here..." style="border-radius: 6px; font-size: 0.75rem;" required>
+{% if reply_to_msg %}
+
+--- On {{ reply_to_msg.sent_at|date:"d M, H:i" }}, {{ reply_to_msg.sender.name }} wrote ---
+{{ reply_to_msg.body }}{% elif forward_to_msg %}
+
+--- Forwarded Message ---
+From: {{ forward_to_msg.sender.name }}
+Subject: {{ forward_to_msg.subject }}
+
+{{ forward_to_msg.body }}{% endif %}</textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="fw-bold text-secondary mb-1" style="font-size: 0.70rem;">Attachments:</label>
+                    <input type="file" name="attachments" class="form-control form-control-sm" multiple style="font-size: 0.70rem;">
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold text-white shadow-sm" style="border-radius: 6px;">
+                    Send Mail 🚀
+                </button>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,100 @@
+{% with emp=node.emp %}
+
+{# ── Left border color: designation ke hisaab se ── #}
+{% if emp.designation == 'NSM' %}
+<div class="mb-1">
+    <div class="d-flex align-items-center gap-2 px-2 py-2 bg-white border rounded"
+         style="border-left: 3px solid #6f42c1 !important; min-height: 44px;">
+{% elif emp.designation == 'ZBM' %}
+<div class="mb-1">
+    <div class="d-flex align-items-center gap-2 px-2 py-2 bg-white border rounded"
+         style="border-left: 3px solid #fd7e14 !important; min-height: 44px;">
+{% elif emp.designation == 'RBM' %}
+<div class="mb-1">
+    <div class="d-flex align-items-center gap-2 px-2 py-2 bg-white border rounded"
+         style="border-left: 3px solid #198754 !important; min-height: 44px;">
+{% elif emp.designation == 'ABM' %}
+<div class="mb-1">
+    <div class="d-flex align-items-center gap-2 px-2 py-2 bg-white border rounded"
+         style="border-left: 3px solid #0056b3 !important; min-height: 44px;">
+{% else %}
+<div class="mb-1">
+    <div class="d-flex align-items-center gap-2 px-2 py-2 bg-white border rounded"
+         style="border-left: 3px solid #adb5bd !important; min-height: 44px;">
+{% endif %}
+
+        {# Avatar #}
+        <div class="flex-shrink-0 d-flex justify-content-center align-items-center"
+             style="width:30px; height:30px; border-radius:50%;
+                    background:#eef5ff; border:1px solid #dee2e6; overflow:hidden;">
+            {% if emp.photo %}
+                <img src="{{ emp.photo.url }}"
+                     style="width:100%; height:100%; object-fit:cover;" alt="">
+            {% else %}
+                <span style="font-size:0.9rem; line-height:1;">👤</span>
+            {% endif %}
+        </div>
+
+        {# Details #}
+        <div style="min-width:0; flex:1;">
+
+            {# Name #}
+            <div class="fw-bold text-dark text-truncate" style="font-size:0.75rem; line-height:1.2;">
+                {{ emp.name }}
+            </div>
+
+            {# Chips: Designation | HQ | Phone #}
+            <div class="d-flex flex-wrap align-items-center gap-1 mt-1">
+
+                {# Designation badge — color inline without {% with %} #}
+                {% if emp.designation == 'NSM' %}
+                <span class="badge border fw-bold"
+                      style="font-size:0.58rem; padding:2px 5px; color:#6f42c1; border-color:#6f42c1 !important; background:transparent;">NSM</span>
+                {% elif emp.designation == 'ZBM' %}
+                <span class="badge border fw-bold"
+                      style="font-size:0.58rem; padding:2px 5px; color:#fd7e14; border-color:#fd7e14 !important; background:transparent;">ZBM</span>
+                {% elif emp.designation == 'RBM' %}
+                <span class="badge border fw-bold"
+                      style="font-size:0.58rem; padding:2px 5px; color:#198754; border-color:#198754 !important; background:transparent;">RBM</span>
+                {% elif emp.designation == 'ABM' %}
+                <span class="badge border fw-bold"
+                      style="font-size:0.58rem; padding:2px 5px; color:#0056b3; border-color:#0056b3 !important; background:transparent;">ABM</span>
+                {% else %}
+                <span class="badge border fw-bold"
+                      style="font-size:0.58rem; padding:2px 5px; color:#6c757d; border-color:#adb5bd !important; background:transparent;">MR</span>
+                {% endif %}
+
+                {# HQ #}
+                {% if emp.headquarter %}
+                <span class="text-muted" style="font-size:0.65rem; white-space:nowrap;">
+                    📍 {{ emp.headquarter.name }}
+                </span>
+                {% endif %}
+
+                {# Phone #}
+                {% if emp.phone %}
+                <a href="tel:{{ emp.phone }}" class="text-decoration-none"
+                   style="font-size:0.65rem; color:#198754; white-space:nowrap;">
+                    📞 {{ emp.phone }}
+                </a>
+                {% else %}
+                <span class="text-muted" style="font-size:0.62rem;">📞 —</span>
+                {% endif %}
+
+            </div>
+        </div>
+
+    </div>{# end card row #}
+
+    {# Children — recursive include #}
+    {% if node.children %}
+    <div style="margin-left:1rem; border-left:1px dashed #ced4da; padding-left:0.5rem; margin-top:2px;">
+        {% for child in node.children %}
+            {% include "partials/team_node.html" with node=child depth=depth %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+</div>{# end mb-1 wrapper #}
+
+{% endwith %}

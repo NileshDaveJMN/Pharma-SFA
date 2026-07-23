@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+    
+    <!-- 🌟 COMPACT HEADER -->
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="{% url 'request_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0 flex-grow-1"><i class="bi bi-calendar2-minus text-danger me-1"></i> Leave Management</h6>
+    </div>
+
+    <!-- 📊 COMPACT LEAVE BALANCE CARDS -->
+    <div class="row g-1 mb-2 px-1 text-center">
+        <div class="col-4">
+            <div class="card border-0 shadow-sm bg-white py-1" style="border-bottom: 3px solid #28a745; border-radius: 6px;">
+                <div class="fw-bold text-success" style="font-size: 0.90rem;">{{ rem_cl|floatformat:1 }}</div>
+                <div class="text-muted fw-bold" style="font-size: 0.55rem;">CL (of {{ balance.cl_total }})</div>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="card border-0 shadow-sm bg-white py-1" style="border-bottom: 3px solid #ffc107; border-radius: 6px;">
+                <div class="fw-bold text-warning" style="font-size: 0.90rem;">{{ rem_sl|floatformat:1 }}</div>
+                <div class="text-muted fw-bold" style="font-size: 0.55rem;">SL (of {{ balance.sl_total }})</div>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="card border-0 shadow-sm bg-white py-1" style="border-bottom: 3px solid #007bff; border-radius: 6px;">
+                <div class="fw-bold text-primary" style="font-size: 0.90rem;">{{ rem_pl|floatformat:1 }}</div>
+                <div class="text-muted fw-bold" style="font-size: 0.55rem;">PL (of {{ balance.pl_total }})</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 📝 COMPACT APPLY LEAVE FORM -->
+    <div class="card border-0 shadow-sm bg-white mb-3 mx-1" style="border-radius: 8px;">
+        <div class="card-body p-2">
+            <h6 class="fw-bold text-secondary mb-2 border-bottom pb-1" style="font-size: 0.70rem;">✏️ NEW APPLICATION</h6>
+            <form method="POST" class="m-0">
+                {% csrf_token %}
+                
+                <div class="mb-2">
+                    <label class="form-label text-secondary fw-bold mb-0" style="font-size: 0.65rem;">Leave Type</label>
+                    <select name="leave_type" class="form-select form-select-sm bg-light border-0 fw-bold" style="border-radius: 6px;" required>
+                        <option value="CL">Casual Leave (CL)</option>
+                        <option value="SL">Sick Leave (SL)</option>
+                        <option value="PL">Privilege Leave (PL)</option>
+                        <option value="LWP">Leave Without Pay (LWP)</option>
+                    </select>
+                </div>
+                
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="form-label text-secondary fw-bold mb-0" style="font-size: 0.65rem;">Start Date</label>
+                        <input type="date" name="start_date" class="form-control form-control-sm bg-light border-0 fw-bold text-dark" style="border-radius: 6px;" required>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label text-secondary fw-bold mb-0" style="font-size: 0.65rem;">End Date</label>
+                        <input type="date" name="end_date" class="form-control form-control-sm bg-light border-0 fw-bold text-dark" style="border-radius: 6px;" required>
+                    </div>
+                </div>
+                
+                <div class="mb-2">
+                    <label class="form-label text-secondary fw-bold mb-0" style="font-size: 0.65rem;">Reason</label>
+                    <textarea name="reason" class="form-control form-control-sm bg-light border-0 fw-bold" rows="2" placeholder="Why do you need leave?" style="border-radius: 6px;" required></textarea>
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold shadow-sm mt-1" style="border-radius: 6px;">🚀 Submit to Manager</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 📋 COMPACT LEAVE HISTORY -->
+    <h6 class="fw-bold text-secondary mb-1 px-2" style="font-size: 0.65rem; letter-spacing: 0.5px;">📋 LEAVE HISTORY</h6>
+    <div class="mx-1 mb-5">
+        {% for app in applications %}
+            <div class="card border-0 shadow-sm mb-2 bg-white" style="border-left: 3px solid {% if app.status == 'Approved' %}#28a745{% elif app.status == 'Rejected' %}#dc3545{% else %}#ffc107{% endif %}; border-radius: 6px;">
+                <div class="card-body p-2 d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="fw-bold text-dark d-block" style="font-size: 0.75rem;">{{ app.leave_type }} <small class="text-muted fw-bold">({{ app.no_of_days }} Days)</small></span>
+                        <small class="text-muted fw-bold" style="font-size: 0.60rem;">{{ app.start_date|date:"d M" }} - {{ app.end_date|date:"d M Y" }}</small>
+                    </div>
+                    <span class="badge {% if app.status == 'Approved' %}bg-success{% elif app.status == 'Rejected' %}bg-danger{% else %}bg-warning text-dark{% endif %} shadow-sm px-2 py-1" style="font-size: 0.60rem; border-radius: 4px;">{{ app.status }}</span>
+                </div>
+            </div>
+        {% empty %}
+            <div class="text-center p-3 bg-white shadow-sm" style="border-radius: 6px;">
+                <span class="text-muted fw-bold" style="font-size: 0.70rem;">Koi pichli chhutti (leave) ka record nahi hai.</span>
+            </div>
+        {% endfor %}
+    </div>
+
+</div>
+{% endblock %}

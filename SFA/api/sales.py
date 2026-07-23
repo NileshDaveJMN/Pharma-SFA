@@ -1,0 +1,670 @@
+"""
+SFA/api/sales.py
+================
+Flutter ke liye Sales & Visit REST API endpoints.
+"""
+
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.db.models import Sum, Q
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+
+from SFA.models import (
+    Employee, Doctor, Chemist, Product, Stockist,
+    DailyDCR, DCRVisit, DCRProductDetail,
+    DayEnd, MRInventory, GiftCampaignPlan, DoctorROILedger,
+    PartyWiseSaleReport, PartyWiseSaleLine, PrimarySale,
+    SystemSetting, MonthlyTargetMaster, TerritoryTarget,
+    DoctorRxMapping  # 🌟 YEH LINE ADD KARO
+)
+from SFA.services.team import get_dropdown_team
+from SFA.views.core import get_open_day
+
+# ==============================================================================
+# 🩺 DOCTOR VISIT
+# ==============================================================================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_doctor_visit_form(request, doc_id):
+    try:
+        employee = request.user.employee
+    except AttributeError:
+        return Response({'error': 'Employee profile missing'}, status=400)
+
+    open_day, stuck_day = get_open_day(employee)
+
+    if stuck_day:
+        return Response({
+            'error': f'{stuck_day.date} ka purana Day Start lock ho gaya. Admin se sampark karein.',
+            'stuck_date': str(stuck_day.date),
+        }, status=400)
+
+    if not open_day:
+        return Response({'error': 'Pehle Day Start karein!'}, status=400)
+
+    doctor = get_object_or_404(Doctor, id=doc_id)
+    today = open_day.date
+
+    my_inventory = MRInventory.objects.filter(employee=employee, stock_qty__gt=0).select_related('item', 'item__linked_product')
+
+    sample_stock_map = {
+        inv.item.linked_product_id: inv.stock_qty
+        for inv in my_inventory
+        if inv.item.item_type == 'Sample' and inv.item.linked_product_id
+    }
+
+    products = [
+        {
+            'id': p.id,
+            'name': p.name,
+            'sample_stock': sample_stock_map.get(p.id, 0),
+            'order_qty': 0,
+        }
+        for p in Product.objects.filter(company=employee.company).order_by('name')
+    ]
+
+    approved_gift_ids = set(GiftCampaignPlan.objects.filter(
+        employee=employee, doctor=doctor,
+        status='Approved', month=today.month, year=today.year
+    ).values_list('item_id', flat=True))
+
+    gifts = []
+    for inv in my_inventory:
+        if inv.item.item_type == 'Sample':
+            continue
+        if inv.item.item_type == 'HighValue' and inv.item.id not in approved_gift_ids:
+            continue
+        gifts.append({
+            'inventory_id': inv.id,
+            'item_id': inv.item.id,
+            'item_name': inv.item.name,
+            'item_type': inv.item.item_type,
+            'stock_qty': inv.stock_qty,
+            'price': float(inv.item.price) if inv.item.price else 0.0,
+        })
+
+    return Response({
+        'doctor': {
+            'id': doctor.id,
+            'name': doctor.name,
+            'specialty': doctor.specialty or '',
+            'category': doctor.category or '',
+            'route': doctor.route.name if doctor.route else None,
+        },
+        'working_date': str(today),
+        'products': products,
+        'gifts': gifts,
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_doctor_visit_submit(request):
+    try:
+        employee = request.user.employee
+    except AttributeError:
+        return Response({'error': 'Employee profile missing'}, status=400)
+
+    open_day, stuck_day = get_open_day(employee)
+
+    if stuck_day:
+        return Response({'error': 'Purana Day Start lock ho gaya. Admin se sampark karein.'}, status=400)
+    if not open_day:
+        return Response({'error': 'Pehle Day Start karein!'}, status=400)
+
+    data = request.data
+    doctor_id = data.get('doctor_id')
+    if not doctor_id:
+        return Response({'error': 'doctor_id required hai'}, status=400)
+
+    doctor = get_object_or_404(Doctor, id=doctor_id)
+
+    setting = SystemSetting.objects.filter(company=employee.company).first()
+    is_backdated = open_day.date < timezone.localdate()
+    is_bypassed = is_backdated and (not setting or not setting.strict_geofence_for_backdate)
+
+    try:
+        daily_dcr, _ = DailyDCR.objects.get_or_create(employee=employee, date=open_day.date)
+
+        visit = DCRVisit.objects.create(
+            daily_dcr=daily_dcr,
+            route=doctor.route,
+            doctor=doctor,
+            remark=data.get('remark', ''),
+            latitude=data.get('latitude') or None,
+            longitude=data.get('longitude') or None,
+            geofence_bypassed=is_bypassed,
+        )
+
+        for prod_data in (data.get('products') or []):
+            p_id = prod_data.get('product_id')
+            is_det = bool(prod_data.get('is_detailed', False))
+            sq = int(prod_data.get('sample_qty') or 0)
+            oq = int(prod_data.get('order_qty') or 0)
+
+            if is_det or sq > 0 or oq > 0:
+                DCRProductDetail.objects.create(visit=visit, product_id=p_id, is_detailed=is_det, sample_qty=sq, order_qty=oq)
+                if sq > 0:
+                    sample_inv = MRInventory.objects.filter(employee=employee, item__linked_product_id=p_id, item__item_type='Sample').first()
+                    if sample_inv and sample_inv.stock_qty >= sq:
+                        sample_inv.stock_qty -= sq
+                        sample_inv.save()
+
+        for gift_data in (data.get('gifts') or []):
+            item_id = gift_data.get('item_id')
+            qty_given = int(gift_data.get('qty') or 0)
+            if qty_given > 0:
+                try:
+                    inventory = MRInventory.objects.get(employee=employee, item_id=item_id)
+                    if inventory.stock_qty >= qty_given:
+                        inventory.stock_qty -= qty_given
+                        inventory.save()
+                        DoctorROILedger.objects.create(
+                            date_given=open_day.date, doctor=doctor, employee=employee,
+                            item=inventory.item, quantity=qty_given,
+                            total_value=float(inventory.item.price) * qty_given, visit=visit,
+                        )
+                except MRInventory.DoesNotExist:
+                    pass
+
+        return Response({'message': f'Dr. {doctor.name} ki visit save ho gayi!', 'visit_id': visit.id}, status=201)
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
+# ==============================================================================
+# 🧪 CHEMIST VISIT
+# ==============================================================================
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_chemist_visit_submit(request):
+    try:
+        employee = request.user.employee
+    except AttributeError:
+        return Response({'error': 'Employee profile missing'}, status=400)
+
+    open_day, stuck_day = get_open_day(employee)
+
+    if stuck_day:
+        return Response({'error': 'Purana Day Start lock ho gaya. Admin se sampark karein.'}, status=400)
+    if not open_day:
+        return Response({'error': 'Pehle Day Start karein!'}, status=400)
+
+    data = request.data
+    chemist_id = data.get('chemist_id')
+    if not chemist_id:
+        return Response({'error': 'chemist_id required hai'}, status=400)
+
+    chemist = get_object_or_404(Chemist, id=chemist_id)
+
+    try:
+        daily_dcr, _ = DailyDCR.objects.get_or_create(employee=employee, date=open_day.date)
+
+        visit = DCRVisit.objects.create(
+            daily_dcr=daily_dcr, route=chemist.route, chemist=chemist,
+            latitude=data.get('latitude') or None, longitude=data.get('longitude') or None,
+        )
+
+        for prod_data in (data.get('products') or []):
+            oq = int(prod_data.get('order_qty') or 0)
+            if oq > 0:
+                DCRProductDetail.objects.create(visit=visit, product_id=prod_data.get('product_id'), sample_qty=0, order_qty=oq)
+
+        return Response({'message': f'{chemist.name} ki visit save ho gayi!', 'visit_id': visit.id}, status=201)
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
+# ==============================================================================
+# 📋 TODAY'S VISITS
+# ==============================================================================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_today_visits(request):
+    try:
+        employee = request.user.employee
+    except AttributeError:
+        return Response({'error': 'Employee profile missing'}, status=400)
+
+    open_day, _ = get_open_day(employee)
+    if not open_day:
+        return Response({
+            'working_date': str(timezone.localdate()),
+            'doctor_visits': [], 'chemist_visits': [],
+            'summary': {'dr_count': 0, 'chem_count': 0, 'total_samples': 0, 'total_pob': 0.0}
+        })
+
+    working_date = open_day.date
+    daily_dcr = DailyDCR.objects.filter(employee=employee, date=working_date).first()
+
+    if not daily_dcr:
+        return Response({
+            'working_date': str(working_date),
+            'doctor_visits': [], 'chemist_visits': [],
+            'summary': {'dr_count': 0, 'chem_count': 0, 'total_samples': 0, 'total_pob': 0.0}
+        })
+
+    all_visits = daily_dcr.visits.select_related('doctor', 'chemist', 'route').prefetch_related('product_details__product').all()
+
+    doctor_visits = []
+    chemist_visits = []
+    total_samples = 0
+    total_pob = 0.0
+
+    for v in all_visits:
+        product_details = list(v.product_details.all())
+
+        if v.doctor:
+            detailed = [pd.product.name for pd in product_details if pd.is_detailed]
+            samples = sum(pd.sample_qty or 0 for pd in product_details)
+            pob = sum((pd.order_qty or 0) * (float(pd.product.price) if getattr(pd.product, 'price', None) else 0.0) for pd in product_details)
+            total_samples += samples
+            total_pob += pob
+
+            doctor_visits.append({
+                'id': v.id,
+                'doctor': {'id': v.doctor.id, 'name': v.doctor.name, 'specialty': v.doctor.specialty or '', 'category': v.doctor.category or ''},
+                'route': v.route.name if v.route else None,
+                'remark': v.remark or '',
+                'time': v.created_at.strftime('%I:%M %p') if hasattr(v, 'created_at') and v.created_at else None,
+                'products_detailed': detailed, 'samples_given': samples, 'pob': round(pob, 2),
+            })
+
+        elif v.chemist:
+            ordered = [{'name': pd.product.name, 'qty': pd.order_qty or 0} for pd in product_details if (pd.order_qty or 0) > 0]
+            chemist_visits.append({
+                'id': v.id,
+                'chemist': {'id': v.chemist.id, 'name': v.chemist.name},
+                'route': v.route.name if v.route else None,
+                'time': v.created_at.strftime('%I:%M %p') if hasattr(v, 'created_at') and v.created_at else None,
+                'products_ordered': ordered,
+            })
+
+    return Response({
+        'working_date': str(working_date),
+        'doctor_visits': doctor_visits, 'chemist_visits': chemist_visits,
+        'summary': {'dr_count': len(doctor_visits), 'chem_count': len(chemist_visits), 'total_samples': total_samples, 'total_pob': round(total_pob, 2)}
+    })
+
+# ==============================================================================
+# 🗑️ DELETE VISIT
+# ==============================================================================
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def api_delete_visit(request, visit_id):
+    try:
+        employee = request.user.employee
+    except AttributeError:
+        return Response({'error': 'Employee profile missing'}, status=400)
+
+    visit = get_object_or_404(DCRVisit, id=visit_id, daily_dcr__employee=employee)
+    visit_date = visit.daily_dcr.date
+
+    if DayEnd.objects.filter(employee=employee, date=visit_date, is_closed=True).exists():
+        return Response({'error': 'Day End ho chuka hai — visit delete nahi ho sakti'}, status=400)
+
+    visit.delete()
+    return Response({'message': 'Visit delete ho gayi!'})
+
+
+# ==============================================================================
+# 💊 PARTY WISE SALE
+# ==============================================================================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_party_wise_get(request):
+    employee = request.user.employee
+    today = timezone.now().date()
+    current_month, current_year = (12, today.year - 1) if today.month == 1 else (today.month - 1, today.year)
+    
+    setting = SystemSetting.objects.filter(company=employee.company).first()
+    deadline = setting.sale_upload_deadline_day if setting and setting.sale_upload_deadline_day else 4
+    is_locked = today.day > deadline
+
+    team_employees = get_dropdown_team(employee).filter(designation='MR', is_active=True)
+    is_manager_view = employee.designation != 'MR'
+    
+    selected_emp_id = request.query_params.get('employee_id')
+    if not selected_emp_id:
+        selected_emp_id = str(employee.id)
+    selected_emp = get_object_or_404(Employee, id=selected_emp_id)
+
+    my_terr_ids = [selected_emp.headquarter_id] if selected_emp.headquarter_id else []
+    available_stockists = Stockist.objects.filter(territory_id__in=my_terr_ids).order_by('name')
+    
+    selected_stockist_id = request.query_params.get('stockist_id')
+    if selected_stockist_id and not available_stockists.filter(id=selected_stockist_id).exists():
+        selected_stockist_id = None
+    if not selected_stockist_id and available_stockists.exists():
+        selected_stockist_id = str(available_stockists.first().id)
+        
+    selected_stockist = available_stockists.filter(id=selected_stockist_id).first()
+
+    balances = []
+    if selected_stockist:
+        import calendar
+        from datetime import date
+        last_day_of_target_month = date(current_year, current_month, calendar.monthrange(current_year, current_month)[1])
+
+        for prod in Product.objects.filter(company=selected_emp.company):
+            primary_agg = PrimarySale.objects.filter(stockist=selected_stockist, product=prod, date__lte=last_day_of_target_month).aggregate(tot_qty=Sum('quantity'), tot_free=Sum('free_quantity'))
+            total_lifetime_primary = (primary_agg['tot_qty'] or 0) + (primary_agg['tot_free'] or 0)
+            
+            past_party_agg = PartyWiseSaleLine.objects.filter(report__stockist=selected_stockist, product=prod).filter(Q(report__year__lt=current_year) | Q(report__year=current_year, report__month__lt=current_month)).aggregate(tb=Sum('billed_qty'), tf=Sum('free_qty'))
+            total_past_secondary = (past_party_agg['tb'] or 0) + (past_party_agg['tf'] or 0)
+            
+            stock_available_for_this_month = total_lifetime_primary - total_past_secondary
+            
+            current_party_agg = PartyWiseSaleLine.objects.filter(report__stockist=selected_stockist, product=prod, report__month=current_month, report__year=current_year).aggregate(tb=Sum('billed_qty'), tf=Sum('free_qty'))
+            billed_this_month = (current_party_agg['tb'] or 0) + (current_party_agg['tf'] or 0)
+            
+            current_balance = stock_available_for_this_month - billed_this_month
+            
+            if stock_available_for_this_month > 0 or billed_this_month > 0:
+                balances.append({
+                    'product_id': prod.id, 'product_name': prod.name, 
+                    'total_sale': stock_available_for_this_month, 'billed': billed_this_month, 'balance': current_balance
+                })
+
+    chemists = Chemist.objects.filter(allocated_to=selected_emp, status='Approved').order_by('name')
+    chem_data = [{'id': c.id, 'name': c.name} for c in chemists]
+    
+    stockist_data = [{'id': s.id, 'name': s.name} for s in available_stockists]
+    team_data = [{'id': e.id, 'name': e.name} for e in team_employees]
+
+    return Response({
+        'is_locked': is_locked, 'deadline_day': deadline,
+        'month': current_month, 'year': current_year,
+        'is_manager_view': is_manager_view, 'team_employees': team_data, 
+        'selected_emp_id': int(selected_emp_id), 'stockists': stockist_data,
+        'selected_stockist_id': int(selected_stockist_id) if selected_stockist_id else None,
+        'balances': balances, 'chemists': chem_data
+    })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_party_wise_submit(request):
+    try:
+        employee = request.user.employee
+    except AttributeError:
+        return Response({'error': 'Employee profile missing'}, status=400)
+
+    today = timezone.now().date()
+    setting = SystemSetting.objects.filter(company=employee.company).first()
+    deadline = setting.sale_upload_deadline_day if setting else 4
+
+    if today.day > deadline and employee.designation not in ['Admin', 'NSM']:
+        return Response({'error': f'Entry locked! Har mahine ki {deadline} tareekh ke baad edit nahi hoti.'}, status=400)
+
+    data = request.data
+    team_employees = get_dropdown_team(employee, ordered=False)
+
+    emp_id = data.get('employee_id', employee.id)
+    try:
+        selected_emp = Employee.objects.get(id=emp_id)
+    except Employee.DoesNotExist:
+        selected_emp = employee
+
+    if not team_employees.filter(id=selected_emp.id).exists():
+        return Response({'error': 'Access denied'}, status=403)
+
+    curr_month = 12 if today.month == 1 else today.month - 1
+    curr_year = today.year - 1 if today.month == 1 else today.year
+
+    stockist_id = data.get('stockist_id')
+    chemist_id = data.get('chemist_id')
+    lines = data.get('lines', [])
+
+    if not stockist_id: return Response({'error': 'stockist_id required hai'}, status=400)
+    if not chemist_id: return Response({'error': 'chemist_id required hai'}, status=400)
+    if not lines: return Response({'error': 'Koi product line nahi di'}, status=400)
+
+    stockist = get_object_or_404(Stockist, id=stockist_id)
+    chemist = get_object_or_404(Chemist, id=chemist_id)
+
+    try:
+        report, _ = PartyWiseSaleReport.objects.get_or_create(employee=selected_emp, stockist=stockist, month=curr_month, year=curr_year)
+
+        saved = 0
+        for line in lines:
+            bq = int(line.get('billed_qty') or 0)
+            fq = int(line.get('free_qty') or 0)
+            if bq > 0 or fq > 0:
+                PartyWiseSaleLine.objects.create(report=report, chemist=chemist, product_id=line.get('product_id'), billed_qty=bq, free_qty=fq)
+                saved += 1
+
+        if saved == 0:
+            return Response({'error': 'Sab quantities 0 thi — kuch save nahi hua'}, status=400)
+
+        return Response({'message': f'Sale saved! {saved} product(s) ki entry ho gayi.', 'month': curr_month, 'year': curr_year}, status=201)
+
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
+# ====================================================================
+# 1. CLASSIFY RX API
+# ====================================================================
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def api_classify_rx(request):
+    employee = request.user.employee
+    today = timezone.now().date()
+    
+    month, year = (12, today.year - 1) if today.month == 1 else (today.month - 1, today.year)
+    
+    setting = SystemSetting.objects.filter(company=employee.company).first()
+    deadline = setting.sale_upload_deadline_day if setting and setting.sale_upload_deadline_day else 4
+    is_locked = today.day > deadline
+    
+    team_employees = get_dropdown_team(employee).filter(designation='MR', is_active=True)
+    is_manager_view = employee.designation != 'MR'
+    
+    selected_emp_id = request.query_params.get('employee_id') or request.data.get('employee_id')
+    if not selected_emp_id:
+        selected_emp_id = str(employee.id)
+    selected_emp = get_object_or_404(Employee, id=selected_emp_id)
+
+    if request.method == 'GET':
+        stockist_id = request.query_params.get('stockist_id')
+        if not stockist_id:
+            return Response({'success': False, 'error': 'Stockist ID is required.'}, status=400)
+            
+        stockist = get_object_or_404(Stockist, id=stockist_id)
+        report = PartyWiseSaleReport.objects.filter(stockist=stockist, month=month, year=year, employee=selected_emp).first()
+        
+        lines_data = []
+        classified_lines_data = []
+        
+        if report:
+            for line in PartyWiseSaleLine.objects.filter(report=report).select_related('chemist', 'product'):
+                mappings = line.dr_mappings.select_related('doctor').all()
+                mapped_billed = sum(m.mapped_billed_qty for m in mappings)
+                mapped_free = sum(m.mapped_free_qty for m in mappings)
+                
+                bal_billed = line.billed_qty - mapped_billed
+                bal_free = line.free_qty - mapped_free
+                
+                line_info = {
+                    'line_id': line.id, 'chemist_name': line.chemist.name, 'product_name': line.product.name,
+                    'billed_qty': line.billed_qty, 'free_qty': line.free_qty, 'bal_billed': bal_billed, 'bal_free': bal_free
+                }
+                
+                if bal_billed > 0 or bal_free > 0:
+                    lines_data.append(line_info)
+                else:
+                    line_info['mappings'] = [{'doctor_name': m.doctor.name, 'billed': m.mapped_billed_qty, 'free': m.mapped_free_qty} for m in mappings]
+                    classified_lines_data.append(line_info)
+                    
+        # 🌟 FIX: Define variables before returning
+        doctors = Doctor.objects.filter(allocated_to=selected_emp, status='Approved').order_by('name')
+        doc_data = [{'id': d.id, 'name': f"Dr. {d.name}"} for d in doctors]
+        
+        team_data = [{'id': e.id, 'name': e.name} for e in team_employees]
+        
+        return Response({
+            'success': True, 'is_locked': is_locked, 'deadline_day': deadline,
+            'month': month, 'year': year,
+            'pending_lines': lines_data, 'classified_lines': classified_lines_data,
+            'doctors': doc_data, 'is_manager_view': is_manager_view,
+            'team_employees': team_data, 'selected_emp_id': int(selected_emp_id)
+        })        
+
+    if request.method == 'POST':
+        if is_locked and employee.designation not in ['Admin', 'System Administrator']:
+            return Response({'success': False, 'error': f'Edit Locked! Classify Rx ki entry sirf {deadline} tareekh tak allow hoti hai.'}, status=403)
+            
+        line_id = request.data.get('line_id')
+        doctor_id = request.data.get('doctor_id')
+        m_billed = int(request.data.get('mapped_billed', 0))
+        m_free = int(request.data.get('mapped_free', 0))
+        
+        target_line = get_object_or_404(PartyWiseSaleLine, id=line_id)
+        current_mapped_billed = sum(m.mapped_billed_qty for m in target_line.dr_mappings.all())
+        current_mapped_free = sum(m.mapped_free_qty for m in target_line.dr_mappings.all())
+        
+        if m_billed > (target_line.billed_qty - current_mapped_billed) or m_free > (target_line.free_qty - current_mapped_free):
+            return Response({'success': False, 'error': 'Allocation quantity Balance se zyada nahi ho sakti.'}, status=400)
+            
+        if m_billed > 0 or m_free > 0:
+            DoctorRxMapping.objects.create(party_line=target_line, doctor_id=doctor_id, mapped_billed_qty=m_billed, mapped_free_qty=m_free)
+            return Response({'success': True, 'message': 'Rx Classified successfully!'})
+            
+        return Response({'success': False, 'error': 'No quantity provided.'}, status=400)
+
+
+# ====================================================================
+# 2. TARGET SETTING API
+# ====================================================================
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def api_target_setting(request):
+    employee = request.user.employee
+    
+    if not employee.headquarter:
+        return Response({'success': False, 'error': 'Aapke profile mein Territory/Headquarter assign nahi hai.'}, status=403)
+        
+    month = int(request.query_params.get('month') or request.data.get('month') or timezone.now().month)
+    year = int(request.query_params.get('year') or request.data.get('year') or timezone.now().year)
+    
+    master, _ = MonthlyTargetMaster.objects.get_or_create(territory=employee.headquarter, month=month, year=year)
+    is_readonly = master.status not in ['Draft', 'Rejected']
+
+    if request.method == 'GET':
+        existing_targets = {t.product_id: t.target_qty for t in TerritoryTarget.objects.filter(territory=employee.headquarter, month=month, year=year)}
+        
+        products_data = []
+        for p in Product.objects.filter(company=employee.company):
+            products_data.append({'product_id': p.id, 'product_name': p.name, 'target_qty': existing_targets.get(p.id, 0)})
+            
+        return Response({'success': True, 'status': master.status, 'is_readonly': is_readonly, 'manager_remark': master.manager_remark, 'targets': products_data})
+
+    if request.method == 'POST':
+        if is_readonly:
+            return Response({'success': False, 'error': 'Ye target already submitted hai, ise edit nahi kiya ja sakta.'}, status=403)
+            
+        action = request.data.get('action') 
+        target_payload = request.data.get('targets', []) 
+        
+        for item in target_payload:
+            p_id = item.get('product_id')
+            t_qty = int(item.get('target_qty', 0))
+            
+            if t_qty > 0:
+                TerritoryTarget.objects.update_or_create(territory=employee.headquarter, product_id=p_id, month=month, year=year, defaults={'target_qty': t_qty})
+            else:
+                TerritoryTarget.objects.filter(territory=employee.headquarter, product_id=p_id, month=month, year=year).delete()
+                
+        if action == 'Submit':
+            master.status = 'Pending_Manager'
+            master.approved_by_managers = []
+            msg = 'Target Manager ko approval ke liye submit kar diya gaya hai!'
+        else:
+            master.status = 'Draft'
+            msg = 'Target Draft successfully save ho gaya!'
+            
+        master.save()
+        return Response({'success': True, 'message': msg})
+
+
+# ====================================================================
+# 9. GIFT CAMPAIGN API
+# ====================================================================
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def api_gift_campaign(request):
+    employee = request.user.employee
+
+    if request.method == 'GET':
+        month = int(request.query_params.get('month') or timezone.now().month)
+        year = int(request.query_params.get('year') or timezone.now().year)
+
+        stock = MRInventory.objects.filter(employee=employee, item__item_type__in=['HighValue', 'Gift'], stock_qty__gt=0)
+        gifts_data = [{'id': s.item.id, 'name': s.item.name, 'stock': s.stock_qty} for s in stock]
+
+        doctors = Doctor.objects.filter(allocated_to=employee, status='Approved').order_by('name')
+        doctors_data = [{'id': d.id, 'name': d.name} for d in doctors]
+
+        history = GiftCampaignPlan.objects.filter(employee=employee).order_by('-id')[:20]
+        history_data = [
+            {'id': h.id, 'doctor_name': h.doctor.name if h.doctor else 'Unknown', 'item_name': h.item.name if h.item else 'Unknown', 'month': h.month, 'year': h.year, 'status': h.status}
+            for h in history
+        ]
+
+        return Response({'success': True, 'gifts': gifts_data, 'doctors': doctors_data, 'history': history_data})
+
+    if request.method == 'POST':
+        item_id = request.data.get('item_id')
+        doctor_ids = request.data.get('doctor_ids', []) 
+        month = request.data.get('month')
+        year = request.data.get('year')
+
+        if not item_id or not doctor_ids:
+            return Response({'success': False, 'error': 'Item aur kam se kam ek Doctor select karna zaroori hai.'}, status=400)
+
+        inventory = MRInventory.objects.filter(employee=employee, item_id=item_id, stock_qty__gt=0).first()
+        if not inventory:
+            return Response({'success': False, 'error': 'Aapke paas is item ka stock nahi hai.'}, status=400)
+
+        already_allocated = GiftCampaignPlan.objects.filter(employee=employee, item_id=item_id, month=month, year=year, status__in=['Pending', 'Approved']).count()
+
+        new_docs_to_add = []
+        for doc_id in doctor_ids:
+            already = GiftCampaignPlan.objects.filter(employee=employee, doctor_id=doc_id, item_id=item_id, month=month, year=year, status__in=['Pending', 'Approved']).exists()
+            if not already:
+                new_docs_to_add.append(doc_id)
+
+        if already_allocated + len(new_docs_to_add) > inventory.stock_qty:
+            available_to_assign = inventory.stock_qty - already_allocated
+            return Response({'success': False, 'error': f'Stock Limit Exceeded! {inventory.item.name} ka total stock {inventory.stock_qty} hai. (Jisme se {already_allocated} already assigned hain). Aap is baar sirf {available_to_assign} aur select kar sakte hain.'}, status=400)
+
+        created = 0
+        for doc_id in new_docs_to_add:
+            doctor = get_object_or_404(Doctor, id=doc_id)
+            GiftCampaignPlan.objects.create(employee=employee, doctor=doctor, item_id=item_id, month=month, year=year, status='Pending')
+            created += 1
+
+        if created > 0:
+             return Response({'success': False, 'error': f'Stock Limit Exceeded! {inventory.item.name} ka total stock {inventory.stock_qty} hai. (Jisme se {already_allocated} already assigned hain). Aap is baar sirf {available_to_assign} aur select kar sakte hain.'}, status=400)
+
+        created = 0
+        for doc_id in new_docs_to_add:
+            doctor = get_object_or_404(Doctor, id=doc_id)
+            GiftCampaignPlan.objects.create(employee=employee, doctor=doctor, item_id=item_id, month=month, year=year, status='Pending')
+            created += 1
+
+        if created > 0:
+            return Response({'success': True, 'message': f'{created} Doctor(s) ke liye Campaign Manager ko bhej diya gaya!'})
+        else:
+            return Response({'success': False, 'error': 'Sabhi selected doctors already is month ke plan mein hain.'}, status=400)

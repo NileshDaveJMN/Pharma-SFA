@@ -1,0 +1,97 @@
+{% extends 'base.html' %}{% block content %}
+<div class="container-fluid p-0 mb-2 mt-2">
+    <a href="{% url 'request_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-1 rounded-3 border bg-white text-secondary"><span class="fs-5 fw-bold">⬅️</span></a>
+    <div class="d-flex align-items-center mb-2 px-2"><h5 class="fw-bold text-dark mb-0" style="font-size: 1.2rem;">⬆️ Promote Employee</h5></div>
+    <div class="mx-2">
+        <div class="alert alert-warning border-warning shadow-sm py-2 mb-2" style="border-radius: 10px; font-size: 0.75rem;">
+            <strong class="text-dark"><i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> Dhyan Dein:</strong> <br> Employee ka apna purana data (agar hai) ek naye Vacant placeholder ko offload hoga, aur naye designation ki vacant position ka data isi employee ko mil jayega.
+        </div>
+        <div class="card border-0 shadow-sm bg-white" style="border-radius: 10px; border-top: 4px solid #6610f2 !important;">
+            <div class="card-body p-2">
+                <form method="POST" id="promoteForm" onsubmit="return confirm('⚠️ Confirm: Promotion process karna chahte hain?');">{% csrf_token %}
+                    <div class="mb-2">
+                        <label class="form-label fw-bold text-dark mb-1" style="font-size: 0.8rem;"><i class="bi bi-person-fill me-1"></i> Employee (jo promote ho raha hai)</label>
+                        <select name="employee" id="empSelect" class="form-select form-select-sm shadow-sm" required>
+                            <option value="">-- Select Employee --</option>
+                            {% for emp in employees %}<option value="{{ emp.id }}">{{ emp.name }} ({{ emp.designation }} - {{ emp.headquarter.name|default:"No HQ" }})</option>{% endfor %}
+                        </select>
+                    </div>
+
+                    <div id="statsBox" class="d-none mt-2 mb-3">
+                        <h6 class="text-secondary fw-bold mb-2 px-1" style="font-size: 0.7rem; letter-spacing: 0.5px;"><i class="bi bi-pie-chart-fill me-1"></i> CURRENT DATA (<span id="s_desig"></span>)</h6>
+                        <div class="row g-2 text-center">
+                            <div class="col-4"><div class="p-2 border border-primary border-opacity-25 rounded-3" style="background:#f0f8ff;"><div class="fw-bold fs-5 text-dark lh-1" id="s_doc">0</div><div class="text-muted fw-bold mt-1" style="font-size:0.6rem;">DOCTORS</div></div></div>
+                            <div class="col-4"><div class="p-2 border border-success border-opacity-25 rounded-3" style="background:#f0fff4;"><div class="fw-bold fs-5 text-dark lh-1" id="s_chem">0</div><div class="text-muted fw-bold mt-1" style="font-size:0.6rem;">CHEMISTS</div></div></div>
+                            <div class="col-4"><div class="p-2 border border-warning border-opacity-25 rounded-3" style="background:#fffdf0;"><div class="fw-bold fs-5 text-dark lh-1" id="s_team">0</div><div class="text-muted fw-bold mt-1" style="font-size:0.6rem;">TEAM</div></div></div>
+                        </div>
+                    </div>
+
+                    <div class="text-center mb-2 text-muted"><i class="bi bi-arrow-down-circle-fill text-primary" style="font-size: 1.3rem;"></i></div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-bold text-success mb-1" style="font-size: 0.8rem;"><i class="bi bi-arrow-up-circle-fill me-1"></i> Naya Designation</label>
+                        <select name="new_designation" id="designationSelect" class="form-select form-select-sm border-success bg-success bg-opacity-10 fw-bold text-dark shadow-sm" required>
+                            <option value="">-- Select Designation --</option>
+                            {% for d in designation_levels %}{% if d != 'MR' %}<option value="{{ d }}">{{ d }}</option>{% endif %}{% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-bold text-success mb-1" style="font-size: 0.8rem;"><i class="bi bi-geo-alt-fill me-1"></i> Kaunsi Vacant Position Fill Karein</label>
+                        <select name="vacancy" id="vacancySelect" class="form-select form-select-sm border-success bg-success bg-opacity-10 fw-bold text-dark shadow-sm" required disabled>
+                            <option value="">-- Pehle Designation Select Karein --</option>
+                        </select>
+                        <small class="text-muted" style="font-size: 0.65rem;">Is vacancy ka saara data (Doctors/Chemists/Team) employee ko mil jayega.</small>
+                    </div>
+
+                    <hr class="text-muted opacity-25 mb-2">
+                    <button type="submit" class="btn w-100 fw-bold shadow-sm py-2 text-white" style="background: linear-gradient(135deg, #6610f2, #8540f5); border-radius: 8px;"><i class="bi bi-rocket-takeoff-fill me-1"></i> Promote & Transfer</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('empSelect').addEventListener('change', function() {
+    let empId = this.value;
+    let box = document.getElementById('statsBox');
+    if (!empId) { box.classList.add('d-none'); return; }
+    fetch(`?get_stats=1&emp_id=${empId}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('s_desig').innerText = data.designation;
+                document.getElementById('s_doc').innerText = data.doctors;
+                document.getElementById('s_chem').innerText = data.chemists;
+                document.getElementById('s_team').innerText = data.team;
+                box.classList.remove('d-none');
+            }
+        });
+});
+
+document.getElementById('designationSelect').addEventListener('change', function() {
+    let designation = this.value;
+    let vacancySelect = document.getElementById('vacancySelect');
+    if (!designation) {
+        vacancySelect.innerHTML = '<option value="">-- Pehle Designation Select Karein --</option>';
+        vacancySelect.disabled = true;
+        return;
+    }
+    fetch(`?get_vacancies=1&designation=${designation}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                if (data.vacancies.length === 0) {
+                    vacancySelect.innerHTML = '<option value="">-- Koi Vacant Position Nahi Hai --</option>';
+                    vacancySelect.disabled = true;
+                } else {
+                    vacancySelect.innerHTML = '<option value="">-- Select Vacancy --</option>' +
+                        data.vacancies.map(v => `<option value="${v.id}">${v.label}</option>`).join('');
+                    vacancySelect.disabled = false;
+                }
+            }
+        });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+    
+    <!-- 🌟 COMPACT HEADER WITH EXCEL BUTTON -->
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="{% url 'view_hub' %}?employee_id={{ selected_emp_id }}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0 flex-grow-1"><i class="bi bi-calendar2-event text-primary me-1"></i> Approved Holidays</h6>
+        
+        <!-- 📥 COMPACT EXCEL BUTTON -->
+        <a href="?employee_id={{ selected_emp_id }}&export=excel" class="btn btn-success btn-sm fw-bold shadow-sm px-2 py-0" style="font-size: 0.75rem;">
+            📥 .XLSX
+        </a>
+    </div>
+
+    <!-- 📊 COMPACT HOLIDAY LIST -->
+    <div class="card border-0 shadow-sm bg-white mx-1 mb-5" style="border-radius: 8px;">
+        <div class="card-header bg-light border-bottom pt-2 pb-1 d-flex justify-content-between align-items-center" style="border-top-left-radius: 8px; border-top-right-radius: 8px;">
+            <small class="fw-bold text-secondary mb-0" style="font-size: 0.65rem;">📍 REGION: <span class="text-dark">{{ rbm_name }}</span></small>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-sm text-center mb-0 align-middle" style="font-size: 0.75rem;">
+                <thead class="table-light border-bottom">
+                    <tr>
+                        <th class="text-start ps-2 py-2 text-secondary fw-bold" style="width: 35%;">Date</th>
+                        <th class="py-2 text-secondary fw-bold text-start">Holiday Name</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for h in holidays %}
+                    <tr>
+                        <td class="text-start ps-2 py-2 border-end">
+                            <span class="fw-bold text-primary d-block">{{ h.date|date:"d-b-y" }}</span>
+                            <small class="text-muted fw-bold" style="font-size: 0.6rem;">{{ h.date|date:"l" }}</small>
+                        </td>
+                        <td class="text-dark fw-bold text-start py-2" style="white-space: normal;">{{ h.name }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="2" class="text-center text-muted py-4" style="font-size: 0.8rem;">
+                            No approved holidays found for this region.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

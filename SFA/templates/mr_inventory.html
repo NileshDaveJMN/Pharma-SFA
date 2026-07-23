@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+    
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="{% url 'view_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0 flex-grow-1"><i class="bi bi-box-seam text-primary me-1"></i> My Inventory</h6>
+        <a href="?employee_id={{ selected_emp_id }}&export=excel" class="btn btn-success btn-sm fw-bold shadow-sm px-2 py-0" style="font-size: 0.70rem; border-radius: 4px;">📥 .XLSX</a>
+    </div>
+
+    {% if is_manager_view %}
+    <div class="card border-0 shadow-sm mb-2 bg-white mx-1" style="border-radius: 8px;">
+        <div class="card-body p-2">
+            <form method="GET" class="row g-1 align-items-end" id="filterForm">
+                <div class="col-12">
+                    <select name="employee_id" class="form-select form-select-sm bg-light fw-bold text-primary border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">👤 Select Employee...</option>
+                        {% for emp in team_employees %}
+                            <option value="{{ emp.id }}" {% if emp.id == selected_emp_id %}selected{% endif %}>
+                                {{ emp.name }} ({{ emp.designation }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <ul class="nav nav-pills mx-1 mb-2 shadow-sm bg-white p-1" id="inventoryTabs" role="tablist" style="border-radius: 8px;">
+        <li class="nav-item flex-fill text-center" role="presentation">
+            <button class="nav-link active w-100 fw-bold py-1" id="stock-tab" data-bs-toggle="pill" data-bs-target="#stock" type="button" role="tab" style="border-radius: 6px; font-size: 0.70rem;">
+                📦 Sample and Gift
+            </button>
+        </li>
+        <li class="nav-item flex-fill text-center" role="presentation">
+            <button class="nav-link w-100 fw-bold py-1 text-secondary" id="hv-tab" data-bs-toggle="pill" data-bs-target="#hv" type="button" role="tab" style="border-radius: 6px; font-size: 0.70rem;">
+                🎁 HV Gifts
+            </button>
+        </li>
+        <li class="nav-item flex-fill text-center" role="presentation">
+            <button class="nav-link w-100 fw-bold py-1 text-secondary" id="transit-tab" data-bs-toggle="pill" data-bs-target="#transit" type="button" role="tab" style="border-radius: 6px; font-size: 0.70rem;">
+                🚚 Receive
+            </button>
+        </li>
+    </ul>
+
+    <style>
+        #inventoryTabs .nav-link.active { background-color: #198754 !important; color: white !important; }
+        #inventoryTabs .nav-link { color: #6c757d; border: none; }
+        .table-custom { font-size: 0.65rem; }
+        .table-custom th { font-weight: bold; color: #6c757d; background-color: #f8f9fa; border-bottom: 1px solid #dee2e6; padding: 4px; }
+        .table-custom td { vertical-align: middle; border-bottom: 1px solid #e9ecef; padding: 4px; }
+    </style>
+
+    <div class="tab-content mx-1 mb-5" id="inventoryTabsContent">
+        
+        <div class="tab-pane fade show active" id="stock" role="tabpanel">
+            <div class="card border-0 shadow-sm bg-white" style="border-radius: 8px;">
+                <div class="table-responsive" style="border-radius: 8px;">
+                    <table class="table table-sm table-custom text-center mb-0">
+                        <thead>
+                            <tr>
+                                <th class="text-start ps-2" style="width: 50%;">Item Details</th>
+                                <th>Recv</th>
+                                <th>Dist</th>
+                                <th class="text-success pe-2">Bal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in sample_gift_data %}
+                            <tr>
+                                <td class="text-start ps-2">
+                                    <span class="fw-bold text-dark d-block mb-0">{{ item.item_name }}</span>
+                                    <span class="badge bg-light border text-secondary py-0 px-1 mt-1" style="font-size: 0.55rem; border-radius: 4px;">{{ item.category }}</span>
+                                </td>
+                                <td class="text-muted fw-bold">{{ item.received }}</td>
+                                <td class="text-danger fw-bold">{{ item.distributed }}</td>
+                                <td class="text-success fw-bold pe-2" style="font-size: 0.75rem;">{{ item.balance }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-muted py-3 fw-bold" style="font-size: 0.65rem;">Koi stock available nahi hai.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="hv" role="tabpanel">
+            <div class="card border-0 shadow-sm bg-white" style="border-radius: 8px;">
+                <div class="table-responsive" style="border-radius: 8px;">
+                    <table class="table table-sm table-custom text-center mb-0">
+                        <thead>
+                            <tr>
+                                <th class="text-start ps-2" style="width: 50%;">Item Details</th>
+                                <th>Recv</th>
+                                <th>Dist</th>
+                                <th class="text-success pe-2">Bal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in hv_stock_data %}
+                            <tr>
+                                <td class="text-start ps-2">
+                                    <span class="fw-bold text-dark d-block mb-0">{{ item.item_name }}</span>
+                                    <span class="badge bg-light border text-secondary py-0 px-1 mt-1" style="font-size: 0.55rem; border-radius: 4px;">{{ item.category }}</span>
+                                </td>
+                                <td class="text-muted fw-bold">{{ item.received }}</td>
+                                <td class="text-danger fw-bold">{{ item.distributed }}</td>
+                                <td class="text-success fw-bold pe-2" style="font-size: 0.75rem;">{{ item.balance }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-muted py-3 fw-bold" style="font-size: 0.65rem;">Koi High Value Gift stock available nahi hai.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="transit" role="tabpanel">
+            <div class="card border-0 shadow-sm bg-white" style="border-radius: 8px;">
+                <div class="table-responsive" style="border-radius: 8px;">
+                    <table class="table table-sm table-custom text-center mb-0">
+                        <thead>
+                            <tr>
+                                <th class="text-start ps-2" style="width: 40%;">Item Name</th>
+                                <th>Date</th>
+                                <th>Qty</th>
+                                <th class="pe-2">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for disp in in_transit_items %}
+                            <tr>
+                                <td class="text-start text-dark fw-bold" style="white-space: normal;">{{ disp.item.name }}</td>
+                                <td class="text-muted fw-bold" style="font-size: 0.60rem;">{{ disp.dispatch_date|date:"d M" }}</td>
+                                <td class="fw-bold text-primary">{{ disp.quantity }}</td>
+                                <td class="pe-2">
+                                    {% if not is_manager_view %}
+                                    <form method="POST" class="d-inline m-0 p-0">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="dispatch_id" value="{{ disp.id }}">
+                                        <button type="submit" name="receive_dispatch" class="btn btn-sm btn-success fw-bold shadow-sm" style="font-size: 0.60rem; padding: 2px 8px; border-radius: 4px;">Receive</button>
+                                    </form>
+                                    {% else %}
+                                    <span class="badge bg-warning text-dark" style="font-size: 0.60rem; border-radius: 4px;">In-Transit</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-muted py-3 fw-bold" style="font-size: 0.65rem;">Koi item In-Transit nahi hai.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

@@ -1,29 +1,34 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container-fluid mb-4">
-    <h4 class="fw-bold mb-3">📅 Monthly Tour Program (MTP)</h4>
 
-    <div class="card border-0 shadow-sm mb-4">
-        <div class="card-body">
-            <h6 class="text-primary fw-bold mb-3">1. Create New Month Plan</h6>
+<div class="container-fluid p-0 mb-4">
+    <h4 class="fw-bold mb-3">📅 Monthly Tour Program (MTP)</h4>
+    <a href="{% url 'request_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-1 rounded-3 border bg-white text-secondary mb-3">
+        <span class="fs-5 fw-bold">⬅️</span>
+    </a>
+    
+    <!-- 1. Create New Month Plan -->
+    <div class="card border-0 shadow-sm mb-4 bg-white">
+        <div class="card-body p-3">
+            
+            <h6 class="text-primary fw-bold mb-3" style="font-size: 0.9rem;">1. Create New Month Plan</h6>
             <form method="POST" class="row g-2">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="create_mtp">
                 
                 <div class="col-6">
-                    <select name="month" class="form-select" required>
+                    <!-- 🌟 DYNAMIC DROPDOWN & SMART JS FOR YEAR UPDATE -->
+                    <select name="month" class="form-select text-dark fw-medium" required onchange="document.getElementById('year_input').value = this.options[this.selectedIndex].getAttribute('data-year');">
                         <option value="" disabled selected>-- Month --</option>
-                        <option value="1">January</option> <option value="2">February</option>
-                        <option value="3">March</option> <option value="4">April</option>
-                        <option value="5">May</option> <option value="6">June</option>
-                        <option value="7">July</option> <option value="8">August</option>
-                        <option value="9">September</option> <option value="10">October</option>
-                        <option value="11">November</option> <option value="12">December</option>
+                        {% for am in allowed_months %}
+                            <option value="{{ am.month }}" data-year="{{ am.year }}">{{ am.label }}</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="col-3">
-                    <input type="number" name="year" class="form-control" value="{{ current_year }}" required>
+                    <!-- 🌟 READONLY YEAR INPUT (MR ab ise manually change nahi kar sakta) -->
+                    <input type="number" name="year" id="year_input" class="form-control text-center bg-light" value="{{ current_year }}" readonly required>
                 </div>
                 <div class="col-3">
                     <button type="submit" class="btn btn-primary w-100 fw-bold">Create</button>
@@ -32,57 +37,66 @@
         </div>
     </div>
 
-    {% for mtp in draft_mtps %}
-        <div class="card border-0 shadow-sm mb-4" style="border-top: 4px solid #ffc107 !important;">
-            <div class="card-body">
+    <!-- 2. Display MTP Drafts/Plans -->
+    {% for data in mtp_data %}
+        <div class="card border-0 shadow-sm mb-4 bg-white" style="border-top: 4px solid #ffc107 !important;">
+            <div class="card-body p-3">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="fw-bold mb-0">Plan: {{ mtp.month }}/{{ mtp.year }}</h5>
-                    <span class="badge bg-warning text-dark">{{ mtp.status }}</span>
+                    <h5 class="fw-bold mb-0 text-dark" style="font-size: 1.1rem;">Plan: {{ data.mtp.month }}/{{ data.mtp.year }}</h5>
+                    <span class="badge bg-warning text-dark fw-bold px-2 py-1" style="font-size: 0.75rem;">{{ data.mtp.status }}</span>
                 </div>
 
-                <form method="POST" class="row g-2 mb-3 bg-light p-2 rounded">
+                <form method="POST">
                     {% csrf_token %}
-                    <input type="hidden" name="action" value="add_daily_plan">
-                    <input type="hidden" name="mtp_id" value="{{ mtp.id }}">
+                    <input type="hidden" name="mtp_id" value="{{ data.mtp.id }}">
+                    <input type="hidden" name="action" id="action_mtp_{{ data.mtp.id }}" value="bulk_save_plan">
                     
-                    <div class="col-12 col-md-4">
-                        <input type="date" name="date" class="form-control" required>
-                    </div>
-                    <div class="col-12 col-md-6">
-                        <select name="route" class="form-select" required>
-                            <option value="" disabled selected>-- Select Route --</option>
-                            {% for route in routes %}
-                                <option value="{{ route.id }}">{{ route.name }} ({{ route.territory.name }})</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-12 col-md-2">
-                        <button type="submit" class="btn btn-success w-100">Add Day</button>
-                    </div>
-                </form>
-
-                {% if mtp.daily_plans.all %}
-                    <div class="table-responsive">
-                        <table class="table table-sm table-bordered">
-                            <thead class="table-light">
+                    <div class="table-responsive rounded-3 border" style="max-height: 450px; overflow-y: auto;">
+                        <table class="table table-sm table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                            <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
                                 <tr>
-                                    <th>Date</th>
-                                    <th>Route</th>
-                                    <th>Action</th>
+                                    <th class="ps-3" style="width: 35%;">Date & Day</th>
+                                    <th class="pe-3">Select Route / Status</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for plan in mtp.daily_plans.all %}
-                                <tr>
-                                    <td>{{ plan.date|date:"d M, y" }}</td>
-                                    <td>{{ plan.route.name }}</td>
-                                    <td class="text-center">
-                                        <form method="POST" class="d-inline">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="action" value="delete_daily_plan">
-                                            <input type="hidden" name="plan_id" value="{{ plan.id }}">
-                                            <button type="submit" class="btn btn-sm btn-danger px-2 py-0">✕</button>
-                                        </form>
+                                {% for day in data.days_list %}
+                                <!-- Sunday highlight ke liye row background change -->
+                                <tr class="{% if day.is_sunday %}bg-light{% endif %}">
+                                    
+                                    <!-- Date Column -->
+                                    <td class="text-nowrap fw-semibold ps-3 {% if day.is_sunday %}text-danger{% else %}text-secondary{% endif %}">
+                                        {{ day.date_str }}
+                                    </td>
+                                    
+                                    <!-- Route Selection Column -->
+                                    <td class="pe-3 py-2">
+                                        
+                                        <!-- 🌟 NEW LOGIC: Agar Locked Hai (Leave/Holiday/Sunday) -->
+                                        {% if day.is_locked %}
+                                            <input type="hidden" name="route_{{ day.day_number }}" value="">
+                                            <div class="badge 
+                                                {% if day.is_leave %}bg-primary text-primary border-primary
+                                                {% elif day.is_holiday %}bg-info text-info border-info
+                                                {% elif day.is_sunday %}bg-danger text-danger border-danger
+                                                {% else %}bg-secondary text-secondary border-secondary{% endif %} 
+                                                bg-opacity-10 border w-100 py-2 text-start px-2" 
+                                                style="font-size: 0.8rem; border-radius: 6px; white-space: normal;">
+                                                {{ day.status_text }}
+                                            </div>
+                                        
+                                        <!-- 🌟 NORMAL LOGIC: Working day (Dropdown open rahega) -->
+                                        {% else %}
+                                            <select name="route_{{ day.day_number }}" class="form-select form-select-sm fw-medium text-dark bg-white shadow-sm border-secondary" style="font-size: 0.8rem; border-radius: 6px;">
+                                                <option value="">-- Select Route --</option>
+                                                {% for route in routes %}
+                                                    <option value="{{ route.id }}" {% if day.selected_route_id == route.id %}selected{% endif %}>
+                                                        {{ route.name }} ({{ route.territory.name }})
+                                                    </option>
+                                                {% endfor %}
+                                            </select>
+                                        {% endif %}
+                                        
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -90,20 +104,22 @@
                         </table>
                     </div>
 
-                    <form method="POST" class="mt-3 text-end">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="submit_mtp">
-                        <input type="hidden" name="mtp_id" value="{{ mtp.id }}">
-                        <button type="submit" class="btn btn-warning fw-bold px-4">Submit For Approval</button>
-                    </form>
-                {% else %}
-                    <p class="text-muted small text-center mb-0 mt-3">Koi date add nahi ki gayi hai.</p>
-                {% endif %}
+                    <div class="d-flex flex-column gap-2 mt-3">
+                        <button type="submit" class="btn btn-success fw-bold py-2.5 w-100" style="border-radius: 8px;" onclick="document.getElementById('action_mtp_{{ data.mtp.id }}').value='bulk_save_plan'; return true;">
+                            💾 Save Month Plan
+                        </button>
+                        
+                        <button type="submit" class="btn btn-warning fw-bold py-2.5 w-100 text-dark" style="border-radius: 8px;" onclick="if(confirm('Kya aap is Tour Program ko approval ke liye submit karna chahte hain?')) { document.getElementById('action_mtp_{{ data.mtp.id }}').value='submit_plan'; return true; } else { return false; }">
+                            🚀 Submit For Approval
+                        </button>
+                    </div>
+                </form>
+
             </div>
         </div>
     {% empty %}
-        <div class="alert alert-info text-center shadow-sm">
-            Koi Draft MTP nahi hai. Naya Tour Program banane ke liye upar form ka use karein.
+        <div class="card border-0 text-center p-4 shadow-sm bg-white">
+            <span class="text-muted small fw-medium">Koi Draft MTP nahi hai. Naya Tour Program banane ke liye upar form ka use karein.</span>
         </div>
     {% endfor %}
 </div>

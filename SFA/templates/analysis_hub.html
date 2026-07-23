@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-1">
+    
+    <!-- 🌟 COMPACT HEADER WITH EXCEL BUTTON -->
+    <div class="d-flex align-items-center gap-2 mb-2 px-2">
+        <a href="{% url 'view_hub' %}" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h6 class="fw-bold text-dark mb-0 flex-grow-1"><i class="bi bi-bar-chart-fill text-primary me-1"></i> Analytical Hub</h6>
+        
+        <!-- 📥 COMPACT EXCEL BUTTON (Moved to Top) -->
+        <a href="?employee_id={{ selected_emp_id }}&from_month={{ from_month }}&to_month={{ to_month }}&year={{ selected_year }}&export=excel" class="btn btn-success btn-sm fw-bold shadow-sm px-2 py-0" style="font-size: 0.75rem;">
+            📥 .XLSX
+        </a>
+    </div>
+
+    <!-- 🎛️ ULTRA COMPACT FILTERS (Auto-Submit) -->
+    <div class="card border-0 shadow-sm mb-2 bg-white mx-1" style="border-radius: 8px;">
+        <div class="card-body p-2">
+            <form method="GET" class="row g-1 align-items-end" id="filterForm">
+                {% if is_manager_view %}
+                <div class="col-12">
+                    <select name="employee_id" class="form-select form-select-sm bg-light fw-bold text-primary border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        <option value="">👤 Select Employee...</option>
+                        {% for emp in team_employees %}
+                            <option value="{{ emp.id }}" {% if selected_emp_id == emp.id %}selected{% endif %}>{{ emp.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                
+                <div class="col-4">
+                    <select name="from_month" class="form-select form-select-sm bg-light fw-bold border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        {% for m_num, m_name in months_choices %}
+                            <option value="{{ m_num }}" {% if from_month == m_num %}selected{% endif %}>🟢 {{ m_name|slice:":3" }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-4">
+                    <select name="to_month" class="form-select form-select-sm bg-light fw-bold border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                        {% for m_num, m_name in months_choices %}
+                            <option value="{{ m_num }}" {% if to_month == m_num %}selected{% endif %}>🔴 {{ m_name|slice:":3" }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-4">
+                    <input type="number" name="year" value="{{ selected_year }}" class="form-control form-control-sm bg-light fw-bold text-center border-0" style="border-radius: 6px;" onchange="this.form.submit()">
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 🎨 COMPACT TABLE CSS -->
+    <style>
+    .excel-table-wrapper { max-height: 65vh; overflow: auto; border-radius: 8px; border: 1px solid #ccc; position: relative; }
+    .excel-table { border-collapse: separate; border-spacing: 0; width: 100%; background-color: #fff; font-size: 0.70rem; }
+    .excel-table th, .excel-table td {
+        border-right: 1px solid #d4d4d4; border-bottom: 1px solid #d4d4d4;
+        padding: 6px 4px; vertical-align: middle; text-align: center; white-space: nowrap;
+    }
+    .excel-table thead tr th { position: sticky; top: 0; z-index: 20; color: #fff; background-color: #107C41; padding: 8px 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    
+    /* 🌟 KPI COLUMN */
+    .excel-table tbody td:first-child {
+        position: sticky; left: 0; background-color: #f4f7f9; z-index: 10; text-align: left; 
+        font-weight: bold; border-right: 2px solid #107C41; color: #333; 
+        width: 105px; min-width: 105px; max-width: 105px; 
+        white-space: normal; word-wrap: break-word; box-shadow: 3px 0 5px -1px rgba(0,0,0,0.1);
+    }
+    .excel-table thead tr th:first-child {
+        position: sticky; left: 0; z-index: 30; background-color: #0b5e31; border-right: 2px solid #0b5e31; 
+        text-align: left; width: 105px; min-width: 105px; max-width: 105px; white-space: normal;
+    }
+    
+    .excel-table tbody tr:hover td { background-color: #e6f2eb; }
+    .excel-table tbody tr:hover td:first-child { background-color: #d1e5d8; }
+    </style>
+
+    <!-- 📊 THE MATRIX VIEW (TABLE) -->
+    <div class="card border-0 shadow-sm bg-white mx-1 mb-5" style="border-radius: 8px;">
+        <div class="excel-table-wrapper" style="border-radius: 8px;">
+            <table class="excel-table">
+                <thead>
+                    <tr>
+                        <th>KPI</th>
+                        {% for m_num, m_name in months_headers %}
+                            <th>{{ m_name }}</th>
+                        {% endfor %}
+                        <th style="background-color: #0b5e31;">Total/Avg</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report_data %}
+                    <tr>
+                        <td>{{ row.label }}</td>
+                        
+                        {% for val in row.monthly_list %}
+                            <td class="fw-bold {% if row.is_currency %}text-success{% elif row.is_pct %}text-primary{% else %}text-secondary{% endif %}">
+                                {% if row.is_currency %}₹{{ val|floatformat:0 }}
+                                {% elif row.is_pct %}{{ val|floatformat:1 }}%
+                                {% elif row.is_avg %}{{ val|floatformat:1 }}
+                                {% else %}{{ val }}{% endif %}
+                            </td>
+                        {% endfor %}
+
+                        <td class="fw-bold text-dark" style="background-color: #e9ecef;">
+                            {% if row.is_currency %}₹{{ row.tot|floatformat:0 }}
+                            {% elif row.is_pct %}{{ row.tot|floatformat:1 }}%
+                            {% elif row.is_avg %}{{ row.tot|floatformat:1 }}
+                            {% else %}{{ row.tot }}{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
