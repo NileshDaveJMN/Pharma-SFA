@@ -148,9 +148,9 @@ STORAGES = {
 MEDIA_URL  = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 CSRF_TRUSTED_ORIGINS = [
+    'https://*.onrender.com',
     'https://*.trycloudflare.com',
 ]
-
 JAZZMIN_SETTINGS = {
     "site_title": "SFA Admin",
     "site_header": "SFA Manager",
