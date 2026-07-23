@@ -24,8 +24,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-bp2j)=s!f#fa+o87vwk5)moam%bl5dp_n)j53ewoo+&+8-@1-h'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
-
+# Local (Pydroid) par default True rahega, aur Render par env variable False kar dega
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = ['*']
 
 
