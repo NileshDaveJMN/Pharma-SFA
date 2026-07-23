@@ -36,7 +36,9 @@ from SFA.models import (
 )
 from .auth import get_full_team_employees, get_team_territory_ids, get_team_route_ids, get_team_tree
 from SFA.decorators import employee_required
-
+import os
+import json
+from django.conf import settings
 from SFA.models import SystemNotification
 from SFA.models import Doctor, Chemist
 
@@ -1013,6 +1015,35 @@ from SFA.models import CompanyNotice, SystemNotification, DirectMessage
 # ==============================================================================
 
 # views.py ke upar import
+# 🌟 NAYA HELPER FUNCTION: Environment variable se file banane ke liye
+def get_firebase_cred_path():
+    # 1. Pehle local file check karein (Pydroid/mobile ke liye)
+    local_path = os.path.join(settings.BASE_DIR, 'firebase_key.json')
+    if os.path.exists(local_path):
+        return local_path
+    
+    # 2. Agar local file nahi hai (Render par), toh Env Variable check karein
+    tmp_path = '/tmp/firebase_key.json' # Render par temporary file yahan banegi
+    if not os.path.exists(tmp_path):
+        env_creds = os.environ.get('FIREBASE_CREDENTIALS')
+        if env_creds:
+            try:
+                # JSON string ko file mein likh dein
+                with open(tmp_path, 'w') as f:
+                    f.write(env_creds)
+            except Exception as e:
+                print(f"Error writing Firebase key: {e}")
+    return tmp_path
+
+# 🌟 NAYA HELPER FUNCTION: Project ID ke liye (Taaki hardcode na karna pade)
+def get_firebase_project_id():
+    env_creds = os.environ.get('FIREBASE_CREDENTIALS')
+    if env_creds:
+        try:
+            return json.loads(env_creds).get('project_id', '')
+        except:
+            pass
+    return "your-firebase-project-id" # Local ke liye fallback
 from django.contrib import messages
 from django.shortcuts import render, redirect
 from django.conf import settings
@@ -1049,14 +1080,18 @@ def notice_board_view(request, employee):
             # 3. 🌟 FCM Push Notification Bhejna
             tokens = list(DeviceToken.objects.filter(employee__company=employee.company).values_list('token', flat=True))
             
-            project_id = "your-firebase-project-id" 
-            cred_path = os.path.join(settings.BASE_DIR, 'firebase_key.json')
+            # 🌟 Dynamic Project ID aur Cred Path
+            project_id = get_firebase_project_id()
+            cred_path = get_firebase_cred_path()
             
             # Try-except taaki FCM fail hone par DB save aur UI flow disturb na ho
             try:
-                send_fcm_push(title, body, tokens, project_id, cred_path)
+                if os.path.exists(cred_path):
+                    send_fcm_push(title, body, tokens, project_id, cred_path)
+                else:
+                    print("Firebase credentials file not found!")
             except Exception as e:
-                print(f"FCM Push Error: {e}") # Aap yahan logging bhi karwa sakte hain
+                print(f"FCM Push Error: {e}")
                     
             messages.success(request, "📢 Notice successfully broadcast ho gaya!")
             return redirect('notice_board')
