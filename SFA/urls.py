@@ -12,17 +12,6 @@ from .views import masters, sales, reports
 from .views.reports import gift_distribution_report
 from SFA.views import auth as auth_views
 
-# 🌟 NAYA IMPORT: Admin user banane ke liye
-from django.contrib.auth.models import User
-from django.http import HttpResponse
-
-# 🌟 NAYA FUNCTION: Ek baar admin banane ke liye
-def make_admin(request):
-    if not User.objects.filter(username='admin').exists():
-        User.objects.create_superuser('admin', 'admin@example.com', 'Pass1234')
-        return HttpResponse("Admin created! Go to /admin/ to login.")
-    return HttpResponse("Admin already exists!")
-
 urlpatterns = [
     path('hub/view/gift-report/', gift_distribution_report, name='gift_distribution_report'),
 
@@ -100,7 +89,7 @@ urlpatterns = [
     # 🌟 NAYA: Email System URLs
     path('hub/messages/', views.web_inbox_view, name='web_inbox'),
     path('hub/messages/compose/', views.web_compose_view, name='web_compose'),
-    path('hub/messages/<int:msg_id>/', views.web_message_detail_view, name='web_message_detail'), # 🌟 NAYA
+    path('hub/messages/<int:msg_id>/', views.web_message_detail_view, name='web_message_detail'),
     
     path('reports/analysis-hub/', views.analysis_hub_view, name='analysis_hub'),
     path('network/bulk-upload/', bulk_network_upload_view, name='bulk_network_upload'),
@@ -121,9 +110,6 @@ urlpatterns = [
     path('free-claim-view/', views.free_claim_view_readonly, name='free_claim_view_readonly'),
     path('my-requests/', views.my_requests_view, name='my_requests'),
     path('leave-status/', views.leave_status_view, name='leave_status'),
-    
-    # 🌟 TEMPORARY URL: Superuser banane ke liye (Kaam hone ke baad delete kar dena)
-    path('make-admin-secret/', make_admin),
     
     # 🌟 Yahan saari Flutter APIs auto-include ho rahi hain
     path('api/', include('SFA.api.urls')), 
