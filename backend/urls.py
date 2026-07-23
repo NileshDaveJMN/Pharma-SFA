@@ -1,8 +1,5 @@
 """
 URL configuration for backend project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/6.0/topics/http/urls/
 """
 from django.contrib import admin
 from django.urls import path, include
@@ -14,7 +11,5 @@ urlpatterns = [
     path('', include('SFA.urls')),
 ]
 
-# 🌟 FIX: Media Files (Attachments) ko serve karne ke liye
-# DEBUG=True hone par hi ye local server files ko serve karega (jo development ke liye sahi hai)
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# 🌟 FIX: Ab ye DEBUG=False (Render) par bhi media files serve karega
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
