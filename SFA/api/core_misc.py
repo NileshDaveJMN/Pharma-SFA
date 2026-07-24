@@ -266,29 +266,35 @@ from SFA.models import (
     Employee, Route, MonthlyTourProgram, DailyTourPlan, 
     LeaveApplication, Holiday, SystemSetting
 )
-# Apne auth.py ke helper functions yahan import karein (jo already core.py me ho sakte hain)
-from SFA.views.auth import get_full_team_employees, get_team_route_ids
-
-
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from django.http import JsonResponse
+import json
+import calendar
+from datetime import date, datetime, timedelta
+from SFA.models import (
+    Employee, Route, MonthlyTourProgram, DailyTourPlan, 
+    LeaveApplication, Holiday, SystemSetting
+)
+from SFA.views.auth import get_full_team_employees, get_team_route_ids
 
-# 🌟 FIX: csrf_exempt hata kar DRF decorators lagayein
+# 🌟 FIX: Token Auth aur api_view lagaya gaya hai
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def api_mtp(request):
     try:
         employee = request.user.employee
-    except:
-        return JsonResponse({'error': 'Authentication failed'}, status=401)
-        
+    except AttributeError:
+        return Response({'error': 'Authentication failed'}, status=401)
+
     if request.method == "GET":
         return handle_get_mtp(employee)
     elif request.method == "POST":
         return handle_post_mtp(employee, request)
     else:
-        return JsonResponse({'error': 'Invalid request'}, status=405)
+        return Response({'error': 'Invalid request'}, status=405)
+
 
 def handle_get_mtp(employee):
     """Flutter ko MTP ka initial data (Calendar, Routes, Leaves) bhejne ke liye"""
@@ -299,18 +305,18 @@ def handle_get_mtp(employee):
 
     # Allowed Months Logic
     is_new_joiner = employee.joining_date and (today - employee.joining_date).days <= 7
-    setting, _ = SystemSetting.objects.get_or_create(company=employee.company)
+    setting = SystemSetting.objects.filter(company=employee.company).first()
+    allow_current_month = setting.allow_current_month_mtp if setting else False
 
     allowed_months = [
         {'month': next_month, 'year': next_year, 'name': calendar.month_name[next_month], 'label': f"{calendar.month_name[next_month]} {next_year}"}
     ]
-    if is_new_joiner or setting.allow_current_month_mtp:
+    if is_new_joiner or allow_current_month:
         allowed_months.insert(0, {'month': curr_month, 'year': current_year, 'name': calendar.month_name[curr_month], 'label': f"{calendar.month_name[curr_month]} {current_year}"})
 
-    # Routes Fetch
+    # 🌟 FIX: Routes Fetch mein Company filter lagaya
     team_employees = get_full_team_employees(employee)
     all_terr_ids = list(team_employees.exclude(headquarter__isnull=True).values_list('headquarter_id', flat=True))
-    # 🌟 FIX: Company filter lagaya taaki dusri company ke routes na aayein
     routes = Route.objects.filter(territory_id__in=all_terr_ids, company=employee.company, status='Approved').select_related('territory').order_by('category', 'name')
     routes_data = [{'id': r.id, 'name': r.name, 'category': r.category, 'territory': r.territory.name} for r in routes]
 
@@ -339,8 +345,10 @@ def handle_get_mtp(employee):
         while curr:
             if curr.designation == 'RBM': rbm_emp = curr; break
             curr = curr.manager
-        holiday_creators = list(Employee.objects.filter(designation='Admin', company=employee.company).values_list('id', flat=True))  # 🌟 FIX: company-scoped
+            
+        holiday_creators = list(Employee.objects.filter(designation='Admin', company=employee.company).values_list('id', flat=True))
         if rbm_emp: holiday_creators.append(rbm_emp.id)
+        
         holidays = Holiday.objects.filter(proposed_by_id__in=holiday_creators, status='Approved', date__month=mtp.month, date__year=mtp.year)
         holiday_dates = {h.date.day: h.name for h in holidays}
 
@@ -384,19 +392,20 @@ def handle_get_mtp(employee):
                 'days': days_list
             })
 
-    return JsonResponse({
+    return Response({
         'allowed_months': allowed_months,
         'routes': routes_data,
         'drafts': mtp_calendar_data
-    }, safe=False)
+    })
 
 
 def handle_post_mtp(employee, request):
     """Flutter se MTP Create, Save ya Submit karne ke liye"""
+    # 🌟 FIX: request.body se JSON parse karna (Token auth ke sath)
     try:
         data = json.loads(request.body)
     except:
-        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        return Response({'error': 'Invalid JSON'}, status=400)
 
     action = data.get('action')
 
@@ -408,26 +417,26 @@ def handle_post_mtp(employee, request):
         next_month, next_year = (1, current_year + 1) if curr_month == 12 else (curr_month + 1, current_year)
         
         is_new_joiner = employee.joining_date and (today - employee.joining_date).days <= 7
-        setting, _ = SystemSetting.objects.get_or_create(company=employee.company)
+        setting = SystemSetting.objects.filter(company=employee.company).first()
         allowed = [{'month': next_month, 'year': next_year}]
-        if is_new_joiner or setting.allow_current_month_mtp:
+        if is_new_joiner or (setting and setting.allow_current_month_mtp):
             allowed.append({'month': curr_month, 'year': current_year})
 
         is_allowed = any(am['month'] == m and am['year'] == y for am in allowed)
         if not is_allowed:
-            return JsonResponse({'error': '⚠️ Kripya sirf allowed mahine ka hi Tour Plan banayein.'}, status=403)
+            return Response({'error': '⚠️ Kripya sirf allowed mahine ka hi Tour Plan banayein.'}, status=403)
 
         if employee.joining_date:
             mtp_val = y * 12 + m
             join_val = employee.joining_date.year * 12 + employee.joining_date.month
             if mtp_val < join_val:
-                return JsonResponse({'error': f'❌ Aap apni joining date se pehle ka Tour Plan nahi bana sakte!'}, status=403)
+                return Response({'error': f'❌ Aap apni joining date se pehle ka Tour Plan nahi bana sakte!'}, status=403)
 
         if not MonthlyTourProgram.objects.filter(employee=employee, month=m, year=y).exists():
             mtp = MonthlyTourProgram.objects.create(employee=employee, month=m, year=y, status='Draft')
-            return JsonResponse({'success': True, 'message': 'Draft created!', 'mtp_id': mtp.id})
+            return Response({'success': True, 'message': 'Draft created!', 'mtp_id': mtp.id})
         else:
-            return JsonResponse({'error': 'Is mahine ka plan pehle se maujood hai!'}, status=400)
+            return Response({'error': 'Is mahine ka plan pehle se maujood hai!'}, status=400)
 
     elif action in ['save_plan', 'submit_plan']:
         mtp_id = data.get('mtp_id')
@@ -436,7 +445,7 @@ def handle_post_mtp(employee, request):
         try:
             mtp = MonthlyTourProgram.objects.get(id=mtp_id, employee=employee)
         except MonthlyTourProgram.DoesNotExist:
-            return JsonResponse({'error': 'MTP not found'}, status=404)
+            return Response({'error': 'MTP not found'}, status=404)
 
         DailyTourPlan.objects.filter(mtp=mtp).delete()
 
@@ -458,8 +467,8 @@ def handle_post_mtp(employee, request):
         if action == 'submit_plan':
             mtp.status = 'Pending'
             mtp.save()
-            return JsonResponse({'success': True, 'message': f'🚀 MTP for {calendar.month_name[mtp.month]} submitted to Manager!'})
+            return Response({'success': True, 'message': f'🚀 MTP for {calendar.month_name[mtp.month]} submitted to Manager!'})
         else:
-            return JsonResponse({'success': True, 'message': '💾 Draft saved successfully!'})
+            return Response({'success': True, 'message': '💾 Draft saved successfully!'})
 
-    return JsonResponse({'error': 'Invalid action provided'}, status=400)
+    return Response({'error': 'Invalid action provided'}, status=400)
