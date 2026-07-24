@@ -53,6 +53,9 @@ __all__ = [
 def login_view(request):
     """Standard Django session-based login — web browser ke liye."""
     if request.user.is_authenticated:
+        # 🌟 FIX: Agar Employee profile nahi hai, toh admin panel par bhej do, warna loop ban jayega
+        if not hasattr(request.user, 'employee'):
+            return redirect('/admin/')
         return redirect('mr_dashboard')
 
     if request.method == 'POST':
@@ -62,11 +65,13 @@ def login_view(request):
         )
         if user:
             login(request, user)
+            # 🌟 FIX: Login hone ke baad bhi same check lagana
+            if not hasattr(user, 'employee'):
+                return redirect('/admin/')
             return redirect('mr_dashboard')
         return render(request, 'login.html', {'error': 'Invalid Credentials'})
 
     return render(request, 'login.html')
-
 
 def logout_view(request):
     """Session logout — web browser ke liye."""
