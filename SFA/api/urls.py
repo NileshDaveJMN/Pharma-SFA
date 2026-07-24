@@ -2,6 +2,7 @@
 SFA/api/urls.py — Flutter REST API complete URL patterns
 """
 from django.urls import path
+from django.http import JsonResponse
 from SFA.api.masters import api_add_route
 from SFA.api.reports_core import api_primary_sales_report
 from .core import api_delete_visit
@@ -23,6 +24,9 @@ from SFA.api.core_misc import api_my_requests
 
 # 🌟 Naya Messaging Import
 from SFA.api import messaging
+# 🌟 NAYA: Cron-job ke liye lightweight endpoint
+def api_health_check(request):
+    return JsonResponse({"status": "ok"})
 
 urlpatterns = [
     # ── Auth ──────────────────────────────────────────────────────────────────
@@ -30,7 +34,8 @@ urlpatterns = [
     path('auth/logout/',   auth_api.api_logout,    name='api_logout'),
     path('auth/profile/',  auth_api.api_profile,   name='api_profile'),
     path('auth/team/',     auth_api.api_team_tree, name='api_team_tree'),
-
+# ── 🌟 HEALTH CHECK (Render awake rakhne ke liye) ──
+    path('health/', api_health_check),
     # ── Core / DCR ────────────────────────────────────────────────────────────
     path('dashboard/',  core_api.api_dashboard, name='api_dashboard'),
     path('day-start/',  core_api.api_day_start, name='api_day_start'),
