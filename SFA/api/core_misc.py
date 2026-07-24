@@ -270,22 +270,25 @@ from SFA.models import (
 from SFA.views.auth import get_full_team_employees, get_team_route_ids
 
 
-@csrf_exempt # Testing ke liye hai, baad me TokenAuth laga lena
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+# 🌟 FIX: csrf_exempt hata kar DRF decorators lagayein
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
 def api_mtp(request):
-    # Flutter se Token auth se logged in employee milega
-    # Agar aapne alag auth middleware banaya hai toh uske hisaab se lo, else ye simple way:
     try:
         employee = request.user.employee
     except:
         return JsonResponse({'error': 'Authentication failed'}, status=401)
-
+        
     if request.method == "GET":
         return handle_get_mtp(employee)
     elif request.method == "POST":
         return handle_post_mtp(employee, request)
     else:
         return JsonResponse({'error': 'Invalid request'}, status=405)
-
 
 def handle_get_mtp(employee):
     """Flutter ko MTP ka initial data (Calendar, Routes, Leaves) bhejne ke liye"""
