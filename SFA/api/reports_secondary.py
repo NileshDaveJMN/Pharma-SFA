@@ -64,7 +64,8 @@ def api_stockist_statement(request):
 
     emp_id = request.GET.get('employee_id', str(employee.id))
     try:
-        selected_emp = Employee.objects.get(id=emp_id)
+        # 🌟 FIX: IDOR Prevention - Cross-company employee fetch rokna
+        selected_emp = Employee.objects.get(id=emp_id, company=employee.company)
     except (Employee.DoesNotExist, ValueError):
         selected_emp = employee
 

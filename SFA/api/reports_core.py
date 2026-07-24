@@ -362,6 +362,10 @@ def api_dcr_detail(request, dcr_id):
         id=dcr_id,
     )
 
+    # 🌟 FIX: IDOR Attack Block — Direct company check
+    if daily_dcr.employee.company_id != employee.company_id:
+        return Response({'error': 'Access denied: Cross-company DCR access blocked.'}, status=403)
+
     # 🌟 Permission check: khud ki DCR, ya apni team ke kisi member ki
     allowed_ids = set(get_full_team_employees(employee).values_list('id', flat=True))
     if daily_dcr.employee_id not in allowed_ids:

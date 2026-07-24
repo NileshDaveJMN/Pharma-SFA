@@ -19,7 +19,7 @@ from SFA.models import (
     DayEnd, MRInventory, GiftCampaignPlan, DoctorROILedger,
     PartyWiseSaleReport, PartyWiseSaleLine, PrimarySale,
     SystemSetting, MonthlyTargetMaster, TerritoryTarget,
-    DoctorRxMapping  # 🌟 YEH LINE ADD KARO
+    DoctorRxMapping
 )
 from SFA.services.team import get_dropdown_team
 from SFA.views.core import get_open_day
@@ -47,7 +47,8 @@ def api_doctor_visit_form(request, doc_id):
     if not open_day:
         return Response({'error': 'Pehle Day Start karein!'}, status=400)
 
-    doctor = get_object_or_404(Doctor, id=doc_id)
+    # 🌟 FIX: Sirf usi company ka doctor allow karo
+    doctor = get_object_or_404(Doctor, id=doc_id, company=employee.company)
     today = open_day.date
 
     my_inventory = MRInventory.objects.filter(employee=employee, stock_qty__gt=0).select_related('item', 'item__linked_product')
@@ -122,7 +123,8 @@ def api_doctor_visit_submit(request):
     if not doctor_id:
         return Response({'error': 'doctor_id required hai'}, status=400)
 
-    doctor = get_object_or_404(Doctor, id=doctor_id)
+    # 🌟 FIX: Sirf usi company ka doctor allow karo
+    doctor = get_object_or_404(Doctor, id=doctor_id, company=employee.company)
 
     setting = SystemSetting.objects.filter(company=employee.company).first()
     is_backdated = open_day.date < timezone.localdate()
@@ -202,7 +204,8 @@ def api_chemist_visit_submit(request):
     if not chemist_id:
         return Response({'error': 'chemist_id required hai'}, status=400)
 
-    chemist = get_object_or_404(Chemist, id=chemist_id)
+    # 🌟 FIX: Sirf usi company ka chemist allow karo
+    chemist = get_object_or_404(Chemist, id=chemist_id, company=employee.company)
 
     try:
         daily_dcr, _ = DailyDCR.objects.get_or_create(employee=employee, date=open_day.date)
@@ -338,7 +341,9 @@ def api_party_wise_get(request):
     selected_emp_id = request.query_params.get('employee_id')
     if not selected_emp_id:
         selected_emp_id = str(employee.id)
-    selected_emp = get_object_or_404(Employee, id=selected_emp_id)
+    
+    # 🌟 FIX: Cross-company employee block
+    selected_emp = get_object_or_404(Employee, id=selected_emp_id, company=employee.company)
 
     my_terr_ids = [selected_emp.headquarter_id] if selected_emp.headquarter_id else []
     available_stockists = Stockist.objects.filter(territory_id__in=my_terr_ids).order_by('name')
@@ -412,7 +417,8 @@ def api_party_wise_submit(request):
 
     emp_id = data.get('employee_id', employee.id)
     try:
-        selected_emp = Employee.objects.get(id=emp_id)
+        # 🌟 FIX: Cross-company employee block
+        selected_emp = Employee.objects.get(id=emp_id, company=employee.company)
     except Employee.DoesNotExist:
         selected_emp = employee
 
@@ -430,8 +436,9 @@ def api_party_wise_submit(request):
     if not chemist_id: return Response({'error': 'chemist_id required hai'}, status=400)
     if not lines: return Response({'error': 'Koi product line nahi di'}, status=400)
 
-    stockist = get_object_or_404(Stockist, id=stockist_id)
-    chemist = get_object_or_404(Chemist, id=chemist_id)
+    # 🌟 FIX: Cross-company stockist/chemist block
+    stockist = get_object_or_404(Stockist, id=stockist_id, company=employee.company)
+    chemist = get_object_or_404(Chemist, id=chemist_id, company=employee.company)
 
     try:
         report, _ = PartyWiseSaleReport.objects.get_or_create(employee=selected_emp, stockist=stockist, month=curr_month, year=curr_year)
@@ -474,14 +481,17 @@ def api_classify_rx(request):
     selected_emp_id = request.query_params.get('employee_id') or request.data.get('employee_id')
     if not selected_emp_id:
         selected_emp_id = str(employee.id)
-    selected_emp = get_object_or_404(Employee, id=selected_emp_id)
+    
+    # 🌟 FIX: Cross-company employee block
+    selected_emp = get_object_or_404(Employee, id=selected_emp_id, company=employee.company)
 
     if request.method == 'GET':
         stockist_id = request.query_params.get('stockist_id')
         if not stockist_id:
             return Response({'success': False, 'error': 'Stockist ID is required.'}, status=400)
             
-        stockist = get_object_or_404(Stockist, id=stockist_id)
+        # 🌟 FIX: Cross-company stockist block
+        stockist = get_object_or_404(Stockist, id=stockist_id, company=employee.company)
         report = PartyWiseSaleReport.objects.filter(stockist=stockist, month=month, year=year, employee=selected_emp).first()
         
         lines_data = []
@@ -507,7 +517,6 @@ def api_classify_rx(request):
                     line_info['mappings'] = [{'doctor_name': m.doctor.name, 'billed': m.mapped_billed_qty, 'free': m.mapped_free_qty} for m in mappings]
                     classified_lines_data.append(line_info)
                     
-        # 🌟 FIX: Define variables before returning
         doctors = Doctor.objects.filter(allocated_to=selected_emp, status='Approved').order_by('name')
         doc_data = [{'id': d.id, 'name': f"Dr. {d.name}"} for d in doctors]
         
@@ -530,7 +539,8 @@ def api_classify_rx(request):
         m_billed = int(request.data.get('mapped_billed', 0))
         m_free = int(request.data.get('mapped_free', 0))
         
-        target_line = get_object_or_404(PartyWiseSaleLine, id=line_id)
+        # 🌟 FIX: Cross-company party line block
+        target_line = get_object_or_404(PartyWiseSaleLine, id=line_id, report__employee__company=employee.company)
         current_mapped_billed = sum(m.mapped_billed_qty for m in target_line.dr_mappings.all())
         current_mapped_free = sum(m.mapped_free_qty for m in target_line.dr_mappings.all())
         
@@ -651,16 +661,8 @@ def api_gift_campaign(request):
 
         created = 0
         for doc_id in new_docs_to_add:
-            doctor = get_object_or_404(Doctor, id=doc_id)
-            GiftCampaignPlan.objects.create(employee=employee, doctor=doctor, item_id=item_id, month=month, year=year, status='Pending')
-            created += 1
-
-        if created > 0:
-             return Response({'success': False, 'error': f'Stock Limit Exceeded! {inventory.item.name} ka total stock {inventory.stock_qty} hai. (Jisme se {already_allocated} already assigned hain). Aap is baar sirf {available_to_assign} aur select kar sakte hain.'}, status=400)
-
-        created = 0
-        for doc_id in new_docs_to_add:
-            doctor = get_object_or_404(Doctor, id=doc_id)
+            # 🌟 FIX: Sirf usi company ka doctor allow karo
+            doctor = get_object_or_404(Doctor, id=doc_id, company=employee.company)
             GiftCampaignPlan.objects.create(employee=employee, doctor=doctor, item_id=item_id, month=month, year=year, status='Pending')
             created += 1
 

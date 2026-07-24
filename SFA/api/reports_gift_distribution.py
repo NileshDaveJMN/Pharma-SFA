@@ -44,7 +44,11 @@ def api_gift_distribution_report(request):
     inv_type = request.GET.get('inv_type', 'any_gift')
 
     # 1. DISTRIBUTED GIFTS LOGIC
-    if is_manager_view and selected_emp_id: 
+    # 🌟 FIX: IDOR Attack Block — Agar selected_emp_id uski team ka nahi hai, toh access deny karo
+    if is_manager_view and selected_emp_id:
+        if not team_employees.filter(id=selected_emp_id).exists():
+            return Response({'error': 'Access denied: You can only view reports for your team members.'}, status=403)
+            
         qs = DoctorROILedger.objects.filter(employee_id=selected_emp_id)
         plan_qs = GiftCampaignPlan.objects.filter(employee_id=selected_emp_id)
     elif is_manager_view: 

@@ -84,7 +84,8 @@ def send_message_view(request):
         body = request.data.get('body')
         parent_id = request.data.get('parent_id')
         
-        receiver = Employee.objects.get(id=receiver_id)
+        # 🌟 FIX: Sirf usi company ke employee ko mail bhej sake
+        receiver = Employee.objects.get(id=receiver_id, company=employee.company)
         
         msg = InternalMessage.objects.create(
             sender=employee,

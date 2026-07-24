@@ -235,7 +235,8 @@ def api_route_playback(request, employee_id, date_str):
     except AttributeError:
         return Response({'error': 'Employee profile missing'}, status=400)
 
-    emp = get_object_or_404(Employee, id=employee_id)
+    # 🌟 FIX: Company check ke sath fetch karo
+    emp = get_object_or_404(Employee, id=employee_id, company=employee.company)
 
     # 🌟 Permission check: khud ka data, ya apni team ke kisi member ka
     allowed_ids = set(get_full_team_employees(employee).values_list('id', flat=True))
@@ -522,7 +523,8 @@ def api_free_claims(request):
         if not stockist_id:
             return Response({'success': False, 'error': 'Stockist select karna zaroori hai.'}, status=400)
 
-        stockist = get_object_or_404(Stockist, id=stockist_id)
+        # 🌟 FIX: Sirf usi company ka stockist allow karo
+        stockist = get_object_or_404(Stockist, id=stockist_id, company=employee.company)
         master = FreeQtyClaimMaster.objects.filter(employee=employee, stockist=stockist, month=month, year=year).first()
 
         if action == 'submit':

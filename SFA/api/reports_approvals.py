@@ -82,12 +82,13 @@ def api_approval_hub(request):
     pending_targets, pending_free_claims = [], []
 
     if is_admin:
-        pt_admin = MonthlyTargetMaster.objects.exclude(status__in=['Draft', 'Approved', 'Rejected']).order_by('-year', '-month')
+        pt_admin = MonthlyTargetMaster.objects.exclude(status__in=['Draft', 'Approved', 'Rejected']).filter(territory__company=manager.company).order_by('-year', '-month')
+
         for t in pt_admin:
             if t.status == 'Pending_Admin' or _chain_approved_for_target(t, manager):
                 pending_targets.append(t)
 
-        fc_admin = FreeQtyClaimMaster.objects.exclude(status__in=['Draft', 'Approved', 'Rejected']).order_by('created_at')
+        fc_admin = FreeQtyClaimMaster.objects.exclude(status__in=['Draft', 'Approved', 'Rejected']).filter(employee__company=manager.company).order_by('created_at')
         for c in fc_admin:
             if c.status == 'Pending_Admin':
                 pending_free_claims.append(c)
@@ -299,6 +300,25 @@ def api_approval_action(request):
 
     obj = get_object_or_404(model, id=iid)
     is_admin = manager.designation in ('Admin', 'System Administrator')
+
+    # 🌟 FIX: IDOR Attack Block — Cross-company approval/reject rokna
+    target_emp = None
+    if itype in ['mtp', 'monthly_expense', 'leave', 'free_claim', 'gift_campaign', 'doctor_edit', 'chemist_edit']:
+        target_emp = getattr(obj, 'employee', None)
+    elif itype in ['doctor', 'chemist']:
+        target_emp = getattr(obj, 'allocated_to', None)
+    elif itype == 'route':
+        target_emp = getattr(obj, 'requested_by', None)
+    elif itype == 'holiday':
+        target_emp = getattr(obj, 'proposed_by', None)
+    
+    # Agar object kisika hai, toh check karo ki wo usi company ka hai ya nahi
+    if target_emp and target_emp.company_id != manager.company_id:
+        return Response({'error': 'Access denied: You cannot approve/reject items from another company.'}, status=403)
+        
+    # Target object mein employee nahi hota, usme territory hota hai
+    if itype == 'target' and hasattr(obj, 'territory') and obj.territory.company_id != manager.company_id:
+        return Response({'error': 'Access denied: You cannot approve/reject items from another company.'}, status=403)
 
     if action == 'approve':
         if itype == 'free_claim':

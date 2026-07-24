@@ -70,9 +70,19 @@ def _resolve_selected_employee(request, employee):
             default_emp_id = str(first_sub.id)
 
     selected_emp_id = request.GET.get('employee_id') or default_emp_id
-    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
+    
+    # 🌟 FIX: Multi-Company Data Leak Block (IDOR Prevention)
+    # 1. Pehle ensure karo ki jo ID request mein aayi hai, wo usi company ki hai
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)
+    
+    # 2. Agar user Manager/Hierarchy wala hai (Admin chhodkar), toh check karo ki 
+    #    kya wo selected employee uski team mein hai? Agar nahi hai, toh access deny!
+    if employee.designation not in ['Admin', 'System Administrator', 'MR']:
+        if selected_emp.id != employee.id and not team_employees.filter(id=selected_emp.id).exists():
+            # Agar koi Manager dusre Manager ki team ka ID daal raha hai, toh usko uska default data hi dikhao
+            selected_emp = employee
+            
     return selected_emp, team_employees
-
 
 def _employee_brief(emp):
     return {

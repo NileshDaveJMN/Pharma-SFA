@@ -34,6 +34,10 @@ from SFA.company_helpers import (
 # 🩺 DOCTORS
 # ==============================================================================
 
+# ==============================================================================
+# 🩺 DOCTORS
+# ==============================================================================
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def api_doctors(request):
@@ -83,19 +87,29 @@ def api_doctors(request):
 
         allocated_id = data.get('allocated_to_id')
         if allocated_id and employee.designation != 'MR':
-            allocated_emp = get_object_or_404(Employee, id=allocated_id)
+            # 🌟 FIX: company filter lagaya taaki cross-company employee assign na ho
+            allocated_emp = get_object_or_404(Employee, id=allocated_id, company=employee.company)
             if not team_employees.filter(id=allocated_emp.id).exists():
                 return Response({'error': 'Access denied — ye employee tumhari team mein nahi hai'}, status=403)
         else:
             allocated_emp = employee
 
+        # 🌟 FIX: Territory aur Route ko bhi company se verify karo
+        territory_id = data.get('territory') or data.get('territory_id') or None
+        route_id = data.get('route') or data.get('route_id') or None
+
+        if territory_id:
+            get_object_or_404(Territory, id=territory_id, company=employee.company)
+        if route_id:
+            get_object_or_404(Route, id=route_id, company=employee.company)
+
         try:
             doctor = Doctor(
-                company=allocated_emp.company,  # 🌟 FIX: explicit company — save() fallback par rely nahi karna
+                company=allocated_emp.company,  # 🌟 FIX: explicit company
                 name=name,
                 specialty=(data.get('specialty') or '').strip() or None,
-                territory_id=data.get('territory') or data.get('territory_id') or None,
-                route_id=data.get('route') or data.get('route_id') or None,
+                territory_id=territory_id,
+                route_id=route_id,
                 allocated_to=allocated_emp,
                 address=(data.get('address') or '').strip() or None,
                 residential_address=(data.get('residential_address') or '').strip() or None,
@@ -247,20 +261,30 @@ def api_chemists(request):
 
     allocated_id = data.get('allocated_to_id')
     if allocated_id and employee.designation != 'MR':
-        allocated_emp = get_object_or_404(Employee, id=allocated_id)
+        # 🌟 FIX: company filter lagaya
+        allocated_emp = get_object_or_404(Employee, id=allocated_id, company=employee.company)
         if not team_employees.filter(id=allocated_emp.id).exists():
             return Response({'error': 'Access denied'}, status=403)
     else:
         allocated_emp = employee
 
+    # 🌟 FIX: Territory aur Route ko bhi company se verify karo
+    territory_id = data.get('territory_id') or None
+    route_id = data.get('route_id') or None
+
+    if territory_id:
+        get_object_or_404(Territory, id=territory_id, company=employee.company)
+    if route_id:
+        get_object_or_404(Route, id=route_id, company=employee.company)
+
     try:
         chemist = Chemist.objects.create(
-            company=allocated_emp.company,  # 🌟 FIX: explicit company — save() fallback par rely nahi karna
+            company=allocated_emp.company,  # 🌟 FIX: explicit company
             name=name,
             phone=(data.get('phone') or '').strip() or None,
             address=(data.get('address') or '').strip() or None,
-            territory_id=data.get('territory_id') or None,
-            route_id=data.get('route_id') or None,
+            territory_id=territory_id,
+            route_id=route_id,
             allocated_to=allocated_emp,
         )
         return Response({
@@ -334,7 +358,6 @@ def api_chemist_edit_request(request, chem_id):
 # ==============================================================================
 # 🗺️ ROUTES & TERRITORIES
 # ==============================================================================
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_routes(request):

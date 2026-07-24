@@ -118,10 +118,11 @@ def api_update_location(request):
     lat = request.data.get('latitude')
     lng = request.data.get('longitude')
 
+    # 🌟 FIX: Sirf usi company ka doctor/chemist update ho sake
     if role == 'doctor':
-        target = get_object_or_404(Doctor, id=target_id)
+        target = get_object_or_404(Doctor, id=target_id, company=employee.company)
     elif role == 'chemist':
-        target = get_object_or_404(Chemist, id=target_id)
+        target = get_object_or_404(Chemist, id=target_id, company=employee.company)    
     else:
         return Response({'success': False, 'error': 'Invalid role provided.'}, status=400)
 
@@ -171,7 +172,8 @@ def api_messages(request):
         if not receiver_id or not body:
             return Response({'success': False, 'error': 'Receiver ya message missing hai.'}, status=400)
             
-        receiver_emp = get_object_or_404(Employee, id=receiver_id)
+        # 🌟 FIX: Cross-company message block
+        receiver_emp = get_object_or_404(Employee, id=receiver_id, company=employee.company)        
         DirectMessage.objects.create(sender=employee, receiver=receiver_emp, message=body)
         return Response({'success': True, 'message': f'Message sent to {receiver_emp.name}!'})
 
@@ -181,14 +183,16 @@ def api_messages(request):
     
     allowed_ids = []
     if employee.designation in ['Admin', 'System Administrator']:
-        contacts = Employee.objects.exclude(id=employee.id).order_by('-designation', 'name')
+        # 🌟 FIX: Sirf apni company ke employees dikhao
+        contacts = Employee.objects.filter(company=employee.company).exclude(id=employee.id).order_by('-designation', 'name')
     else:
         allowed_ids = list(get_full_team_employees(employee).values_list('id', flat=True))
         curr = employee.manager
         while curr:
             if curr.is_active: allowed_ids.append(curr.id)
             curr = curr.manager
-        admin_ids = list(Employee.objects.filter(designation__in=['Admin', 'System Administrator']).values_list('id', flat=True))
+        # 🌟 FIX: Sirf apni company ke admins dikhao
+        admin_ids = list(Employee.objects.filter(company=employee.company, designation__in=['Admin', 'System Administrator']).values_list('id', flat=True))
         allowed_ids.extend(admin_ids)
         contacts = Employee.objects.filter(id__in=set(allowed_ids)).exclude(id=employee.id).order_by('-designation', 'name')
 
@@ -303,7 +307,8 @@ def handle_get_mtp(employee):
     # Routes Fetch
     team_employees = get_full_team_employees(employee)
     all_terr_ids = list(team_employees.exclude(headquarter__isnull=True).values_list('headquarter_id', flat=True))
-    routes = Route.objects.filter(territory_id__in=all_terr_ids, status='Approved').select_related('territory').order_by('category', 'name')
+    # 🌟 FIX: Company filter lagaya taaki dusri company ke routes na aayein
+    routes = Route.objects.filter(territory_id__in=all_terr_ids, company=employee.company, status='Approved').select_related('territory').order_by('category', 'name')
     routes_data = [{'id': r.id, 'name': r.name, 'category': r.category, 'territory': r.territory.name} for r in routes]
 
     # Existing Drafts Fetch

@@ -40,11 +40,11 @@ from rest_framework.response import Response
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def api_doctor_visit_detail(request, visit_id):
+    # 🌟 FIX: employee direct field nahi hai, daily_dcr ke through aata hai
     try:
-        # Aapke model ka naam DCRVisit ya jo bhi ho, yahan use karein
-        visit = DCRVisit.objects.get(id=visit_id, employee=request.user.employee)
+        visit = DCRVisit.objects.get(id=visit_id, daily_dcr__employee=request.user.employee)
     except DCRVisit.DoesNotExist:
-        return Response({'error': 'Visit not found.'}, status=404)
+        return Response({'error': 'Visit not found.'}, status=404)    
 
     # 🗑️ DELETE VISIT
     if request.method == 'DELETE':
@@ -161,7 +161,8 @@ def api_edit_visit(request, visit_id):
             new_sq = int(p_data.get('sample_qty', 0))
             oq = int(p_data.get('order_qty', 0))
             
-            p = get_object_or_404(Product, id=p_id)
+            # 🌟 FIX: Sirf usi company ka product allow karo
+            p = get_object_or_404(Product, id=p_id, company=employee.company)
             old_sq = 0
             
             d = DCRProductDetail.objects.filter(visit=visit, product=p).first()
