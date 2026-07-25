@@ -40,10 +40,8 @@ urlpatterns = [
     path('notifications/',    core_api.api_notifications,   name='api_notifications'),
     path('messages/',         core_api.api_messages,        name='api_messages'),
     path('messaging/sent/', messaging.sent_items_view, name='api_sent_items'), # 🌟 NAYA
-    # 🌟 FIX: Vacancy URL hata diya gaya hai
     path('my-requests/',      core_api.api_my_requests,      name='api_my_requests'),
     path('visits/<int:visit_id>/edit/', core_api.api_edit_visit, name='api_edit_visit'),
-    # 🌟 FIX: Deleted visit URL from core, now using sales_api
     path('mtp/', core_api.api_mtp, name='api_mtp'),
 
     # ── Masters ───────────────────────────────────────────────────────────────
@@ -71,16 +69,14 @@ urlpatterns = [
     path('visits/doctor/form/<int:doc_id>/', sales_api.api_doctor_visit_form,    name='api_doctor_visit_form'),
     path('visits/doctor/',                   sales_api.api_doctor_visit_submit,  name='api_doctor_visit_submit'),
     path('visits/chemist/',                  sales_api.api_chemist_visit_submit, name='api_chemist_visit_submit'),
-    # 🌟 FIX: Removed duplicate delete path and pointed to sales_api
-    path('visits/<int:visit_id>/',           sales_api.api_delete_visit,         name='api_delete_visit_alt'), 
-
-    path('visits/<int:visit_id>/delete/',    sales_api.api_delete_visit,         name='api_delete_visit'),
+    
+    # 🌟 FIX: Deleted visit URL pointing to sales_api
+    path('visits/<int:visit_id>/',           sales_api.api_delete_visit,         name='api_delete_visit'), 
     
     path('sales/party-wise/', sales_api.api_party_wise_get, name='api_party_wise_get'),
     path('sales/party-wise/submit/',         sales_api.api_party_wise_submit,    name='api_party_wise_submit'),    
 
     path('sales/targets/',                   sales_api.api_target_setting,       name='api_target_setting'),
-    
     path('gift-campaign/',                   sales_api.api_gift_campaign,        name='api_gift_campaign'),
 
     # ── Expenses ──────────────────────────────────────────────────────────────
