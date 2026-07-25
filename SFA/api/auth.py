@@ -122,21 +122,21 @@ def api_profile(request):
         
         if emp_id:
             try:
-                target_emp = Employee.objects.get(id=emp_id, company=employee.company)
+                target_emp = Employee.objects.get(id=emp_id, company=emp.company)
                 # 🛡️ Security Check: Kya ye employee uski team ya hierarchy mein hai?
-                team_members = get_full_team_employees(employee)
-                managers = employee.get_my_managers()
+                team_members = get_full_team_employees(emp)
+                managers = emp.get_my_managers()
                 allowed_ids = set(team_members.values_list('id', flat=True)) | set([m.id for m in managers])
                 
-                if target_emp.id not in allowed_ids and target_emp.id != employee.id:
+                if target_emp.id not in allowed_ids and target_emp.id != emp.id:
                     return Response({'error': 'Access Denied: You can only view your team members.'}, status=403)
                     
-                employee = target_emp # Agar sab sahi hai, toh profile target employee ki dikhao
+                emp = target_emp # Agar sab sahi hai, toh profile target employee ki dikhao
             except Employee.DoesNotExist:
                 return Response({'error': 'Employee not found'}, status=404)
 
-        data = _employee_dict(employee, include_manager=True)
-        return Response(data, status=200)    
+        data = _employee_dict(emp, include_manager=True)
+        return Response(data, status=status.HTTP_200_OK)
 
     if request.method == 'PUT':
         action = request.data.get('action')
@@ -144,22 +144,25 @@ def api_profile(request):
         if action == 'update_profile':
             emp.phone = request.data.get('phone', emp.phone)
             emp.address = request.data.get('address', emp.address)
+            
             if 'photo' in request.FILES:
                 emp.photo = request.FILES['photo']
+                
             emp.save()
             return Response({'message': 'Profile updated successfully!', 'employee': _employee_dict(emp, True)})
 
         elif action == 'change_password':
             old_pwd = request.data.get('old_password')
             new_pwd = request.data.get('new_password')
+            
             if not request.user.check_password(old_pwd):
                 return Response({'error': 'Old password is wrong'}, status=400)
+                
             request.user.set_password(new_pwd)
             request.user.save()
             return Response({'message': 'Password updated successfully!!'})
 
         return Response({'error': 'Invalid action'}, status=400)
-
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
