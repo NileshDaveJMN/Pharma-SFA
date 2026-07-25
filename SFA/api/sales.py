@@ -319,11 +319,6 @@ def api_delete_visit(request, visit_id):
     visit.delete()
     return Response({'message': 'Visit delete ho gayi!'})
 
-
-# ==============================================================================
-# 💊 PARTY WISE SALE
-# ==============================================================================
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_party_wise_get(request):
@@ -342,7 +337,6 @@ def api_party_wise_get(request):
     if not selected_emp_id:
         selected_emp_id = str(employee.id)
     
-    # 🌟 FIX: Cross-company employee block
     selected_emp = get_object_or_404(Employee, id=selected_emp_id, company=employee.company)
 
     my_terr_ids = [selected_emp.headquarter_id] if selected_emp.headquarter_id else []
@@ -385,6 +379,10 @@ def api_party_wise_get(request):
     chemists = Chemist.objects.filter(allocated_to=selected_emp, status='Approved').order_by('name')
     chem_data = [{'id': c.id, 'name': c.name} for c in chemists]
     
+    # 🌟 NAYA: Doctors ki list bhejni hai taaki Flutter mein dropdown bhar sake
+    doctors = Doctor.objects.filter(allocated_to=selected_emp, status='Approved').order_by('name')
+    doc_data = [{'id': d.id, 'name': f"Dr. {d.name}"} for d in doctors]
+    
     stockist_data = [{'id': s.id, 'name': s.name} for s in available_stockists]
     team_data = [{'id': e.id, 'name': e.name} for e in team_employees]
 
@@ -394,7 +392,7 @@ def api_party_wise_get(request):
         'is_manager_view': is_manager_view, 'team_employees': team_data, 
         'selected_emp_id': int(selected_emp_id), 'stockists': stockist_data,
         'selected_stockist_id': int(selected_stockist_id) if selected_stockist_id else None,
-        'balances': balances, 'chemists': chem_data
+        'balances': balances, 'chemists': chem_data, 'doctors': doc_data
     })
 
 @api_view(['POST'])
@@ -417,7 +415,6 @@ def api_party_wise_submit(request):
 
     emp_id = data.get('employee_id', employee.id)
     try:
-        # 🌟 FIX: Cross-company employee block
         selected_emp = Employee.objects.get(id=emp_id, company=employee.company)
     except Employee.DoesNotExist:
         selected_emp = employee
@@ -430,13 +427,13 @@ def api_party_wise_submit(request):
 
     stockist_id = data.get('stockist_id')
     chemist_id = data.get('chemist_id')
+    doctor_id = data.get('doctor_id') # 🌟 NAYA: Doctor ID receive karna
     lines = data.get('lines', [])
 
     if not stockist_id: return Response({'error': 'stockist_id required hai'}, status=400)
     if not chemist_id: return Response({'error': 'chemist_id required hai'}, status=400)
     if not lines: return Response({'error': 'Koi product line nahi di'}, status=400)
 
-    # 🌟 FIX: Cross-company stockist/chemist block
     stockist = get_object_or_404(Stockist, id=stockist_id, company=employee.company)
     chemist = get_object_or_404(Chemist, id=chemist_id, company=employee.company)
 
@@ -448,7 +445,16 @@ def api_party_wise_submit(request):
             bq = int(line.get('billed_qty') or 0)
             fq = int(line.get('free_qty') or 0)
             if bq > 0 or fq > 0:
-                PartyWiseSaleLine.objects.create(report=report, chemist=chemist, product_id=line.get('product_id'), billed_qty=bq, free_qty=fq)
+                # 1. PartyWiseSaleLine (Chemist ko sale) create karo
+                new_line = PartyWiseSaleLine.objects.create(
+                    report=report, chemist=chemist, product_id=line.get('product_id'), billed_qty=bq, free_qty=fq
+                )
+                
+                # 🌟 NAYA: Agar Doctor select kiya gaya hai, toh DoctorRxMapping (Classify Rx) bhi turant create kar do
+                if doctor_id:
+                    DoctorRxMapping.objects.create(
+                        party_line=new_line, doctor_id=doctor_id, mapped_billed_qty=bq, mapped_free_qty=fq
+                    )
                 saved += 1
 
         if saved == 0:
@@ -458,102 +464,6 @@ def api_party_wise_submit(request):
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
-
-
-# ====================================================================
-# 1. CLASSIFY RX API
-# ====================================================================
-@api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
-def api_classify_rx(request):
-    employee = request.user.employee
-    today = timezone.now().date()
-    
-    month, year = (12, today.year - 1) if today.month == 1 else (today.month - 1, today.year)
-    
-    setting = SystemSetting.objects.filter(company=employee.company).first()
-    deadline = setting.sale_upload_deadline_day if setting and setting.sale_upload_deadline_day else 4
-    is_locked = today.day > deadline
-    
-    team_employees = get_dropdown_team(employee).filter(designation='MR', is_active=True)
-    is_manager_view = employee.designation != 'MR'
-    
-    selected_emp_id = request.query_params.get('employee_id') or request.data.get('employee_id')
-    if not selected_emp_id:
-        selected_emp_id = str(employee.id)
-    
-    # 🌟 FIX: Cross-company employee block
-    selected_emp = get_object_or_404(Employee, id=selected_emp_id, company=employee.company)
-
-    if request.method == 'GET':
-        stockist_id = request.query_params.get('stockist_id')
-        if not stockist_id:
-            return Response({'success': False, 'error': 'Stockist ID is required.'}, status=400)
-            
-        # 🌟 FIX: Cross-company stockist block
-        stockist = get_object_or_404(Stockist, id=stockist_id, company=employee.company)
-        report = PartyWiseSaleReport.objects.filter(stockist=stockist, month=month, year=year, employee=selected_emp).first()
-        
-        lines_data = []
-        classified_lines_data = []
-        
-        if report:
-            for line in PartyWiseSaleLine.objects.filter(report=report).select_related('chemist', 'product'):
-                mappings = line.dr_mappings.select_related('doctor').all()
-                mapped_billed = sum(m.mapped_billed_qty for m in mappings)
-                mapped_free = sum(m.mapped_free_qty for m in mappings)
-                
-                bal_billed = line.billed_qty - mapped_billed
-                bal_free = line.free_qty - mapped_free
-                
-                line_info = {
-                    'line_id': line.id, 'chemist_name': line.chemist.name, 'product_name': line.product.name,
-                    'billed_qty': line.billed_qty, 'free_qty': line.free_qty, 'bal_billed': bal_billed, 'bal_free': bal_free
-                }
-                
-                if bal_billed > 0 or bal_free > 0:
-                    lines_data.append(line_info)
-                else:
-                    line_info['mappings'] = [{'doctor_name': m.doctor.name, 'billed': m.mapped_billed_qty, 'free': m.mapped_free_qty} for m in mappings]
-                    classified_lines_data.append(line_info)
-                    
-        doctors = Doctor.objects.filter(allocated_to=selected_emp, status='Approved').order_by('name')
-        doc_data = [{'id': d.id, 'name': f"Dr. {d.name}"} for d in doctors]
-        
-        team_data = [{'id': e.id, 'name': e.name} for e in team_employees]
-        
-        return Response({
-            'success': True, 'is_locked': is_locked, 'deadline_day': deadline,
-            'month': month, 'year': year,
-            'pending_lines': lines_data, 'classified_lines': classified_lines_data,
-            'doctors': doc_data, 'is_manager_view': is_manager_view,
-            'team_employees': team_data, 'selected_emp_id': int(selected_emp_id)
-        })        
-
-    if request.method == 'POST':
-        if is_locked and employee.designation not in ['Admin', 'System Administrator']:
-            return Response({'success': False, 'error': f'Edit Locked! Classify Rx ki entry sirf {deadline} tareekh tak allow hoti hai.'}, status=403)
-            
-        line_id = request.data.get('line_id')
-        doctor_id = request.data.get('doctor_id')
-        m_billed = int(request.data.get('mapped_billed', 0))
-        m_free = int(request.data.get('mapped_free', 0))
-        
-        # 🌟 FIX: Cross-company party line block
-        target_line = get_object_or_404(PartyWiseSaleLine, id=line_id, report__employee__company=employee.company)
-        current_mapped_billed = sum(m.mapped_billed_qty for m in target_line.dr_mappings.all())
-        current_mapped_free = sum(m.mapped_free_qty for m in target_line.dr_mappings.all())
-        
-        if m_billed > (target_line.billed_qty - current_mapped_billed) or m_free > (target_line.free_qty - current_mapped_free):
-            return Response({'success': False, 'error': 'Allocation quantity Balance se zyada nahi ho sakti.'}, status=400)
-            
-        if m_billed > 0 or m_free > 0:
-            DoctorRxMapping.objects.create(party_line=target_line, doctor_id=doctor_id, mapped_billed_qty=m_billed, mapped_free_qty=m_free)
-            return Response({'success': True, 'message': 'Rx Classified successfully!'})
-            
-        return Response({'success': False, 'error': 'No quantity provided.'}, status=400)
-
-
 # ====================================================================
 # 2. TARGET SETTING API
 # ====================================================================
