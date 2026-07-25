@@ -47,7 +47,6 @@ def api_doctor_visit_form(request, doc_id):
     if not open_day:
         return Response({'error': 'Pehle Day Start karein!'}, status=400)
 
-    # 🌟 FIX: Sirf usi company ka doctor allow karo
     doctor = get_object_or_404(Doctor, id=doc_id, company=employee.company)
     today = open_day.date
 
@@ -123,7 +122,6 @@ def api_doctor_visit_submit(request):
     if not doctor_id:
         return Response({'error': 'doctor_id required hai'}, status=400)
 
-    # 🌟 FIX: Sirf usi company ka doctor allow karo
     doctor = get_object_or_404(Doctor, id=doctor_id, company=employee.company)
 
     setting = SystemSetting.objects.filter(company=employee.company).first()
@@ -204,7 +202,6 @@ def api_chemist_visit_submit(request):
     if not chemist_id:
         return Response({'error': 'chemist_id required hai'}, status=400)
 
-    # 🌟 FIX: Sirf usi company ka chemist allow karo
     chemist = get_object_or_404(Chemist, id=chemist_id, company=employee.company)
 
     try:
@@ -357,7 +354,8 @@ def api_party_wise_get(request):
         last_day_of_target_month = date(current_year, current_month, calendar.monthrange(current_year, current_month)[1])
 
         for prod in Product.objects.filter(company=selected_emp.company):
-            primary_agg = PrimarySale.objects.filter(stockist=selected_stockist, product=prod, date__lte=last_day_of_target_month).aggregate(tot_qty=Sum('quantity'), tot_free=Sum('free_quantity'))
+            # 🌟 FIX: date__lte=today laga diya, taaki aaj tak aaya hua pura stock consider ho
+            primary_agg = PrimarySale.objects.filter(stockist=selected_stockist, product=prod, date__lte=today).aggregate(tot_qty=Sum('quantity'), tot_free=Sum('free_quantity'))
             total_lifetime_primary = (primary_agg['tot_qty'] or 0) + (primary_agg['tot_free'] or 0)
             
             past_party_agg = PartyWiseSaleLine.objects.filter(report__stockist=selected_stockist, product=prod).filter(Q(report__year__lt=current_year) | Q(report__year=current_year, report__month__lt=current_month)).aggregate(tb=Sum('billed_qty'), tf=Sum('free_qty'))
@@ -370,7 +368,8 @@ def api_party_wise_get(request):
             
             current_balance = stock_available_for_this_month - billed_this_month
             
-            if stock_available_for_this_month > 0 or billed_this_month > 0:
+            # 🌟 FIX: Agar stockist ke paas kabhi bhi ye product aaya tha, toh list mein dikhao
+            if total_lifetime_primary > 0 or billed_this_month > 0:
                 balances.append({
                     'product_id': prod.id, 'product_name': prod.name, 
                     'total_sale': stock_available_for_this_month, 'billed': billed_this_month, 'balance': current_balance
@@ -379,7 +378,6 @@ def api_party_wise_get(request):
     chemists = Chemist.objects.filter(allocated_to=selected_emp, status='Approved').order_by('name')
     chem_data = [{'id': c.id, 'name': c.name} for c in chemists]
     
-    # 🌟 NAYA: Doctors ki list bhejni hai taaki Flutter mein dropdown bhar sake
     doctors = Doctor.objects.filter(allocated_to=selected_emp, status='Approved').order_by('name')
     doc_data = [{'id': d.id, 'name': f"Dr. {d.name}"} for d in doctors]
     
@@ -427,7 +425,7 @@ def api_party_wise_submit(request):
 
     stockist_id = data.get('stockist_id')
     chemist_id = data.get('chemist_id')
-    doctor_id = data.get('doctor_id') # 🌟 NAYA: Doctor ID receive karna
+    doctor_id = data.get('doctor_id') 
     lines = data.get('lines', [])
 
     if not stockist_id: return Response({'error': 'stockist_id required hai'}, status=400)
@@ -445,12 +443,10 @@ def api_party_wise_submit(request):
             bq = int(line.get('billed_qty') or 0)
             fq = int(line.get('free_qty') or 0)
             if bq > 0 or fq > 0:
-                # 1. PartyWiseSaleLine (Chemist ko sale) create karo
                 new_line = PartyWiseSaleLine.objects.create(
                     report=report, chemist=chemist, product_id=line.get('product_id'), billed_qty=bq, free_qty=fq
                 )
                 
-                # 🌟 NAYA: Agar Doctor select kiya gaya hai, toh DoctorRxMapping (Classify Rx) bhi turant create kar do
                 if doctor_id:
                     DoctorRxMapping.objects.create(
                         party_line=new_line, doctor_id=doctor_id, mapped_billed_qty=bq, mapped_free_qty=fq
@@ -464,6 +460,7 @@ def api_party_wise_submit(request):
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
 # ====================================================================
 # 2. TARGET SETTING API
 # ====================================================================
@@ -571,7 +568,6 @@ def api_gift_campaign(request):
 
         created = 0
         for doc_id in new_docs_to_add:
-            # 🌟 FIX: Sirf usi company ka doctor allow karo
             doctor = get_object_or_404(Doctor, id=doc_id, company=employee.company)
             GiftCampaignPlan.objects.create(employee=employee, doctor=doctor, item_id=item_id, month=month, year=year, status='Pending')
             created += 1
