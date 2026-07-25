@@ -57,7 +57,8 @@ urlpatterns = [
     
     path('routes/',                        masters_api.api_routes,              name='api_routes'),
     path('routes/add/',                    api_add_route,                       name='api_add_route'),
-    
+    path('auth/team/',     auth_api.api_team_tree, name='api_team_tree'),
+    path('auth/organogram/', auth_api.api_organogram, name='api_organogram'), # 🌟 NAYA   
     path('territories/',                   masters_api.api_territories,         name='api_territories'),
     path('dropdowns/',                     masters_api.api_dropdowns,           name='api_dropdowns'),
     path('leaves/',                        masters_api.api_leaves,              name='api_leaves'),

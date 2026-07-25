@@ -179,7 +179,58 @@ def api_save_token(request):
     DeviceToken.objects.update_or_create(employee=emp, defaults={'token': token})
     return Response({'success': True, 'message': 'Token saved successfully!'})
 
+# ==============================================================================
+# 🌳 ORGANOGRAM (Hierarchy Tree)
+# ==============================================================================
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_organogram(request):
+    try:
+        emp = request.user.employee
+    except AttributeError:
+        return Response({'error': 'Employee profile missing'}, status=400)
+
+    nodes = []
+    
+    # 1. Upar wale Managers (Boss -> RBM -> ABM)
+    managers = emp.get_my_managers(include_inactive=False)
+    managers.reverse() # Sabse bada boss sabse upar aayega
+    for m in managers:
+        nodes.append({
+            'id': m.id,
+            'name': m.name,
+            'role': m.designation,
+            'hq': m.headquarter.name if m.headquarter else 'N/A',
+            'is_me': False,
+            'is_vacant': False
+        })
+        
+    # 2. Khud (ME)
+    nodes.append({
+        'id': emp.id,
+        'name': f"{emp.name} (You)",
+        'role': emp.designation,
+        'hq': emp.headquarter.name if emp.headquarter else 'N/A',
+        'is_me': True,
+        'is_vacant': False
+    })
+    
+    # 3. Niche wali Team (Subordinates - Filled & Vacant)
+    # get_full_team_employees poora niche ka tree deta hai
+    team_members = get_full_team_employees(emp).exclude(id=emp.id).order_by('name')
+    for sub in team_members:
+        is_vacant = sub.is_placeholder
+        nodes.append({
+            'id': sub.id,
+            'name': 'Vacant Position' if is_vacant else sub.name,
+            'role': sub.designation,
+            'hq': sub.headquarter.name if sub.headquarter else 'N/A',
+            'is_me': False,
+            'is_vacant': is_vacant
+        })
+        
+    return Response(nodes, status=200)
 # ==============================================================================
 # 🔧 PRIVATE HELPERS
 # ==============================================================================
