@@ -819,7 +819,9 @@ def api_dr_wise_sale_report(request):
     for m in mappings:
         sale_month = m.party_line.report.month
         doc_id, doc_name, specialty = m.doctor.id, m.doctor.name, m.doctor.specialty or '-'
-        chem_id, chem_name = m.party_line.chemist.id, m.party_line.chemist.name
+        # 🌟 FIX: Agar chemist null hai (Direct Doctor Sale) toh crash nahi hoga
+        chem_id = m.party_line.chemist.id if m.party_line.chemist else 0
+        chem_name = m.party_line.chemist.name if m.party_line.chemist else 'Direct Sale'
         prod_id, prod_name = m.party_line.product.id, m.party_line.product.name
         b_qty, f_qty = m.mapped_billed_qty, m.mapped_free_qty
         price = float(m.party_line.product.price) if getattr(m.party_line.product, 'price', None) else 0.0
@@ -1006,7 +1008,9 @@ def api_party_rx_report(request):
 
     for line in lines:
         r_month = line.report.month
-        ch_id, ch_name = line.chemist.id, line.chemist.name
+        # 🌟 FIX: Agar chemist null hai (Direct Doctor Sale) toh crash nahi hoga
+        ch_id = line.chemist.id if line.chemist else 0
+        ch_name = line.chemist.name if line.chemist else 'Direct Sale'
         st_name = line.report.stockist.name
         pr_id, pr_name = line.product.id, line.product.name
         b_qty, f_qty = line.billed_qty, line.free_qty
