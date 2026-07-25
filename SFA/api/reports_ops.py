@@ -455,17 +455,30 @@ def api_free_claims(request):
     current_month = today.month
     current_year = today.year
 
-    # 📥 GET: Fetch Data (Stockists & Specific Claim Details)
+    # 🌟 NAYA: Manager View setup
+    team_employees = get_dropdown_team(employee, ordered=False)
+    is_manager_view = employee.designation != 'MR'
+
     if request.method == 'GET':
         month = int(request.query_params.get('month', current_month))
         year = int(request.query_params.get('year', current_year))
         stockist_id = request.query_params.get('stockist_id')
         
-        my_terr_ids = [employee.headquarter_id] if employee.headquarter_id else []
-        stockists = Stockist.objects.filter(territory_id__in=my_terr_ids).order_by('name')
+        # 🌟 NAYA: Manager ne agar employee_id diya hai toh use lo, warna khud ko
+        emp_id = request.query_params.get('employee_id', str(employee.id))
+        try:
+            selected_emp = Employee.objects.get(id=emp_id, company=employee.company)
+        except Employee.DoesNotExist:
+            selected_emp = employee
+            
+        # 🌟 NAYA: selected_emp ke hisaab se stockists laao
+        my_terr_ids = [selected_emp.headquarter_id] if selected_emp.headquarter_id else []
+        stockists = Stockist.objects.filter(territory_id__in=my_terr_ids, company=employee.company).order_by('name')
         
         res_data = {
             'success': True,
+            'is_manager_view': is_manager_view, # 🌟 NAYA
+            'team_employees': [{'id': e.id, 'name': e.name} for e in team_employees] if is_manager_view else [], # 🌟 NAYA
             'stockists': [{'id': s.id, 'name': s.name} for s in stockists],
             'master': None,
             'lines': [],
@@ -473,7 +486,8 @@ def api_free_claims(request):
         }
 
         if stockist_id:
-            master = FreeQtyClaimMaster.objects.filter(employee=employee, stockist_id=stockist_id, month=month, year=year).first()
+            # 🌟 NAYA: selected_emp use kiya employee ki jagah
+            master = FreeQtyClaimMaster.objects.filter(employee=selected_emp, stockist_id=stockist_id, month=month, year=year).first()
             if master:
                 res_data['master'] = {
                     'id': master.id,
@@ -482,7 +496,6 @@ def api_free_claims(request):
                     'admin_remark': master.admin_remark or '',
                 }
                 
-                # 🌟 NAYA LOGIC: Yahan pe bhi same product add up (Sum) hoke dikhega
                 lines_agg = FreeQtyClaimLine.objects.filter(master=master).values(
                     'product__name'
                 ).annotate(
@@ -504,14 +517,20 @@ def api_free_claims(request):
 
         return Response(res_data)
 
-    # 📤 POST: Actions (Generate/Sync or Submit)
     if request.method == 'POST':
         stockist_id = request.data.get('stockist_id')
         month = int(request.data.get('month', current_month))
         year = int(request.data.get('year', current_year))
-        action = request.data.get('action') # 'generate' or 'submit'
+        action = request.data.get('action')
         
-        setting = SystemSetting.objects.filter(company=employee.company).first()  # 🌟 FIX: company-scoped
+        # 🌟 NAYA: POST mein bhi selected_emp ko handle karo
+        emp_id = request.data.get('employee_id', employee.id)
+        try:
+            selected_emp = Employee.objects.get(id=emp_id, company=employee.company)
+        except Employee.DoesNotExist:
+            selected_emp = employee
+            
+        setting = SystemSetting.objects.filter(company=employee.company).first()
         deadline = setting.free_claim_deadline_day if setting and setting.free_claim_deadline_day else 4
         prev_month, prev_year = (12, today.year - 1) if today.month == 1 else (today.month - 1, today.year)
         is_immediate_prev_month = (month == prev_month and year == prev_year)
@@ -523,9 +542,8 @@ def api_free_claims(request):
         if not stockist_id:
             return Response({'success': False, 'error': 'Stockist select karna zaroori hai.'}, status=400)
 
-        # 🌟 FIX: Sirf usi company ka stockist allow karo
         stockist = get_object_or_404(Stockist, id=stockist_id, company=employee.company)
-        master = FreeQtyClaimMaster.objects.filter(employee=employee, stockist=stockist, month=month, year=year).first()
+        master = FreeQtyClaimMaster.objects.filter(employee=selected_emp, stockist=stockist, month=month, year=year).first()
 
         if action == 'submit':
             if not master:
@@ -535,9 +553,8 @@ def api_free_claims(request):
             return Response({'success': True, 'message': 'Claim Manager ko submit kar diya gaya hai! 🚀'})
         
         elif action == 'generate':
-            # 🌟 NAYA LOGIC: Generate karte waqt hi same Product ko combine (Sum) kar dega!
             sales_agg = PartyWiseSaleLine.objects.filter(
-                report__employee=employee, report__stockist=stockist, report__month=month, report__year=year, free_qty__gt=0
+                report__employee=selected_emp, report__stockist=stockist, report__month=month, report__year=year, free_qty__gt=0
             ).values('product_id').annotate(
                 tot_billed=Sum('billed_qty'),
                 tot_free=Sum('free_qty')
@@ -549,13 +566,12 @@ def api_free_claims(request):
             if master:
                 if master.status not in ['Draft', 'Rejected']:
                     return Response({'success': False, 'error': 'Approved ya Pending claim ko sync nahi kar sakte.'}, status=400)
-                FreeQtyClaimLine.objects.filter(master=master).delete() # Purani lambi lines delete
+                FreeQtyClaimLine.objects.filter(master=master).delete()
             else:
                 master = FreeQtyClaimMaster.objects.create(
-                    employee=employee, stockist=stockist, month=month, year=year, status='Draft'
+                    employee=selected_emp, stockist=stockist, month=month, year=year, status='Draft'
                 )
 
-            # Ab combined entry save hogi
             for s in sales_agg:
                 prod = Product.objects.get(id=s['product_id'])
                 price = float(prod.price) if getattr(prod, 'price', None) else 0.0
