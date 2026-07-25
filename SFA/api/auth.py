@@ -117,8 +117,26 @@ def api_profile(request):
         return Response({'error': 'Employee profile missing'}, status=status.HTTP_400_BAD_REQUEST)
 
     if request.method == 'GET':
-        data = _employee_dict(emp, include_manager=True)
-        return Response(data, status=status.HTTP_200_OK)
+        # 🌟 NAYA: Agar Manager kisi team member ka profile dekhna chahta hai
+        emp_id = request.query_params.get('employee_id')
+        
+        if emp_id:
+            try:
+                target_emp = Employee.objects.get(id=emp_id, company=employee.company)
+                # 🛡️ Security Check: Kya ye employee uski team ya hierarchy mein hai?
+                team_members = get_full_team_employees(employee)
+                managers = employee.get_my_managers()
+                allowed_ids = set(team_members.values_list('id', flat=True)) | set([m.id for m in managers])
+                
+                if target_emp.id not in allowed_ids and target_emp.id != employee.id:
+                    return Response({'error': 'Access Denied: You can only view your team members.'}, status=403)
+                    
+                employee = target_emp # Agar sab sahi hai, toh profile target employee ki dikhao
+            except Employee.DoesNotExist:
+                return Response({'error': 'Employee not found'}, status=404)
+
+        data = _employee_dict(employee, include_manager=True)
+        return Response(data, status=200)    
 
     if request.method == 'PUT':
         action = request.data.get('action')
