@@ -1,126 +1,118 @@
-"""
-SFA/api/urls.py — Flutter REST API complete URL patterns
-"""
-from django.urls import path
-from SFA.api.masters import api_add_route
-from SFA.api.reports_core import api_primary_sales_report
-from SFA.api.reports_core import api_sales_summary_report
-from SFA.api import auth as auth_api
-from SFA.api import core as core_api
-from SFA.api import masters as masters_api
-from SFA.api import sales as sales_api
-from SFA.api import expenses as expenses_api
-from SFA.api import reports as reports_api
-from SFA.api.pob_reports import api_pob_report
-from SFA.api.reports_core import api_dr_wise_sale_report
-from SFA.api.reports_core import api_party_rx_report
-from SFA.api.reports_core import api_doctor_roi_report
-from SFA.api.reports_core import api_analysis_hub, api_doctor_visit_history, api_route_report, api_product_master, api_mr_inventory, api_receive_dispatch
-from SFA.api.reports_gift_distribution import api_gift_distribution_report
-from SFA.api.reports_free_claim import api_free_claim_readonly
-from SFA.api.core_misc import api_my_requests
-
-# 🌟 Naya Messaging Import
-from SFA.api import messaging
+# SFA/urls.py
+from .views.reports import doctor_roi_report  
+from .views.masters import edit_chemist_list_view, edit_chemist_view, view_doctor_profile
+from .views import reports
+from .views.masters import bulk_network_upload_view
+from django.urls import path, include
+from django.shortcuts import redirect
+from rest_framework.authtoken.views import obtain_auth_token
+from . import views
+from SFA.views import reports  
+from .views import masters, sales, reports 
+from .views.reports import gift_distribution_report
+from SFA.views import auth as auth_views
 
 urlpatterns = [
-    # ── Auth ──────────────────────────────────────────────────────────────────
-    path('auth/login/',    auth_api.api_login,     name='api_login'),
-    path('auth/logout/',   auth_api.api_logout,    name='api_logout'),
-    path('auth/profile/',  auth_api.api_profile,   name='api_profile'),
-    path('auth/team/',     auth_api.api_team_tree, name='api_team_tree'),
-    path('auth/organogram/', auth_api.api_organogram, name='api_organogram'), # 🌟 NAYA   
+    # 🌟 FIX: Root domain par login page redirect karna
+    path('', lambda request: redirect('login/')),
 
-    # ── Core / DCR ────────────────────────────────────────────────────────────
-    path('dashboard/',  core_api.api_dashboard, name='api_dashboard'),
-    path('day-start/',  core_api.api_day_start, name='api_day_start'),
-    path('day-end/',    core_api.api_day_end,   name='api_day_end'),
-    path('notices/',    core_api.api_notices,   name='api_notices'),
-    path('update-location/',  core_api.api_update_location, name='api_update_location'),
-    path('notifications/',    core_api.api_notifications,   name='api_notifications'),
-    path('messages/',         core_api.api_messages,        name='api_messages'),
-    path('messaging/sent/', messaging.sent_items_view, name='api_sent_items'), # 🌟 NAYA
-    path('my-requests/',      core_api.api_my_requests,      name='api_my_requests'),
-    path('visits/<int:visit_id>/edit/', core_api.api_edit_visit, name='api_edit_visit'),
-    path('mtp/', core_api.api_mtp, name='api_mtp'),
+    path('hub/view/gift-report/', gift_distribution_report, name='gift_distribution_report'),
+    path('reports/free-claim/', reports.free_claim_view, name='free_claim_report'),
+    path('update-location/<str:role>/<int:target_id>/', views.update_location_view, name='update_location'),
 
-    # ── Masters ───────────────────────────────────────────────────────────────
-    path('doctors/',                       masters_api.api_doctors,             name='api_doctors'),
-    path('doctors/<int:doc_id>/',          masters_api.api_doctor_detail,       name='api_doctor_detail'),
-    path('doctors/<int:doc_id>/edit/',     masters_api.api_doctor_edit_request, name='api_doctor_edit'),
+    # APIs (Mobile App)
+    path('api/login/', obtain_auth_token, name='api_login'),
     
-    path('chemists/',                      masters_api.api_chemists,            name='api_chemists'),
-    path('chemists/<int:chem_id>/',        masters_api.api_chemist_detail,      name='api_chemist_detail'),
-    path('chemists/<int:chem_id>/edit/',   masters_api.api_chemist_edit_request,name='api_chemist_edit'),
+    # Web Dashboard & Workflow
+    path('login/', views.login_view, name='user_login'), 
+    path('dashboard/', views.mr_dashboard_view, name='mr_dashboard'), 
+    path('start/', views.day_start_view, name='day_start'),
+    path('day-end/', views.day_end_view, name='day_end'),
     
-    path('routes/',                        masters_api.api_routes,              name='api_routes'),
-    path('routes/add/',                    api_add_route,                       name='api_add_route'),
+    # Customer Visits
+    path('visit/doctor/<int:doc_id>/', views.doctor_visit_view, name='doctor_visit'),
+    path('visit/chemist/<int:chem_id>/', views.chemist_visit_view, name='chemist_visit'),
+    path('visit/edit/<int:visit_id>/', views.edit_visit_view, name='edit_visit'),    
+    path('visit/delete/<int:visit_id>/', views.delete_visit_view, name='delete_visit'),
     
-    path('territories/',                   masters_api.api_territories,         name='api_territories'),
-    path('dropdowns/',                     masters_api.api_dropdowns,           name='api_dropdowns'),
-    path('leaves/',                        masters_api.api_leaves,              name='api_leaves'),
-    path('holidays/',                      masters_api.api_holidays,            name='api_holidays'),
+    # Hubs & Management Requests
+    path('report/', views.manager_report_view, name='manager_report'),
+    path('approvals/', reports.manager_approval_hub, name='manager_approvals'),
+    path('request/', views.request_hub_view, name='request_hub'),
+    path('request/add-doctor/', views.add_doctor_view, name='add_doctor'),
+    path('request/add-chemist/', views.add_chemist_view, name='add_chemist'),
+    path('request/add-tp/', views.add_tour_program_view, name='add_tour_program'),
+    path('request/add-route/', views.add_route_view, name='add_route'),
+    path('view/', views.view_hub_view, name='view_hub'),
+    path('expense/', views.expense_hub_view, name='expense_hub'),
+    path('reports/primary-sales/', views.primary_sales_report_view, name='primary_sales_report'),
+    path('reports/smart-secondary-statement/', views.smart_secondary_report_view, name='smart_secondary_statement'),
+    path('reports/products/', views.product_sales_report_view, name='product_report'),
+    path('reports/dcr/', views.dcr_report_view, name='dcr_report'),
+    path('reports/tour-plan/', views.tour_plan_report_view, name='tour_plan_report'),
+    path('reports/network/', views.network_report_view, name='network_report'),
+    path('reports/routes/', views.route_report_view, name='route_report'),
+    path('reports/expenses/', views.expense_report_view, name='expense_report'),
+    path('view/products/', views.product_master_view, name='product_master'),
+    path('dcr/view/<int:dcr_id>/', views.view_dcr_report, name='view_dcr_report'),
+    path('report/route-playback/<int:employee_id>/<str:date_str>/', views.route_playback_view, name='route_playback'),
+    path('view/upload-primary-sales/', views.upload_primary_sales_view, name='upload_primary_sales'),
+
+    # Approvals Engine
+    path('approvals/mtp/<int:mtp_id>/', views.review_mtp_view, name='review_mtp'),
+    path('approvals/expense/<int:exp_id>/', views.review_expense_view, name='review_expense'),
+    path('activity/approve/<int:activity_id>/', views.approve_activity_view, name='approve_activity'),
+
+    # 🎯 Party Wise Sales & Rx Flow
+    path('api/get-chemists/<int:doctor_id>/', views.get_chemists_for_doctor, name='get_chemists_for_doctor'),
+    path('api/get-products/<int:doctor_id>/<int:chemist_id>/', views.get_products_for_dr_chemist, name='get_products_for_dr_chemist'),
+    path('reports/party-wise-sale/', views.party_wise_sale_entry_view, name='party_wise_sale_entry'),
+    path('reports/classify-rx/', views.classify_rx_entry_view, name='classify_rx_entry'),
+    path('reports/party-rx-report/', views.party_rx_report_view, name='party_rx_report'),
+    path('reports/dr-wise-sale-view/', views.dr_wise_sale_report_view, name='dr_wise_sale_report'),
+
+    path('target-setting/', views.target_setting_view, name='target_setting'),
+    path('review-target/<int:target_id>/', views.review_target_view, name='review_target'),
+    path('request/holiday/', views.request_holiday_view, name='request_holiday'),
+    path('view/holidays/', views.holiday_list_view, name='holiday_list'),
+    path('request/leave/', views.apply_leave_view, name='apply_leave'),
+    path('reports/sales-summary/', views.sales_summary_report_view, name='sales_summary_report'),
     
-    path('mappings/doctor/<int:doc_id>/chemists/', masters_api.api_doctor_chemists, name='api_doctor_chemists'),
-    path('mappings/doctor/<int:doc_id>/chemist/<int:chem_id>/products/', masters_api.api_dr_chemist_products, name='api_dr_chemist_products'),
-
-    # ── Sales, Targets & Claims ───────────────────────────────────────────────
-    path('visits/today/',                    sales_api.api_today_visits,         name='api_today_visits'),
-    path('visits/doctor/form/<int:doc_id>/', sales_api.api_doctor_visit_form,    name='api_doctor_visit_form'),
-    path('visits/doctor/',                   sales_api.api_doctor_visit_submit,  name='api_doctor_visit_submit'),
-    path('visits/chemist/',                  sales_api.api_chemist_visit_submit, name='api_chemist_visit_submit'),
+    # ✏️ EDIT HUB & EDIT RECORDS
+    path('edit-hub/', views.edit_hub_view, name='edit_hub'),
+    path('edit/doctor/list/', views.edit_doctor_list_view, name='edit_doctor_list'),
+    path('edit/doctor/<int:doc_id>/', views.edit_doctor_view, name='edit_doctor'),
     
-    # 🌟 FIX: Deleted visit URL pointing to sales_api
-    path('visits/<int:visit_id>/',           sales_api.api_delete_visit,         name='api_delete_visit'), 
+    # 💬 Communications & Alerts Hub (Web)
+    path('hub/notices/', views.notice_board_view, name='notice_board'),
+    path('hub/notifications/', views.notification_list_view, name='notification_list'),
+
+    # 🌟 NAYA: Email System URLs
+    path('hub/messages/', views.web_inbox_view, name='web_inbox'),
+    path('hub/messages/compose/', views.web_compose_view, name='web_compose'),
+    path('hub/messages/<int:msg_id>/', views.web_message_detail_view, name='web_message_detail'),
     
-    path('sales/party-wise/', sales_api.api_party_wise_get, name='api_party_wise_get'),
-    path('sales/party-wise/submit/',         sales_api.api_party_wise_submit,    name='api_party_wise_submit'),    
-
-    path('sales/targets/',                   sales_api.api_target_setting,       name='api_target_setting'),
-    path('gift-campaign/',                   sales_api.api_gift_campaign,        name='api_gift_campaign'),
-
-    # ── Expenses ──────────────────────────────────────────────────────────────
-    path('expenses/',                          expenses_api.api_expense_list,   name='api_expense_list'),
-    path('expenses/<int:report_id>/',          expenses_api.api_expense_detail, name='api_expense_detail'),
-    path('expenses/<int:report_id>/save/',     expenses_api.api_expense_save,   name='api_expense_save'),
-    path('expenses/<int:report_id>/submit/',   expenses_api.api_expense_submit, name='api_expense_submit'),
-    path('expenses/<int:report_id>/reopen/',   expenses_api.api_expense_reopen, name='api_expense_reopen'),
-
-    # ── Reports ──────────────────────────────────────────────────────────────
-    path('reports/product-sales/',       reports_api.api_product_sales_report,   name='api_product_sales_report'),
-    path('reports/dcr/',                 reports_api.api_dcr_report,             name='api_dcr_report'),
-    path('reports/dcr/<int:dcr_id>/',    reports_api.api_dcr_detail,             name='api_dcr_detail'),
-    path('reports/approvals/',           reports_api.api_approval_hub,           name='api_approval_hub'),
-    path('reports/approvals/action/',    reports_api.api_approval_action,        name='api_approval_action'),
-    path('reports/network/',             reports_api.api_network_report,         name='api_network_report'),
-    path('reports/route-playback/<int:employee_id>/<str:date_str>/', reports_api.api_route_playback, name='api_route_playback'),
-    path('reports/products/',            api_product_master,                     name='api_product_master'),
-    path('reports/inventory/',           api_mr_inventory,                        name='api_inventory'),
-    path('reports/inventory/receive/',   api_receive_dispatch,                    name='api_receive_dispatch'),
-    path('reports/free-claims/',         reports_api.api_free_claims,            name='api_free_claims'),
-    path('reports/tour-plan/',           reports_api.api_tour_plan_report,       name='api_tour_plan_report'),
-    path('reports/expense/',             reports_api.api_expense_report,         name='api_expense_report'),
-    path('reports/holidays/',            reports_api.api_holiday_list,           name='api_holiday_list'),
-    path('reports/sales-summary/',       api_sales_summary_report,               name='api_sales_summary_report'),
-    path('reports/primary-sales/', api_primary_sales_report, name='api_primary_sales_report'),
-    path('reports/stockist-statement/', reports_api.api_stockist_statement, name='api_stockist_statement'),
-    path('reports/pob/', api_pob_report, name='api_pob_report'),
-    path('reports/dr-wise-sale/', api_dr_wise_sale_report, name='api_dr_wise_sale_report'),
-    path('reports/party-rx/', api_party_rx_report, name='api_party_rx_report'),
-    path('reports/doctor-roi/', api_doctor_roi_report, name='api_doctor_roi_report'),
-    path('reports/analysis-hub/', api_analysis_hub, name='api_analysis_hub'),
-    path('reports/gift-distribution/', api_gift_distribution_report, name='api_gift_distribution_report'),
-    path('reports/doctor-visits/', api_doctor_visit_history, name='api_doctor_visit_history'),
-    path('reports/free-claim-readonly/', api_free_claim_readonly, name='api_free_claim_readonly'),
-    path('auth/save-token/', auth_api.api_save_token, name='api_save_token'),
-    path('reports/my-requests/', api_my_requests, name='api_my_requests'),
-    path('reports/route-report/', api_route_report, name='api_route_report'),
-
-    # ── 🌟 Internal Messaging System (Email) ──────────────────────────────────
-    # Note: Yahan 'api/' prefix nahi lagana, kyunki include('SFA.api.urls') apne aap 'api/' lagata hai.
-    path('messaging/inbox/', messaging.inbox_view, name='api_inbox'),
-    path('messaging/unread/', messaging.unread_message_count_view, name='api_unread_count'),
-    path('messaging/employees/', messaging.employee_list_view, name='api_employee_list'),
-    path('messaging/send/', messaging.send_message_view, name='api_send_message'),
-    path('messaging/<int:msg_id>/read/', messaging.mark_message_read_view, name='api_mark_read'),
+    path('reports/analysis-hub/', views.analysis_hub_view, name='analysis_hub'),
+    path('network/bulk-upload/', bulk_network_upload_view, name='bulk_network_upload'),
+    path('reports/approve-free-claims/', reports.approve_free_claims_view, name='approve_free_claims'),
+    path('promo-dispatch/', masters.promo_dispatch_view, name='promo_dispatch'),
+    path('my-inventory/', reports.mr_inventory_view, name='mr_inventory'),
+    path('hub/gift-campaign/', masters.gift_campaign_view, name='gift_campaign'),
+    path('hub/view/doctor-roi/', doctor_roi_report, name='doctor_roi_report'),
+    path('view/dr-visit-history/', views.dr_visit_history_view, name='dr_visit_history'),
+    path('edit-chemist-list/', edit_chemist_list_view, name='edit_chemist_list'),
+    path('edit-chemist/<int:chem_id>/', edit_chemist_view, name='edit_chemist'),
+    path('doctor/profile/<int:doc_id>/', view_doctor_profile, name='view_doctor_profile'),
+    path('profile/', views.profile_view, name='profile'),
+    path('admin-tools/transfer-data/', views.transfer_data_view, name='transfer_data'),
+    path('resign-employee/', views.resign_employee_view, name='resign_employee'),
+    path('vacancy-list/', views.vacancy_list_view, name='vacancy_list'),
+    path('promote-employee/', views.promote_employee_view, name='promote_employee'),
+    path('free-claim-view/', views.free_claim_view_readonly, name='free_claim_view_readonly'),
+    path('my-requests/', views.my_requests_view, name='my_requests'),
+    path('leave-status/', views.leave_status_view, name='leave_status'),
+    
+    # 🌟 Yahan saari Flutter APIs auto-include ho rahi hain
+    path('api/', include('SFA.api.urls')), 
+    path('logout/', auth_views.custom_logout_view, name='logout'),
 ]

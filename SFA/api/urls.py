@@ -19,14 +19,12 @@ from SFA.api.reports_core import api_analysis_hub, api_doctor_visit_history, api
 from SFA.api.reports_gift_distribution import api_gift_distribution_report
 from SFA.api.reports_free_claim import api_free_claim_readonly
 from SFA.api.core_misc import api_my_requests
-from django.shortcuts import redirect
 
 # 🌟 Naya Messaging Import
 from SFA.api import messaging
 
 urlpatterns = [
     # ── Auth ──────────────────────────────────────────────────────────────────
-    path('', lambda request: redirect('login/')),    
     path('auth/login/',    auth_api.api_login,     name='api_login'),
     path('auth/logout/',   auth_api.api_logout,    name='api_logout'),
     path('auth/profile/',  auth_api.api_profile,   name='api_profile'),
@@ -119,7 +117,6 @@ urlpatterns = [
     path('reports/route-report/', api_route_report, name='api_route_report'),
 
     # ── 🌟 Internal Messaging System (Email) ──────────────────────────────────
-    # Note: Yahan 'api/' prefix nahi lagana, kyunki include('SFA.api.urls') apne aap 'api/' lagata hai.
     path('messaging/inbox/', messaging.inbox_view, name='api_inbox'),
     path('messaging/unread/', messaging.unread_message_count_view, name='api_unread_count'),
     path('messaging/employees/', messaging.employee_list_view, name='api_employee_list'),
