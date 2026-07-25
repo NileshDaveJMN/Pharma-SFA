@@ -551,7 +551,7 @@ class PartyWiseSaleReport(models.Model):
 
 class PartyWiseSaleLine(models.Model):
     report = models.ForeignKey(PartyWiseSaleReport, related_name='lines', on_delete=models.CASCADE)
-    chemist = models.ForeignKey(Chemist, on_delete=models.CASCADE)
+    chemist = models.ForeignKey(Chemist, on_delete=models.SET_NULL, null=True, blank=True)     
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     billed_qty = models.IntegerField(default=0)
     free_qty = models.IntegerField(default=0)
