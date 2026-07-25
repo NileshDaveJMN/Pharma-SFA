@@ -136,7 +136,8 @@ def employee_list_view(request):
     all_emps = managers + subordinates + admins
     unique_emps = {e.id: e for e in all_emps if e.id != employee.id}
     
-    data = [{'id': e.id, 'name': f"{e.name} ({e.designation})"} for e in unique_emps.values()]
+    # 🌟 FIX: designation field alag se bhejni hai taaki Flutter usko filter kar sake
+    data = [{'id': e.id, 'name': e.name, 'designation': e.designation} for e in unique_emps.values()]
     return Response({'employees': data})
 # 6. Sent Items API (Jo messages user ne khud bheje hain)
 @api_view(['GET'])
