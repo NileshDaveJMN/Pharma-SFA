@@ -203,7 +203,8 @@ def api_organogram(request):
             'role': m.designation,
             'hq': m.headquarter.name if m.headquarter else 'N/A',
             'is_me': False,
-            'is_vacant': False
+            'is_vacant': False,
+            'depth': 0 # Bosses top level par hain
         })
         
     # 2. Khud (ME)
@@ -213,22 +214,33 @@ def api_organogram(request):
         'role': emp.designation,
         'hq': emp.headquarter.name if emp.headquarter else 'N/A',
         'is_me': True,
-        'is_vacant': False
+        'is_vacant': False,
+        'depth': 0
     })
     
-    # 3. Niche wali Team (Subordinates - Filled & Vacant)
-    # get_full_team_employees poora niche ka tree deta hai
-    team_members = get_full_team_employees(emp).exclude(id=emp.id).order_by('name')
-    for sub in team_members:
-        is_vacant = sub.is_placeholder
-        nodes.append({
-            'id': sub.id,
-            'name': 'Vacant Position' if is_vacant else sub.name,
-            'role': sub.designation,
-            'hq': sub.headquarter.name if sub.headquarter else 'N/A',
-            'is_me': False,
-            'is_vacant': is_vacant
-        })
+    # 3. Niche wali Team (Recursively - Hierarchy maintain karte hue)
+    def get_subs(parent, depth):
+        # Direct reports laao (Active aur Vacant sab)
+        direct_reports = Employee.objects.filter(manager=parent).exclude(id=parent.id).order_by('name')
+        for sub in direct_reports:
+            # Agar employee inactive hai aur placeholder nahi hai, toh skip karo
+            if not sub.is_active and not sub.is_placeholder:
+                continue
+                
+            is_vacant = sub.is_placeholder
+            nodes.append({
+                'id': sub.id,
+                'name': 'Vacant Position' if is_vacant else sub.name,
+                'role': sub.designation,
+                'hq': sub.headquarter.name if sub.headquarter else 'N/A',
+                'is_me': False,
+                'is_vacant': is_vacant,
+                'depth': depth # Neeche wale level par hain
+            })
+            # Unke bhi subordinates check karo (Recursion)
+            get_subs(sub, depth + 1)
+            
+    get_subs(emp, 1) # Mere direct reports depth 1 par honge, unke reports depth 2 par, etc.
         
     return Response(nodes, status=200)
 # ==============================================================================
