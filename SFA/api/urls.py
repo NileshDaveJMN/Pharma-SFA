@@ -4,7 +4,6 @@ SFA/api/urls.py — Flutter REST API complete URL patterns
 from django.urls import path
 from SFA.api.masters import api_add_route
 from SFA.api.reports_core import api_primary_sales_report
-from .core import api_delete_visit
 from SFA.api.reports_core import api_sales_summary_report
 from SFA.api import auth as auth_api
 from SFA.api import core as core_api
@@ -20,16 +19,19 @@ from SFA.api.reports_core import api_analysis_hub, api_doctor_visit_history, api
 from SFA.api.reports_gift_distribution import api_gift_distribution_report
 from SFA.api.reports_free_claim import api_free_claim_readonly
 from SFA.api.core_misc import api_my_requests
+from django.shortcuts import redirect
 
 # 🌟 Naya Messaging Import
 from SFA.api import messaging
 
 urlpatterns = [
     # ── Auth ──────────────────────────────────────────────────────────────────
+    path('', lambda request: redirect('login/')),    
     path('auth/login/',    auth_api.api_login,     name='api_login'),
     path('auth/logout/',   auth_api.api_logout,    name='api_logout'),
     path('auth/profile/',  auth_api.api_profile,   name='api_profile'),
     path('auth/team/',     auth_api.api_team_tree, name='api_team_tree'),
+    path('auth/organogram/', auth_api.api_organogram, name='api_organogram'), # 🌟 NAYA   
 
     # ── Core / DCR ────────────────────────────────────────────────────────────
     path('dashboard/',  core_api.api_dashboard, name='api_dashboard'),
@@ -40,10 +42,8 @@ urlpatterns = [
     path('notifications/',    core_api.api_notifications,   name='api_notifications'),
     path('messages/',         core_api.api_messages,        name='api_messages'),
     path('messaging/sent/', messaging.sent_items_view, name='api_sent_items'), # 🌟 NAYA
-    # 🌟 FIX: Vacancy URL hata diya gaya hai
     path('my-requests/',      core_api.api_my_requests,      name='api_my_requests'),
     path('visits/<int:visit_id>/edit/', core_api.api_edit_visit, name='api_edit_visit'),
-    path('visits/<int:visit_id>/delete/', api_delete_visit, name='api_delete_visit'),
     path('mtp/', core_api.api_mtp, name='api_mtp'),
 
     # ── Masters ───────────────────────────────────────────────────────────────
@@ -57,8 +57,7 @@ urlpatterns = [
     
     path('routes/',                        masters_api.api_routes,              name='api_routes'),
     path('routes/add/',                    api_add_route,                       name='api_add_route'),
-    path('auth/team/',     auth_api.api_team_tree, name='api_team_tree'),
-    path('auth/organogram/', auth_api.api_organogram, name='api_organogram'), # 🌟 NAYA   
+    
     path('territories/',                   masters_api.api_territories,         name='api_territories'),
     path('dropdowns/',                     masters_api.api_dropdowns,           name='api_dropdowns'),
     path('leaves/',                        masters_api.api_leaves,              name='api_leaves'),
@@ -72,13 +71,14 @@ urlpatterns = [
     path('visits/doctor/form/<int:doc_id>/', sales_api.api_doctor_visit_form,    name='api_doctor_visit_form'),
     path('visits/doctor/',                   sales_api.api_doctor_visit_submit,  name='api_doctor_visit_submit'),
     path('visits/chemist/',                  sales_api.api_chemist_visit_submit, name='api_chemist_visit_submit'),
-    path('visits/<int:visit_id>/',           sales_api.api_delete_visit,         name='api_delete_visit'),
+    
+    # 🌟 FIX: Deleted visit URL pointing to sales_api
+    path('visits/<int:visit_id>/',           sales_api.api_delete_visit,         name='api_delete_visit'), 
     
     path('sales/party-wise/', sales_api.api_party_wise_get, name='api_party_wise_get'),
     path('sales/party-wise/submit/',         sales_api.api_party_wise_submit,    name='api_party_wise_submit'),    
-    path('sales/classify-rx/',               sales_api.api_classify_rx,          name='api_classify_rx'),
+
     path('sales/targets/',                   sales_api.api_target_setting,       name='api_target_setting'),
-    
     path('gift-campaign/',                   sales_api.api_gift_campaign,        name='api_gift_campaign'),
 
     # ── Expenses ──────────────────────────────────────────────────────────────
