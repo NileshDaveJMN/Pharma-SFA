@@ -72,6 +72,8 @@ urlpatterns = [
     path('visits/doctor/',                   sales_api.api_doctor_visit_submit,  name='api_doctor_visit_submit'),
     path('visits/chemist/',                  sales_api.api_chemist_visit_submit, name='api_chemist_visit_submit'),
     # 🌟 FIX: Removed duplicate delete path and pointed to sales_api
+    path('visits/<int:visit_id>/',           sales_api.api_delete_visit,         name='api_delete_visit_alt'), 
+
     path('visits/<int:visit_id>/delete/',    sales_api.api_delete_visit,         name='api_delete_visit'),
     
     path('sales/party-wise/', sales_api.api_party_wise_get, name='api_party_wise_get'),
