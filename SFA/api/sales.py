@@ -253,7 +253,8 @@ def api_today_visits(request):
             'summary': {'dr_count': 0, 'chem_count': 0, 'total_samples': 0, 'total_pob': 0.0}
         })
 
-    all_visits = daily_dcr.visits.select_related('doctor', 'chemist', 'route').prefetch_related('product_details__product').all()
+    # 🌟 FIX: Latest visits sabse upar aayenge, taaki Optimistic UI se match kare
+    all_visits = daily_dcr.visits.select_related('doctor', 'chemist', 'route').prefetch_related('product_details__product').all().order_by('-created_at')
 
     doctor_visits = []
     chemist_visits = []
