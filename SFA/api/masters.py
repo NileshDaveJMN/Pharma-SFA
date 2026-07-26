@@ -34,10 +34,6 @@ from SFA.company_helpers import (
 # 🩺 DOCTORS
 # ==============================================================================
 
-# ==============================================================================
-# 🩺 DOCTORS
-# ==============================================================================
-
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def api_doctors(request):
@@ -60,7 +56,6 @@ def api_doctors(request):
             return Response({'error': 'Access denied'}, status=403)
 
         doc_status = request.GET.get('status', 'Approved')
-        # 🌟 FIX: company filter — cross-tenant data leak rokne ke liye
         qs = get_doctors(
             employee.company, allocated_to=selected_emp, status=doc_status
         ).select_related('route', 'territory')
@@ -76,7 +71,7 @@ def api_doctors(request):
         today = timezone.localdate()
         return Response([_doctor_dict(d, today) for d in qs.order_by('name')])
 
-    # ── POST: Add Doctor (UPGRADED FOR MOBILE APP) ──
+    # ── POST: Add Doctor ──
     if request.method == 'POST':
         data = request.data
         files = request.FILES
@@ -87,14 +82,12 @@ def api_doctors(request):
 
         allocated_id = data.get('allocated_to_id')
         if allocated_id and employee.designation != 'MR':
-            # 🌟 FIX: company filter lagaya taaki cross-company employee assign na ho
             allocated_emp = get_object_or_404(Employee, id=allocated_id, company=employee.company)
             if not team_employees.filter(id=allocated_emp.id).exists():
                 return Response({'error': 'Access denied — ye employee tumhari team mein nahi hai'}, status=403)
         else:
             allocated_emp = employee
 
-        # 🌟 FIX: Territory aur Route ko bhi company se verify karo
         territory_id = data.get('territory') or data.get('territory_id') or None
         route_id = data.get('route') or data.get('route_id') or None
 
@@ -105,7 +98,7 @@ def api_doctors(request):
 
         try:
             doctor = Doctor(
-                company=allocated_emp.company,  # 🌟 FIX: explicit company
+                company=allocated_emp.company,
                 name=name,
                 specialty=(data.get('specialty') or '').strip() or None,
                 territory_id=territory_id,
@@ -117,13 +110,11 @@ def api_doctors(request):
                 email=(data.get('email') or '').strip() or None,
                 degree=(data.get('degree') or '').strip() or None,
                 category=(data.get('category') or '').strip() or None,
-                
                 dob=data.get('dob') or None,
                 dom=data.get('dom') or None,
                 spouse_dob=data.get('spouse_dob') or None,
                 child_1_dob=data.get('child_1_dob') or None, 
                 child_2_dob=data.get('child_2_dob') or None,
-                
                 latitude=data.get('latitude') or None,
                 longitude=data.get('longitude') or None,
             )
@@ -157,7 +148,7 @@ def api_doctor_detail(request, doc_id):
     doctor = get_object_or_404(
         Doctor.objects.select_related('route', 'territory', 'allocated_to'),
         id=doc_id,
-        company=employee.company,  # 🌟 FIX: cross-tenant access block
+        company=employee.company,
         allocated_to__in=team_employees
     )
 
@@ -176,7 +167,7 @@ def api_doctor_edit_request(request, doc_id):
     team_employees = get_dropdown_team(employee, ordered=False)
     doc = get_object_or_404(
         Doctor, id=doc_id,
-        company=employee.company,  # 🌟 FIX: cross-tenant access block
+        company=employee.company,
         allocated_to__in=team_employees
     )
 
@@ -238,7 +229,6 @@ def api_chemists(request):
             return Response({'error': 'Access denied'}, status=403)
 
         chem_status = request.GET.get('status', 'Approved')
-        # 🌟 FIX: company filter — cross-tenant data leak rokne ke liye
         qs = get_chemists(
             employee.company, allocated_to=selected_emp, status=chem_status
         ).select_related('route', 'territory')
@@ -255,20 +245,19 @@ def api_chemists(request):
 
     # ── POST: Add Chemist ──
     data = request.data
+    files = request.FILES
     name = (data.get('name') or '').strip()
     if not name:
         return Response({'error': 'Chemist name required hai'}, status=400)
 
     allocated_id = data.get('allocated_to_id')
     if allocated_id and employee.designation != 'MR':
-        # 🌟 FIX: company filter lagaya
         allocated_emp = get_object_or_404(Employee, id=allocated_id, company=employee.company)
         if not team_employees.filter(id=allocated_emp.id).exists():
             return Response({'error': 'Access denied'}, status=403)
     else:
         allocated_emp = employee
 
-    # 🌟 FIX: Territory aur Route ko bhi company se verify karo
     territory_id = data.get('territory_id') or None
     route_id = data.get('route_id') or None
 
@@ -278,15 +267,24 @@ def api_chemists(request):
         get_object_or_404(Route, id=route_id, company=employee.company)
 
     try:
-        chemist = Chemist.objects.create(
-            company=allocated_emp.company,  # 🌟 FIX: explicit company
+        chemist = Chemist(
+            company=allocated_emp.company,
             name=name,
             phone=(data.get('phone') or '').strip() or None,
             address=(data.get('address') or '').strip() or None,
             territory_id=territory_id,
             route_id=route_id,
             allocated_to=allocated_emp,
+            # 🌟 NAYA: Owner Info & Card Photo
+            owner_name=(data.get('owner_name') or '').strip() or None,
+            owner_dob=data.get('owner_dob') or None,
         )
+        
+        if 'card_photo' in files:
+            chemist.card_photo = files['card_photo']
+            
+        chemist.save()
+        
         return Response({
             'message': f"{chemist.name} successfully add ho gaya! (Pending approval)",
             'id': chemist.id,
@@ -308,11 +306,11 @@ def api_chemist_detail(request, chem_id):
     chemist = get_object_or_404(
         Chemist.objects.select_related('route', 'territory', 'allocated_to'),
         id=chem_id,
-        company=employee.company,  # 🌟 FIX: cross-tenant access block
+        company=employee.company,
         allocated_to__in=team_employees
     )
 
-    data = _chemist_dict(chemist)
+    data = _chemist_dict(chemist, full=True)
     if chemist.allocated_to:
         data['allocated_to'] = {'id': chemist.allocated_to.id, 'name': chemist.allocated_to.name}
         
@@ -329,7 +327,7 @@ def api_chemist_edit_request(request, chem_id):
     team_employees = get_dropdown_team(employee, ordered=False)
     chem = get_object_or_404(
         Chemist, id=chem_id,
-        company=employee.company,  # 🌟 FIX: cross-tenant access block
+        company=employee.company,
         allocated_to__in=team_employees
     )
 
@@ -346,7 +344,7 @@ def api_chemist_edit_request(request, chem_id):
             employee=employee,
             req_name=data.get('name') or chem.name,
             req_phone=data.get('phone') or None,
-            req_address=data.get('address') or None, # 🌟 NAYA FIELD MAP KIYA
+            req_address=data.get('address') or None,
             req_territory_id=data.get('territory_id') or None,
             req_route_id=data.get('route_id') or None,
             status='Pending'
@@ -368,7 +366,6 @@ def api_routes(request):
 
     team_employees = get_dropdown_team(employee, ordered=False)
     terr_ids = get_team_territory_ids(team_employees)
-    # 🌟 FIX: get_team_requested_routes company-aware nahi hai, isliye explicitly filter karo
     routes = get_team_requested_routes(team_employees, terr_ids).filter(
         company=employee.company
     )
@@ -410,11 +407,10 @@ def api_add_route(request):
         return Response({'error': 'Route Name and Territory are required'}, status=400)
 
     try:
-        # 🌟 FIX: company check — dusri company ki territory pe route add nahi ho sakta
         territory = get_object_or_404(Territory, id=territory_id, company=employee.company)
 
         route = Route.objects.create(
-            company=employee.company,   # 🌟 FIX: explicit company — save() fallback par rely nahi karna
+            company=employee.company,
             name=name,
             territory=territory,
             category=category,
@@ -441,7 +437,6 @@ def api_territories(request):
 
     team_employees = get_dropdown_team(employee, ordered=False)
     terr_ids = get_team_territory_ids(team_employees)
-    # 🌟 FIX: company filter via helper
     territories = get_territories(employee.company, id__in=terr_ids).order_by('name')
 
     return Response([
@@ -460,7 +455,6 @@ def api_dropdowns(request):
 
     team_employees = get_dropdown_team(employee)
     terr_ids = get_team_territory_ids(team_employees)
-    # 🌟 FIX: dono queries company-scoped helpers se
     territories = get_territories(employee.company, id__in=terr_ids).order_by('name')
     routes = get_team_requested_routes(team_employees, terr_ids).filter(
         company=employee.company
@@ -527,20 +521,32 @@ def _doctor_dict(doc, today=None, full=False):
     return data
 
 
-def _chemist_dict(chem):
-    return {
+def _chemist_dict(chem, full=False):
+    data = {
         'id': chem.id,
         'name': chem.name,
         'phone': chem.phone or '',
-        'address': chem.address or '', # 🌟 NAYA FIELD RETURN HOGA JSON MEIN
+        'address': chem.address or '',
         'route': {'id': chem.route.id, 'name': chem.route.name} if chem.route else None,
         'territory': {'id': chem.territory.id, 'name': chem.territory.name} if chem.territory else None,
         'status': chem.status,
     }
+    
+    # 🌟 NAYA: Full details mein Owner info aur Card Photo bhejna
+    if full:
+        data.update({
+            'owner_name': chem.owner_name or '',
+            'owner_dob': str(chem.owner_dob) if chem.owner_dob else None,
+            'card_photo_url': chem.card_photo.url if chem.card_photo else None,
+            'latitude': str(chem.latitude) if chem.latitude else None,
+            'longitude': str(chem.longitude) if chem.longitude else None,
+        })
+        
+    return data
 
 
 # ==============================================================================
-# 🏖️ LEAVES, HOLIDAYS, GIFTS, MAPPINGS (YOUR ORIGINAL CODE)
+# 🏖️ LEAVES, HOLIDAYS, GIFTS, MAPPINGS
 # ==============================================================================
 
 @api_view(['GET', 'POST'])
@@ -561,8 +567,6 @@ def api_leaves(request):
                 'start_date': app.start_date.strftime('%d %b') if app.start_date else '',
                 'end_date': app.end_date.strftime('%d %b %Y') if app.end_date else '',
                 'status': app.status,
-                # 🌟 FIX: None value ko explicitly '' banaya, warna JSON mein null jaata tha
-                # aur Flutter mein null.toString() => "null" ban ke dikh jaata tha
                 'manager_remark': getattr(app, 'manager_remark', '') or '',
                 'admin_remark': getattr(app, 'admin_remark', '') or ''
             })
@@ -611,9 +615,7 @@ def api_leaves(request):
         else:
             return Response({'success': False, 'error': f'Insufficient {l_type} balance!'}, status=400)
 
-# ==============================================================================
-# ⛱️ HOLIDAYS API
-# ==============================================================================
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def api_holidays(request):
@@ -628,7 +630,6 @@ def api_holidays(request):
             rbms = team.filter(designation='RBM', is_active=True).order_by('name')
             subordinate_rbms = [{'id': r.id, 'name': r.name} for r in rbms]
             
-        # 🌟 FIX: company filter via helper
         holidays = get_holidays(employee.company, proposed_by=employee).order_by('-date')
         data = [{'id': h.id, 'name': h.name, 'date': h.date.strftime('%Y-%m-%d'), 'status': h.status} for h in holidays]
         
@@ -651,7 +652,6 @@ def api_holidays(request):
         status_val = 'Approved' if employee.designation in ['Admin', 'System Administrator'] else 'Pending'
 
         if employee.designation == 'RBM':
-            # 🌟 FIX: company lookup me include karo — dusri company ki same date+proposed_by match na ho
             Holiday.objects.get_or_create(
                 company=employee.company, date=h_date, proposed_by=employee,
                 defaults={'name': name, 'status': status_val}
@@ -666,7 +666,6 @@ def api_holidays(request):
                 if not rbm_ids:
                     return Response({'success': False, 'error': 'Please select at least one RBM or mark as National.'}, status=400)
                 for r_id in rbm_ids:
-                    # 🌟 FIX: RBM bhi same company ka hona chahiye
                     rbm_emp = get_object_or_404(Employee, id=r_id, company=employee.company)
                     Holiday.objects.get_or_create(
                         company=employee.company, date=h_date, proposed_by=rbm_emp,
@@ -683,7 +682,6 @@ def api_doctor_chemists(request, doc_id):
     except AttributeError:
         return Response({'error': 'Employee profile missing'}, status=400)
 
-    # 🌟 FIX: doctor company verify karo pehle — koi bhi doc_id blindly pass kar sakta tha
     get_object_or_404(Doctor, id=doc_id, company=employee.company)
 
     chemists = [
@@ -705,7 +703,6 @@ def api_dr_chemist_products(request, doc_id, chem_id):
     except AttributeError:
         return Response({'error': 'Employee profile missing'}, status=400)
 
-    # 🌟 FIX: doctor aur chemist dono company verify karo
     get_object_or_404(Doctor, id=doc_id, company=employee.company)
     get_object_or_404(Chemist, id=chem_id, company=employee.company)
 
@@ -716,10 +713,3 @@ def api_dr_chemist_products(request, doc_id, chem_id):
         ).select_related('product')
     ]
     return Response({'success': True, 'products': products})
-
-from django.utils import timezone
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from SFA.models import LeaveBalance, LeaveApplication
-

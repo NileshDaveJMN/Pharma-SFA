@@ -205,31 +205,6 @@ class Stockist(models.Model):
 
     def __str__(self): return self.name
 
-class Chemist(models.Model):
-    STATUS_CHOICES = (('Pending', 'Pending Approval'), ('Approved', 'Approved'), ('Rejected', 'Rejected'))
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='chemists') # 🌟 CHANGED
-    name = models.CharField(max_length=150)
-    address = models.TextField(blank=True, null=True, help_text="Chemist shop address") # 🌟 NAYA FIELD
-    latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True) # Ye add karein
-    longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True) # Ye add karein
-    territory = models.ForeignKey(Territory, on_delete=models.CASCADE)
-    route = models.ForeignKey(Route, on_delete=models.SET_NULL, null=True, blank=True)
-    linked_stockist = models.ForeignKey(Stockist, on_delete=models.SET_NULL, null=True, blank=True)
-    phone = models.CharField(max_length=15)
-    allocated_to = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
-
-    def save(self, *args, **kwargs):
-        # 🌟 FIX: Agar company explicitly pass nahi hui, toh territory (ya fallback allocated_to) se utha lo
-        if not self.company_id:
-            if self.territory_id:
-                self.company = self.territory.company
-            elif self.allocated_to_id:
-                self.company = self.allocated_to.company
-        super().save(*args, **kwargs)
-
-    def __str__(self): return f"{self.name} ({self.status})"
-
 class Doctor(models.Model):
     STATUS_CHOICES   = (('Pending', 'Pending Approval'), ('Approved', 'Approved'), ('Rejected', 'Rejected'))
     CATEGORY_CHOICES = (('A', 'Category A'), ('B', 'Category B'), ('C', 'Category C'))
@@ -300,8 +275,39 @@ class Doctor(models.Model):
                 self.company = self.allocated_to.company
         super().save(*args, **kwargs)
 
-    def __str__(self): return f"Dr. {self.name} ({self.get_specialty_display() if self.specialty else 'N/A'}) - {self.status}"
+    def __str__(self): 
+        return f"Dr. {self.name} ({self.get_specialty_display() if self.specialty else 'N/A'}) - {self.status}"
 
+
+class Chemist(models.Model):
+    STATUS_CHOICES = (('Pending', 'Pending Approval'), ('Approved', 'Approved'), ('Rejected', 'Rejected'))
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='chemists')
+    name = models.CharField(max_length=150)
+    address = models.TextField(blank=True, null=True, help_text="Chemist shop address")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
+    territory = models.ForeignKey(Territory, on_delete=models.CASCADE)
+    route = models.ForeignKey(Route, on_delete=models.SET_NULL, null=True, blank=True)
+    linked_stockist = models.ForeignKey(Stockist, on_delete=models.SET_NULL, null=True, blank=True)
+    phone = models.CharField(max_length=15)
+    allocated_to = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+
+    # 🌟 NAYA: Owner Info & Card Photo
+    owner_name = models.CharField(max_length=150, blank=True, null=True, help_text="Chemist shop owner ka naam")
+    owner_dob = models.DateField(blank=True, null=True, help_text="Owner ki date of birth")
+    card_photo = models.ImageField(upload_to='chemist_cards/', blank=True, null=True, help_text="Chemist ki visiting card ki photo")
+
+    def save(self, *args, **kwargs):
+        if not self.company_id:
+            if self.territory_id:
+                self.company = self.territory.company
+            elif self.allocated_to_id:
+                self.company = self.allocated_to.company
+        super().save(*args, **kwargs)
+
+    def __str__(self): 
+        return f"{self.name} ({self.status})"
 
 class Product(models.Model):
     GST_SLAB_CHOICES = [
