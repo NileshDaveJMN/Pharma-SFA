@@ -277,6 +277,11 @@ def api_today_visits(request):
                 'remark': v.remark or '',
                 'time': v.created_at.strftime('%I:%M %p') if hasattr(v, 'created_at') and v.created_at else None,
                 'products_detailed': detailed, 'samples_given': samples, 'pob': round(pob, 2),
+                # 🌟 NAYA: Distance calculate karne ke liye coordinates
+                'visit_lat': str(v.latitude) if v.latitude else None,
+                'visit_lng': str(v.longitude) if v.longitude else None,
+                'target_lat': str(v.doctor.latitude) if v.doctor.latitude else None,
+                'target_lng': str(v.doctor.longitude) if v.doctor.longitude else None,
             })
 
         elif v.chemist:
@@ -287,6 +292,11 @@ def api_today_visits(request):
                 'route': v.route.name if v.route else None,
                 'time': v.created_at.strftime('%I:%M %p') if hasattr(v, 'created_at') and v.created_at else None,
                 'products_ordered': ordered,
+                # 🌟 NAYA: Distance calculate karne ke liye coordinates
+                'visit_lat': str(v.latitude) if v.latitude else None,
+                'visit_lng': str(v.longitude) if v.longitude else None,
+                'target_lat': str(v.chemist.latitude) if v.chemist.latitude else None,
+                'target_lng': str(v.chemist.longitude) if v.chemist.longitude else None,
             })
 
     return Response({
