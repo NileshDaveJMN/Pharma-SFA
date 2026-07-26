@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate, login as django_login
+from datetime import datetime # 🌟 NAYA: Date parse karne ke liye
 
 from SFA.services.team import get_team_tree, get_full_team_employees
 from SFA.models import SystemSetting, DeviceToken, Employee
@@ -20,7 +21,6 @@ from SFA.models import SystemSetting, DeviceToken, Employee
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def api_login(request):
-    # 🌟 MULTI-COMPANY: Company Code bhi lena hai
     company_code = request.data.get('company_code', '').strip()
     username = request.data.get('username', '').strip()
     password = request.data.get('password', '').strip()
@@ -45,7 +45,6 @@ def api_login(request):
             status=status.HTTP_403_FORBIDDEN
         )
 
-    # Employee profile check
     try:
         emp = user.employee
     except AttributeError:
@@ -54,20 +53,15 @@ def api_login(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # 🌟 MULTI-COMPANY CHECK: User usi company ka hai ya nahi?
     if emp.company.code != company_code:
         return Response(
             {'error': 'Invalid Company Code ya phir ye user is company ka nahi hai.'},
             status=status.HTTP_403_FORBIDDEN
         )
 
-    # Token create ya fetch (idempotent)
     token, _ = Token.objects.get_or_create(user=user)
-
-    # Django session bhi create karo — WebView ke liye
     django_login(request._request, user)
 
-    # Offline Mode Setting fetch karo
     setting = SystemSetting.objects.filter(company=emp.company).first()
     is_offline_mode = setting.enable_offline_mode if setting else True
 
@@ -117,13 +111,11 @@ def api_profile(request):
         return Response({'error': 'Employee profile missing'}, status=status.HTTP_400_BAD_REQUEST)
 
     if request.method == 'GET':
-        # 🌟 NAYA: Agar Manager kisi team member ka profile dekhna chahta hai
         emp_id = request.query_params.get('employee_id')
         
         if emp_id:
             try:
                 target_emp = Employee.objects.get(id=emp_id, company=emp.company)
-                # 🛡️ Security Check: Kya ye employee uski team ya hierarchy mein hai?
                 team_members = get_full_team_employees(emp)
                 managers = emp.get_my_managers()
                 allowed_ids = set(team_members.values_list('id', flat=True)) | set([m.id for m in managers])
@@ -131,7 +123,7 @@ def api_profile(request):
                 if target_emp.id not in allowed_ids and target_emp.id != emp.id:
                     return Response({'error': 'Access Denied: You can only view your team members.'}, status=403)
                     
-                emp = target_emp # Agar sab sahi hai, toh profile target employee ki dikhao
+                emp = target_emp
             except Employee.DoesNotExist:
                 return Response({'error': 'Employee not found'}, status=404)
 
@@ -144,6 +136,34 @@ def api_profile(request):
         if action == 'update_profile':
             emp.phone = request.data.get('phone', emp.phone)
             emp.address = request.data.get('address', emp.address)
+            
+            # 🌟 NAYA: Personal Info Update
+            emp.dob = request.data.get('dob') or None
+            emp.anniversary = request.data.get('anniversary') or None
+            emp.blood_group = request.data.get('blood_group') or None
+            emp.emergency_contact = request.data.get('emergency_contact') or None
+            emp.permanent_address = request.data.get('permanent_address') or None
+            
+            # 🌟 NAYA: Family Info Update
+            emp.father_name = request.data.get('father_name') or None
+            emp.father_dob = request.data.get('father_dob') or None
+            emp.father_mobile = request.data.get('father_mobile') or None
+            emp.father_occupation = request.data.get('father_occupation') or None
+            
+            emp.mother_name = request.data.get('mother_name') or None
+            emp.mother_dob = request.data.get('mother_dob') or None
+            emp.mother_mobile = request.data.get('mother_mobile') or None
+            emp.mother_occupation = request.data.get('mother_occupation') or None
+            
+            emp.spouse_name = request.data.get('spouse_name') or None
+            emp.spouse_dob = request.data.get('spouse_dob') or None
+            emp.spouse_mobile = request.data.get('spouse_mobile') or None
+            emp.spouse_occupation = request.data.get('spouse_occupation') or None
+            
+            emp.child1_name = request.data.get('child1_name') or None
+            emp.child1_dob = request.data.get('child1_dob') or None
+            emp.child2_name = request.data.get('child2_name') or None
+            emp.child2_dob = request.data.get('child2_dob') or None
             
             if 'photo' in request.FILES:
                 emp.photo = request.FILES['photo']
@@ -193,9 +213,8 @@ def api_organogram(request):
 
     nodes = []
     
-    # 1. Upar wale Managers (Boss -> RBM -> ABM)
     managers = emp.get_my_managers(include_inactive=False)
-    managers.reverse() # Sabse bada boss sabse upar aayega
+    managers.reverse()
     for m in managers:
         nodes.append({
             'id': m.id,
@@ -204,10 +223,9 @@ def api_organogram(request):
             'hq': m.headquarter.name if m.headquarter else 'N/A',
             'is_me': False,
             'is_vacant': False,
-            'depth': 0 # Bosses top level par hain
+            'depth': 0
         })
         
-    # 2. Khud (ME)
     nodes.append({
         'id': emp.id,
         'name': f"{emp.name} (You)",
@@ -218,12 +236,9 @@ def api_organogram(request):
         'depth': 0
     })
     
-    # 3. Niche wali Team (Recursively - Hierarchy maintain karte hue)
     def get_subs(parent, depth):
-        # Direct reports laao (Active aur Vacant sab)
         direct_reports = Employee.objects.filter(manager=parent).exclude(id=parent.id).order_by('name')
         for sub in direct_reports:
-            # Agar employee inactive hai aur placeholder nahi hai, toh skip karo
             if not sub.is_active and not sub.is_placeholder:
                 continue
                 
@@ -235,14 +250,14 @@ def api_organogram(request):
                 'hq': sub.headquarter.name if sub.headquarter else 'N/A',
                 'is_me': False,
                 'is_vacant': is_vacant,
-                'depth': depth # Neeche wale level par hain
+                'depth': depth
             })
-            # Unke bhi subordinates check karo (Recursion)
             get_subs(sub, depth + 1)
             
-    get_subs(emp, 1) # Mere direct reports depth 1 par honge, unke reports depth 2 par, etc.
+    get_subs(emp, 1)
         
     return Response(nodes, status=200)
+
 # ==============================================================================
 # 🔧 PRIVATE HELPERS
 # ==============================================================================
@@ -257,7 +272,36 @@ def _employee_dict(emp, include_manager=False):
         'hq': emp.headquarter.name if emp.headquarter else None,
         'hq_id': emp.headquarter_id,
         'photo_url': emp.photo.url if emp.photo else None,
+        
+        # 🌟 NAYA: Personal Info
+        'dob': str(emp.dob) if emp.dob else None,
+        'anniversary': str(emp.anniversary) if emp.anniversary else None,
+        'blood_group': emp.blood_group or '',
+        'emergency_contact': emp.emergency_contact or '',
+        'permanent_address': emp.permanent_address or '',
+        
+        # 🌟 NAYA: Family Info
+        'father_name': emp.father_name or '',
+        'father_dob': str(emp.father_dob) if emp.father_dob else None,
+        'father_mobile': emp.father_mobile or '',
+        'father_occupation': emp.father_occupation or '',
+        
+        'mother_name': emp.mother_name or '',
+        'mother_dob': str(emp.mother_dob) if emp.mother_dob else None,
+        'mother_mobile': emp.mother_mobile or '',
+        'mother_occupation': emp.mother_occupation or '',
+        
+        'spouse_name': emp.spouse_name or '',
+        'spouse_dob': str(emp.spouse_dob) if emp.spouse_dob else None,
+        'spouse_mobile': emp.spouse_mobile or '',
+        'spouse_occupation': emp.spouse_occupation or '',
+        
+        'child1_name': emp.child1_name or '',
+        'child1_dob': str(emp.child1_dob) if emp.child1_dob else None,
+        'child2_name': emp.child2_name or '',
+        'child2_dob': str(emp.child2_dob) if emp.child2_dob else None,
     }
+    
     if include_manager and emp.manager:
         data['manager'] = {
             'id': emp.manager.id,
