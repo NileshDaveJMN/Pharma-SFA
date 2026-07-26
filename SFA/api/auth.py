@@ -272,6 +272,8 @@ def _employee_dict(emp, include_manager=False):
         'hq': emp.headquarter.name if emp.headquarter else None,
         'hq_id': emp.headquarter_id,
         'photo_url': emp.photo.url if emp.photo else None,
+        'joining_date': str(emp.joining_date) if emp.joining_date else 'N/A', # 🌟 NAYA
+
         
         # 🌟 NAYA: Personal Info
         'dob': str(emp.dob) if emp.dob else None,
