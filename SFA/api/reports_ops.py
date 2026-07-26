@@ -185,6 +185,39 @@ def api_network_report(request):
     setting = SystemSetting.objects.filter(company=employee.company).first()
     allow_location_capture = setting.allow_location_capture if setting else True
 
+    # 🌟 NAYA: Excel Export Logic
+    if request.GET.get('export') == 'excel':
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+        import io
+        from django.http import HttpResponse
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Network Report"
+        
+        header_fill = PatternFill(start_color="107C41", end_color="107C41", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True)
+        
+        if active_tab == 'doctor':
+            ws.append(['Doctor Name', 'Specialty', 'Category', 'Route', 'Territory', 'Mobile', 'Address', 'Status'])
+            for col in range(1, 9): ws.cell(row=1, column=col).fill = header_fill; ws.cell(row=1, column=col).font = header_font
+            for d in doctors_out:
+                ws.append([d['name'], d['specialty'], d['category'], d['route'], d['territory'], d['mobile'], d['address'], d['status']])
+        else:
+            ws.append(['Chemist Name', 'Phone', 'Address', 'Route', 'Territory', 'Status'])
+            for col in range(1, 7): ws.cell(row=1, column=col).fill = header_fill; ws.cell(row=1, column=col).font = header_font
+            for c in chemists_out:
+                ws.append([c['name'], c['phone'], c['address'], c['route'], c['territory'], c['status']])
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        response = HttpResponse(output.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename="{active_tab}_network.xlsx"'
+        return response
+
     return Response({
         'selected_employee': _employee_brief(selected_emp),
         'team_employees': [_employee_brief(e) for e in team_employees] if employee.designation != 'MR' else [],
@@ -192,7 +225,7 @@ def api_network_report(request):
         'routes': [{'id': r.id, 'name': r.name} for r in routes],
         'specialty_choices': list(Doctor.SPECIALTY_CHOICES),
         'category_choices': list(Doctor.CATEGORY_CHOICES),
-        'allow_location_capture': allow_location_capture,  # 🌟 FIX
+        'allow_location_capture': allow_location_capture,
         'doctors': doctors_out,
         'chemists': chemists_out,
     })
