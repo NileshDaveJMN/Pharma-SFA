@@ -200,26 +200,8 @@ def api_expense_detail(request, report_id):
 @permission_classes([IsAuthenticated])
 def api_expense_save(request, report_id):
     """
-    Misc amount aur remarks save karo — Draft mein rehta hai, submit nahi hota.
-
-    POST body (JSON):
-    {
-        "lines": [
-            {
-                "line_id": 101,
-                "misc_amount": 150.0,
-                "remark": "Auto rickshaw"
-            },
-            {
-                "line_id": 102,
-                "misc_amount": 0.0,
-                "remark": ""
-            }
-        ]
-    }
-
-    Success (200):
-    { "message": "Draft save ho gaya! Submit karna mat bhoolo." }
+    Misc amount, remarks aur Bill Photo save karo — Draft mein rehta hai, submit nahi hota.
+    (Supports Multipart/form-data for file uploads)
     """
     try:
         employee = request.user.employee
@@ -234,9 +216,18 @@ def api_expense_save(request, report_id):
             status=400
         )
 
-    lines_data = request.data.get('lines', [])
-    if not lines_data:
+    # 🌟 FIX: Multipart request handle karna
+    lines_str = request.POST.get('lines')
+    if not lines_str:
+        lines_str = request.data.get('lines') # Fallback for standard JSON
+        
+    if not lines_str:
         return Response({'error': 'lines array required hai'}, status=400)
+
+    try:
+        lines_data = json.loads(lines_str) if isinstance(lines_str, str) else lines_str
+    except Exception:
+        return Response({'error': 'Invalid lines JSON format'}, status=400)
 
     try:
         for item in lines_data:
@@ -244,9 +235,17 @@ def api_expense_save(request, report_id):
             misc = float(item.get('misc_amount') or 0)
             remark = item.get('remark', '')
 
-            DailyExpense.objects.filter(
-                id=line_id, monthly_report=mr
-            ).update(misc_amount=misc, remark=remark)
+            expense = DailyExpense.objects.filter(id=line_id, monthly_report=mr).first()
+            if expense:
+                expense.misc_amount = misc
+                expense.remark = remark
+                
+                # 🌟 NAYA: Bill Photo Save karna
+                bill_file = request.FILES.get(f'bill_{line_id}')
+                if bill_file:
+                    expense.misc_bill = bill_file
+                
+                expense.save()
 
         return Response({
             'message': '📝 Draft save ho gaya! Manager ko dikhane ke liye Submit karna mat bhoolo.'
@@ -254,8 +253,6 @@ def api_expense_save(request, report_id):
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
-
-
 # ==============================================================================
 # 📤 SUBMIT FOR APPROVAL
 # ==============================================================================
