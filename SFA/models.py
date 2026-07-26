@@ -78,7 +78,33 @@ class Employee(models.Model):
     address = models.TextField(blank=True, null=True, help_text="Employee ka home address")
     is_active = models.BooleanField(default=True, help_text="False matlab ye employee company chhod chuka hai ya inactive hai.")
     leaving_date = models.DateField(null=True, blank=True, help_text="Employee ke company chhodne ki tareekh.")
-
+    # 🌟 NAYA: Personal & Family Info
+    dob = models.DateField(null=True, blank=True, verbose_name="Date of Birth")
+    anniversary = models.DateField(null=True, blank=True, verbose_name="Marriage Anniversary")
+    blood_group = models.CharField(max_length=10, blank=True, null=True)
+    emergency_contact = models.CharField(max_length=15, blank=True, null=True)
+    permanent_address = models.TextField(blank=True, null=True)
+    
+    # Family Info
+    father_name = models.CharField(max_length=100, blank=True, null=True)
+    father_dob = models.DateField(null=True, blank=True)
+    father_mobile = models.CharField(max_length=15, blank=True, null=True)
+    father_occupation = models.CharField(max_length=100, blank=True, null=True)
+    
+    mother_name = models.CharField(max_length=100, blank=True, null=True)
+    mother_dob = models.DateField(null=True, blank=True)
+    mother_mobile = models.CharField(max_length=15, blank=True, null=True)
+    mother_occupation = models.CharField(max_length=100, blank=True, null=True)
+    
+    spouse_name = models.CharField(max_length=100, blank=True, null=True)
+    spouse_dob = models.DateField(null=True, blank=True)
+    spouse_mobile = models.CharField(max_length=15, blank=True, null=True)
+    spouse_occupation = models.CharField(max_length=100, blank=True, null=True)
+    
+    child1_name = models.CharField(max_length=100, blank=True, null=True)
+    child1_dob = models.DateField(null=True, blank=True)
+    child2_name = models.CharField(max_length=100, blank=True, null=True)
+    child2_dob = models.DateField(null=True, blank=True)
     EMPLOYMENT_STATUS_CHOICES = [
         ('active', 'Active'),
         ('resigned', 'Resigned'),
