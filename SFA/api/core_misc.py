@@ -134,16 +134,19 @@ def api_update_location(request):
     is_global_open = setting.allow_location_capture if setting else True
 
     if target.latitude and not is_global_open:
-        return Response({'success': False, 'error': f'⚠️ {target.name} ki location pehle se lock hai. Admin se sampark karein.'}, status=403)
+        # 🌟 FIX: Professional English
+        return Response({'success': False, 'error': f'Location for {target.name} is already locked. Please contact the administrator.'}, status=403)
 
     if lat is not None and lng is not None:
-        # 🌟 FIX: Float ko String mein convert karke save karo, warna PostgreSQL 500 error dega
+        # 🌟 FIX: Float to String for PostgreSQL DecimalField
         target.latitude = str(lat)
         target.longitude = str(lng)
         target.save()
-        return Response({'success': True, 'message': f'📍 {target.name} ki location successfully save ho gayi!'})
+        # 🌟 FIX: Professional English
+        return Response({'success': True, 'message': f'Location for {target.name} has been saved successfully!'})
         
-    return Response({'success': False, 'error': 'GPS coordinates missing hain.'}, status=400)
+    # 🌟 FIX: Professional English
+    return Response({'success': False, 'error': 'GPS coordinates are missing.'}, status=400)
 # ==============================================================================
 # 🔔 NOTIFICATIONS
 # ==============================================================================
