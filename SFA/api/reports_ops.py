@@ -256,7 +256,8 @@ def api_route_playback(request, employee_id, date_str):
     if day_start and day_start.latitude and day_start.longitude:
         waypoints.append({
             'lat': float(day_start.latitude), 'lng': float(day_start.longitude),
-            'title': 'Day Start', 'time': day_start.started_at.strftime('%I:%M %p'), 'type': 'start',
+            # 🌟 FIX: localtime se IST mein convert hoga
+            'title': 'Day Start', 'time': timezone.localtime(day_start.started_at).strftime('%I:%M %p'), 'type': 'start',
         })
     if daily_dcr:
         for v in daily_dcr.visits.all().order_by('created_at'):
@@ -264,12 +265,14 @@ def api_route_playback(request, employee_id, date_str):
                 name = f"Dr. {v.doctor.name}" if v.doctor_id else (v.chemist.name if v.chemist_id else 'Visit')
                 waypoints.append({
                     'lat': float(v.latitude), 'lng': float(v.longitude),
-                    'title': name, 'time': v.created_at.strftime('%I:%M %p'), 'type': 'visit',
+                    # 🌟 FIX: localtime se IST mein convert hoga
+                    'title': name, 'time': timezone.localtime(v.created_at).strftime('%I:%M %p'), 'type': 'visit',
                 })
     if day_end and day_end.latitude and day_end.longitude:
         waypoints.append({
             'lat': float(day_end.latitude), 'lng': float(day_end.longitude),
-            'title': 'Day End', 'time': day_end.closed_at.strftime('%I:%M %p'), 'type': 'end',
+            # 🌟 FIX: localtime se IST mein convert hoga
+            'title': 'Day End', 'time': timezone.localtime(day_end.closed_at).strftime('%I:%M %p'), 'type': 'end',
         })
 
     return Response({
