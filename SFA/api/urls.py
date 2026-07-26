@@ -115,6 +115,7 @@ urlpatterns = [
     path('auth/save-token/', auth_api.api_save_token, name='api_save_token'),
     path('reports/my-requests/', api_my_requests, name='api_my_requests'),
     path('reports/route-report/', api_route_report, name='api_route_report'),
+    path('calendar/events/', core_api.api_calendar_events, name='api_calendar_events'),    
 
     # ── 🌟 Internal Messaging System (Email) ──────────────────────────────────
     path('messaging/inbox/', messaging.inbox_view, name='api_inbox'),

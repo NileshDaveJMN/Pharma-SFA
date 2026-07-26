@@ -478,3 +478,97 @@ def handle_post_mtp(employee, request):
             return Response({'success': True, 'message': '💾 Draft saved successfully!'})
 
     return Response({'error': 'Invalid action provided'}, status=400)
+# ==============================================================================
+# 📅 CALENDAR EVENTS API
+# ==============================================================================
+
+import calendar
+from datetime import date, timedelta
+from collections import defaultdict
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_calendar_events(request):
+    try:
+        employee = request.user.employee
+    except AttributeError:
+        return Response({'error': 'Employee profile missing'}, status=400)
+
+    # Month aur Year query params se lo (default current month/year)
+    today = timezone.now().date()
+    year = int(request.query_params.get('year', today.year))
+    month = int(request.query_params.get('month', today.month))
+
+    # 1. Hierarchy Logic: MR ko khud ka, Manager ko team ka
+    if employee.designation == 'MR':
+        team_employees = [employee]
+    else:
+        team_employees = list(get_full_team_employees(employee))
+        if employee not in team_employees:
+            team_employees.append(employee)
+            
+    team_ids = [e.id for e in team_employees]
+
+    events_map = defaultdict(list)
+
+    # 2. Holidays Scan
+    holidays = Holiday.objects.filter(company=employee.company, date__year=year, date__month=month, status='Approved')
+    for h in holidays:
+        events_map[h.date.isoformat()].append(f"🏖️ {h.name}")
+
+    # 3. Leaves Scan (Date range check)
+    start_date = date(year, month, 1)
+    end_date = date(year, month, calendar.monthrange(year, month)[1])
+    leaves = LeaveApplication.objects.filter(
+        employee_id__in=team_ids, 
+        start_date__lte=end_date, 
+        end_date__gte=start_date
+    ).exclude(status='Rejected')
+    
+    for leave in leaves:
+        current = max(leave.start_date, start_date)
+        end = min(leave.end_date, end_date)
+        while current <= end:
+            events_map[current.isoformat()].append(f"🏖️ {leave.employee.name} on Leave")
+            current += timedelta(days=1)
+
+    # 4. Employee Birthdays & Anniversaries Scan
+    for emp in team_employees:
+        if emp.dob and emp.dob.month == month:
+            try:
+                dt_str = date(year, month, emp.dob.day).isoformat()
+                events_map[dt_str].append(f"🎂 {emp.name} Birthday")
+            except ValueError: pass # Skip invalid dates like Feb 29
+                
+        if emp.anniversary and emp.anniversary.month == month:
+            try:
+                dt_str = date(year, month, emp.anniversary.day).isoformat()
+                events_map[dt_str].append(f"💍 {emp.name} Anniversary")
+            except ValueError: pass
+
+    # 5. Doctor Birthdays & Anniversaries Scan
+    doctors = Doctor.objects.filter(allocated_to_id__in=team_ids)
+    for doc in doctors:
+        if doc.dob and doc.dob.month == month:
+            try:
+                dt_str = date(year, month, doc.dob.day).isoformat()
+                events_map[dt_str].append(f"🎂 Dr. {doc.name} Birthday")
+            except ValueError: pass
+                
+        if doc.dom and doc.dom.month == month:
+            try:
+                dt_str = date(year, month, doc.dom.day).isoformat()
+                events_map[dt_str].append(f"💍 Dr. {doc.name} Anniversary")
+            except ValueError: pass
+
+    # 6. Chemist Owner Birthdays Scan
+    chemists = Chemist.objects.filter(allocated_to_id__in=team_ids)
+    for chem in chemists:
+        if chem.owner_dob and chem.owner_dob.month == month:
+            try:
+                dt_str = date(year, month, chem.owner_dob.day).isoformat()
+                events_map[dt_str].append(f"🎂 {chem.name} (Owner) Birthday")
+            except ValueError: pass
+
+    # defaultdict ko normal dict mein convert karke return karo
+    return Response(dict(events_map))    
