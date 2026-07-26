@@ -113,34 +113,37 @@ def _get_compliance_block(employee, today, setting):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_update_location(request):
+    try:
+        employee = request.user.employee
+    except AttributeError:
+        return Response({'error': 'Employee profile missing'}, status=400)
+
     role = request.data.get('role')
     target_id = request.data.get('target_id')
     lat = request.data.get('latitude')
     lng = request.data.get('longitude')
 
-    # 🌟 FIX: Sirf usi company ka doctor/chemist update ho sake
     if role == 'doctor':
         target = get_object_or_404(Doctor, id=target_id, company=employee.company)
     elif role == 'chemist':
-        target = get_object_or_404(Chemist, id=target_id, company=employee.company)    
+        target = get_object_or_404(Chemist, id=target_id, company=employee.company)
     else:
         return Response({'success': False, 'error': 'Invalid role provided.'}, status=400)
 
-    employee = request.user.employee  # 🌟 YE LINE ADD KARNI HAI
     setting = SystemSetting.objects.filter(company=employee.company).first()
     is_global_open = setting.allow_location_capture if setting else True
 
     if target.latitude and not is_global_open:
         return Response({'success': False, 'error': f'⚠️ {target.name} ki location pehle se lock hai. Admin se sampark karein.'}, status=403)
 
-    if lat and lng:
-        target.latitude = lat
-        target.longitude = lng
+    if lat is not None and lng is not None:
+        # 🌟 FIX: Float ko String mein convert karke save karo, warna PostgreSQL 500 error dega
+        target.latitude = str(lat)
+        target.longitude = str(lng)
         target.save()
         return Response({'success': True, 'message': f'📍 {target.name} ki location successfully save ho gayi!'})
         
     return Response({'success': False, 'error': 'GPS coordinates missing hain.'}, status=400)
-
 # ==============================================================================
 # 🔔 NOTIFICATIONS
 # ==============================================================================
