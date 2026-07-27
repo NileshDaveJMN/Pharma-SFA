@@ -570,18 +570,28 @@ def api_leaves(request):
                 'manager_remark': getattr(app, 'manager_remark', '') or '',
                 'admin_remark': getattr(app, 'admin_remark', '') or ''
             })
+            
+        # 🌟 FIX: Dono screens ke liye sab keys bhej rahe hain
         return Response({
             'success': True,
             'balance': {
+                # Leave Status Screen ke liye
                 'rem_cl': balance.cl_total - balance.cl_used,
                 'rem_sl': balance.sl_total - balance.sl_used,
                 'rem_pl': balance.pl_total - balance.pl_used,
                 'cl_total': balance.cl_total,
                 'sl_total': balance.sl_total,
                 'pl_total': balance.pl_total,
+                # Apply Leave Screen ke liye
+                'CL_left': balance.cl_total - balance.cl_used,
+                'SL_left': balance.sl_total - balance.sl_used,
+                'PL_left': balance.pl_total - balance.pl_used,
             },
-            'applications': app_data
-        })
+            # Leave Status Screen ke liye
+            'applications': app_data,
+            # Apply Leave Screen ke liye
+            'history': app_data
+        })    
 
     if request.method == 'POST':
         l_type = request.data.get('leave_type')
