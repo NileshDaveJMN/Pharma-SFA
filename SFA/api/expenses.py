@@ -2,16 +2,10 @@
 SFA/api/expenses.py
 ===================
 Flutter ke liye Expense REST API endpoints.
-
-Endpoints:
-    GET    /api/expenses/                    → Meri saari expense reports list
-    GET    /api/expenses/<id>/               → Ek report ki daily lines detail
-    POST   /api/expenses/<id>/save/          → Misc + remark save (Draft)
-    POST   /api/expenses/<id>/submit/        → Submit for approval
-    POST   /api/expenses/<id>/reopen/        → Rejected → Draft wapas
 """
 
 import calendar
+import json  # 🌟 FIX: json module import kiya
 from datetime import datetime
 
 from django.utils import timezone
@@ -33,22 +27,6 @@ from SFA.views.expenses import _fill_missing_dates
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_expense_list(request):
-    """
-    Employee ki saari monthly expense reports.
-
-    Response:
-    [
-        {
-            "id": 12,
-            "month": 5, "year": 2026,
-            "month_name": "May 2026",
-            "status": "Draft",          // Draft | Pending | Approved | Rejected
-            "total_claimed": 4500.0,
-            "total_approved": null,     // sirf Approved reports mein value hogi
-            "manager_remark": ""
-        }
-    ]
-    """
     try:
         employee = request.user.employee
     except AttributeError:
@@ -99,40 +77,6 @@ def api_expense_list(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_expense_detail(request, report_id):
-    """
-    Ek monthly report ki puri daily lines.
-
-    Response:
-    {
-        "id": 12,
-        "month": 5, "year": 2026,
-        "month_name": "May 2026",
-        "status": "Draft",
-        "manager_remark": "",
-        "total_claimed": 4500.0,
-        "total_approved": null,
-        "daily_lines": [
-            {
-                "id": 101,
-                "date": "2026-05-01",
-                "day_name": "Friday",
-                "territory_category": "HQ",   // HQ | EX_HQ | OUTSTATION
-                "night_stay": false,
-                "is_slab3": false,             // true = Admin manually approve karega
-                "da_amount": 200.0,
-                "ta_amount": 150.0,
-                "misc_amount": 0.0,
-                "remark": "",
-                "distance_km": 25.0,
-                "approved_da": null,           // null = claimed hi approved maano
-                "approved_ta": null,
-                "approved_misc": null,
-                "day_total_claimed": 350.0,
-                "day_total_approved": 350.0
-            }
-        ]
-    }
-    """
     try:
         employee = request.user.employee
     except AttributeError:
@@ -140,7 +84,6 @@ def api_expense_detail(request, report_id):
 
     mr = get_object_or_404(MonthlyExpenseReport, id=report_id, employee=employee)
 
-    # Smart recovery — missing dates fill karo
     if mr.status in ('Draft', 'Rejected'):
         _fill_missing_dates(mr, employee)
 
@@ -199,10 +142,6 @@ def api_expense_detail(request, report_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_expense_save(request, report_id):
-    """
-    Misc amount, remarks aur Bill Photo save karo — Draft mein rehta hai, submit nahi hota.
-    (Supports Multipart/form-data for file uploads)
-    """
     try:
         employee = request.user.employee
     except AttributeError:
@@ -225,6 +164,7 @@ def api_expense_save(request, report_id):
         return Response({'error': 'lines array required hai'}, status=400)
 
     try:
+        # 🌟 FIX: json module ka use
         lines_data = json.loads(lines_str) if isinstance(lines_str, str) else lines_str
     except Exception:
         return Response({'error': 'Invalid lines JSON format'}, status=400)
@@ -240,7 +180,7 @@ def api_expense_save(request, report_id):
                 expense.misc_amount = misc
                 expense.remark = remark
                 
-                # 🌟 NAYA: Bill Photo Save karna
+                # 🌟 Bill Photo Save karna
                 bill_file = request.FILES.get(f'bill_{line_id}')
                 if bill_file:
                     expense.misc_bill = bill_file
@@ -253,6 +193,8 @@ def api_expense_save(request, report_id):
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+
 # ==============================================================================
 # 📤 SUBMIT FOR APPROVAL
 # ==============================================================================
@@ -260,26 +202,6 @@ def api_expense_save(request, report_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_expense_submit(request, report_id):
-    """
-    Expense report submit karo — Draft/Rejected → Pending.
-
-    POST body (JSON):
-    {
-        "lines": [           // optional — save + submit ek saath
-            {
-                "line_id": 101,
-                "misc_amount": 150.0,
-                "remark": "Auto rickshaw"
-            }
-        ]
-    }
-
-    Success (200):
-    { "message": "Expense Report successfully submitted!" }
-
-    Error (400):
-    { "error": "Current month ka expense abhi submit nahi ho sakta." }
-    """
     try:
         employee = request.user.employee
     except AttributeError:
@@ -301,15 +223,33 @@ def api_expense_submit(request, report_id):
         )
 
     try:
-        # Pehle misc/remark save karo agar diye hain
-        lines_data = request.data.get('lines', [])
-        for item in lines_data:
-            line_id = item.get('line_id')
-            misc = float(item.get('misc_amount') or 0)
-            remark = item.get('remark', '')
-            DailyExpense.objects.filter(
-                id=line_id, monthly_report=mr
-            ).update(misc_amount=misc, remark=remark)
+        # 🌟 FIX: Multipart request handle karna (Save jaisa same logic)
+        lines_str = request.POST.get('lines')
+        if not lines_str:
+            lines_str = request.data.get('lines')
+            
+        if lines_str:
+            try:
+                lines_data = json.loads(lines_str) if isinstance(lines_str, str) else lines_str
+            except Exception:
+                return Response({'error': 'Invalid lines JSON format'}, status=400)
+
+            for item in lines_data:
+                line_id = item.get('line_id')
+                misc = float(item.get('misc_amount') or 0)
+                remark = item.get('remark', '')
+
+                expense = DailyExpense.objects.filter(id=line_id, monthly_report=mr).first()
+                if expense:
+                    expense.misc_amount = misc
+                    expense.remark = remark
+                    
+                    # 🌟 NAYA: Submit karte time bhi Bill Photo Save karna
+                    bill_file = request.FILES.get(f'bill_{line_id}')
+                    if bill_file:
+                        expense.misc_bill = bill_file
+                        
+                    expense.save()
 
         # Missing dates fill karo
         _fill_missing_dates(mr, employee)
@@ -333,12 +273,6 @@ def api_expense_submit(request, report_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_expense_reopen(request, report_id):
-    """
-    Rejected report ko wapas Draft mein daalo taaki changes ho sakein.
-
-    Success (200):
-    { "message": "Report wapas Draft mein aa gayi. Ab changes kar sakte hain." }
-    """
     try:
         employee = request.user.employee
     except AttributeError:
