@@ -321,7 +321,55 @@ def api_approval_action(request):
         return Response({'error': 'Access denied: You cannot approve/reject items from another company.'}, status=403)
 
     if action == 'approve':
-        if itype == 'free_claim':
+        
+        # 🌟 NAYA: Edit & Approve Logic for Expenses
+        if itype == 'monthly_expense':
+            edited_lines = request.data.get('edited_lines')
+            if edited_lines:
+                from SFA.models import DailyExpense
+                for e_line in edited_lines:
+                    line_id = e_line.get('line_id')
+                    line_obj = DailyExpense.objects.filter(id=line_id, monthly_report=obj).first()
+                    if line_obj:
+                        line_obj.approved_da = float(e_line.get('da', line_obj.da_amount))
+                        line_obj.approved_ta = float(e_line.get('ta', line_obj.ta_amount))
+                        line_obj.approved_misc = float(e_line.get('misc', line_obj.misc_amount))
+                        line_obj.save()
+            obj.status = 'Approved'
+            obj.manager_remark = remark
+
+        # 🌟 NAYA: Edit & Approve Logic for Targets
+        elif itype == 'target':
+            edited_lines = request.data.get('edited_lines')
+            if edited_lines:
+                from SFA.models import TerritoryTarget
+                for e_line in edited_lines:
+                    tt_id = e_line.get('line_id')
+                    tt_obj = TerritoryTarget.objects.filter(id=tt_id).first()
+                    if tt_obj:
+                        tt_obj.target_qty = int(e_line.get('qty', tt_obj.target_qty))
+                        tt_obj.save()
+
+            # Existing Target Chain Approval Logic
+            if is_admin:
+                obj.status = 'Approved'
+            else:
+                m_list = list(obj.approved_by_managers)
+                if manager.id not in m_list:
+                    m_list.append(manager.id)
+                obj.approved_by_managers = m_list
+                obj.manager_remark = remark
+                chain_complete = True
+                chain_emp = _get_target_chain_starter(obj)
+                curr = chain_emp.manager if chain_emp else None
+                while curr and curr.designation not in ('Admin', 'System Administrator'):
+                    if curr.id not in obj.approved_by_managers:
+                        chain_complete = False
+                        break
+                    curr = curr.manager
+                obj.status = 'Pending_Admin' if chain_complete else 'Pending_Manager'
+
+        elif itype == 'free_claim':
             if is_admin:
                 obj.status = 'Approved'
                 obj.admin_remark = remark
@@ -333,24 +381,6 @@ def api_approval_action(request):
                 obj.manager_remark = remark
                 chain_complete = True
                 curr = obj.employee.manager
-                while curr and curr.designation not in ('Admin', 'System Administrator'):
-                    if curr.id not in obj.approved_by_managers:
-                        chain_complete = False
-                        break
-                    curr = curr.manager
-                obj.status = 'Pending_Admin' if chain_complete else 'Pending_Manager'
-
-        elif itype == 'target':
-            if is_admin:
-                obj.status = 'Approved'
-            else:
-                m_list = list(obj.approved_by_managers)
-                if manager.id not in m_list:
-                    m_list.append(manager.id)
-                obj.approved_by_managers = m_list
-                chain_complete = True
-                chain_emp = _get_target_chain_starter(obj)
-                curr = chain_emp.manager if chain_emp else None
                 while curr and curr.designation not in ('Admin', 'System Administrator'):
                     if curr.id not in obj.approved_by_managers:
                         chain_complete = False
