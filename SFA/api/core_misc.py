@@ -162,9 +162,28 @@ def api_notifications(request):
     
     notifications.filter(is_read=False).update(is_read=True)
     return Response({'success': True, 'notifications': data})
-
+# 🌟 NAYA: Unread Notifications Count (Read mark nahi karega)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_unread_notifications_count(request):
+    try:
+        employee = request.user.employee
+    except AttributeError:
+        return Response({'error': 'Employee profile missing'}, status=400)
+        
+    unread_notifs = SystemNotification.objects.filter(employee=employee, is_read=False)
+    
+    # Notice wale notifications ka title '📢 ' se shuru hota hai (notice_board_view se)
+    unread_notices = unread_notifs.filter(title__startswith='📢').count()
+    # Baaki sab alerts hain (Approvals, Leaves, etc.)
+    unread_alerts = unread_notifs.exclude(title__startswith='📢').count()
+    
+    return Response({
+        'unread_alerts': unread_alerts,
+        'unread_notices': unread_notices
+    })
 # ==============================================================================
-# 💬 MESSAGES
+# 💬 "MESSAGES"
 # ==============================================================================
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])

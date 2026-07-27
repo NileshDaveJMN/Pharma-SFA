@@ -123,4 +123,5 @@ urlpatterns = [
     path('messaging/employees/', messaging.employee_list_view, name='api_employee_list'),
     path('messaging/send/', messaging.send_message_view, name='api_send_message'),
     path('messaging/<int:msg_id>/read/', messaging.mark_message_read_view, name='api_mark_read'),
+    path('notifications/unread/', core_api.api_unread_notifications_count, name='api_unread_notifs_count'),    
 ]
