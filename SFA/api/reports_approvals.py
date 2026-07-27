@@ -20,8 +20,8 @@ from rest_framework import status
 
 from SFA.models import (
     Employee, Doctor, Chemist, Product, DailyDCR, DCRVisit, DCRProductDetail,
-    MonthlyTourProgram, MonthlyExpenseReport, Route, Holiday,
-    MonthlyTargetMaster, LeaveApplication, LeaveBalance, DayStart, SystemSetting,
+    MonthlyTourProgram, DailyTourPlan, MonthlyExpenseReport, Route, Holiday,
+    MonthlyTargetMaster, TerritoryTarget, LeaveApplication, LeaveBalance, DayStart, SystemSetting,
     FreeQtyClaimMaster, GiftCampaignPlan, ChemistEditRequest, DoctorEditRequest,
 )
 from SFA.services.team import (
@@ -49,27 +49,6 @@ def _chain_approved_for_target(target, manager):
 def api_approval_hub(request):
     """
     Manager/Admin ke saare PENDING approval-items, category-wise.
-    (MTP, Doctor, Chemist, Expense, Route, Holiday, Leave, Target,
-    Free Claim, Gift Campaign, Doctor Edit, Chemist Edit)
-
-    Response:
-    {
-        "manager_name": "Suresh RBM", "designation": "RBM",
-        "pending": {
-            "mtp": [{"id": 5, "employee": "Amit MR", "month": 6, "year": 2026}],
-            "doctors": [{"id": 12, "name": "Dr. Sharma", "employee": "Amit MR"}],
-            "chemists": [...],
-            "expenses": [{"id": 7, "employee": "Amit MR", "month": 6, "year": 2026}],
-            "routes": [{"id": 3, "name": "Dadar West", "requested_by": "Amit MR"}],
-            "holidays": [{"id": 1, "name": "Diwali", "date": "2026-11-01"}],
-            "leaves": [{"id": 9, "employee": "Amit MR", "leave_type": "CL", "start_date": "...", "end_date": "...", "days": 2}],
-            "targets": [{"id": 4, "territory": "Dadar", "month": 6, "year": 2026}],
-            "free_claims": [{"id": 8, "employee": "Amit MR", "stockist": "ABC Pharma", "month": 6, "year": 2026}],
-            "gift_campaigns": [{"id": 2, "employee": "Amit MR", "doctor": "Dr. Sharma", "item": "Diary"}],
-            "doctor_edits": [{"id": 6, "doctor": "Dr. Sharma", "employee": "Amit MR"}],
-            "chemist_edits": [...]
-        }
-    }
     """
     try:
         manager = request.user.employee
@@ -106,7 +85,7 @@ def api_approval_hub(request):
         pending_gift_campaigns = GiftCampaignPlan.objects.filter(
             employee__in=team_members, status='Pending'
         ).select_related('employee', 'doctor', 'item')
-        pending_holidays = Holiday.objects.filter(proposed_by__in=team_members, status='Pending')  # 🌟 FIX: pehle poore system ke pending holidays dikhte the, ab sirf apni team ke
+        pending_holidays = Holiday.objects.filter(proposed_by__in=team_members, status='Pending')
     else:
         team_territories = Employee.objects.filter(id__in=team_members).exclude(
             headquarter__isnull=True
@@ -137,8 +116,8 @@ def api_approval_hub(request):
         pending_holidays = []
 
     pending_mtps = MonthlyTourProgram.objects.filter(employee__in=team_members, status='Pending').select_related('employee').order_by('-year', '-month')
-    pending_doctors = Doctor.objects.filter(allocated_to__in=team_members, status='Pending').select_related('allocated_to')
-    pending_chemists = Chemist.objects.filter(allocated_to__in=team_members, status='Pending').select_related('allocated_to')
+    pending_doctors = Doctor.objects.filter(allocated_to__in=team_members, status='Pending').select_related('allocated_to', 'territory', 'route')
+    pending_chemists = Chemist.objects.filter(allocated_to__in=team_members, status='Pending').select_related('allocated_to', 'territory', 'route')
     pending_expenses = MonthlyExpenseReport.objects.filter(employee__in=team_members, status='Pending').select_related('employee')
     pending_routes = Route.objects.filter(requested_by__in=team_members, status='Pending').select_related('territory', 'requested_by')
     pending_leaves = LeaveApplication.objects.filter(employee__in=team_members, status='Pending').select_related('employee').order_by('start_date')
@@ -150,24 +129,55 @@ def api_approval_hub(request):
         'designation': manager.designation,
         'pending': {
             'mtp': [
-                {'id': m.id, 'employee': m.employee.name, 'month': m.month, 'year': m.year}
-                for m in pending_mtps
+                {
+                    'id': m.id, 'employee': m.employee.name, 'month': m.month, 'year': m.year,
+                    'lines': [
+                        {'date': d.date.strftime('%d %b'), 'route': d.route.name if d.route else '-'}
+                        for d in DailyTourPlan.objects.filter(mtp=m).select_related('route')
+                    ]
+                } for m in pending_mtps
             ],
             'doctors': [
-                {'id': d.id, 'name': d.name, 'employee': d.allocated_to.name if d.allocated_to else None}
-                for d in pending_doctors
+                {
+                    'id': d.id, 'name': d.name, 'employee': d.allocated_to.name if d.allocated_to else None,
+                    'specialty': d.specialty, 'category': d.category,
+                    'territory': d.territory.name if d.territory_id else None,
+                    'route': d.route.name if d.route_id else None,
+                    'mobile': d.mobile
+                } for d in pending_doctors
             ],
             'chemists': [
-                {'id': c.id, 'name': c.name, 'employee': c.allocated_to.name if c.allocated_to else None}
-                for c in pending_chemists
+                {
+                    'id': c.id, 'name': c.name, 'employee': c.allocated_to.name if c.allocated_to else None,
+                    'phone': c.phone,
+                    'territory': c.territory.name if c.territory_id else None,
+                    'route': c.route.name if c.route_id else None,
+                    'address': c.address
+                } for c in pending_chemists
             ],
             'expenses': [
-                {'id': e.id, 'employee': e.employee.name, 'month': e.month, 'year': e.year}
-                for e in pending_expenses
+                {
+                    'id': e.id, 'employee': e.employee.name, 'month': e.month, 'year': e.year,
+                    'total_claimed': sum((l.ta_amount or 0) + (l.da_amount or 0) + (l.misc_amount or 0) for l in e.daily_lines.all()),
+                    'lines': [
+                        {
+                            'date': l.date.strftime('%d %b'),
+                            'category': l.territory_category or 'HQ',
+                            'da': float(l.da_amount or 0),
+                            'ta': float(l.ta_amount or 0),
+                            'misc': float(l.misc_amount or 0),
+                            'total': float((l.ta_amount or 0) + (l.da_amount or 0) + (l.misc_amount or 0))
+                        } for l in e.daily_lines.all()
+                    ]
+                } for e in pending_expenses
             ],
             'routes': [
-                {'id': r.id, 'name': r.name, 'requested_by': r.requested_by.name if r.requested_by else None}
-                for r in pending_routes
+                {
+                    'id': r.id, 'name': r.name, 'requested_by': r.requested_by.name if r.requested_by else None,
+                    'territory': r.territory.name if r.territory_id else None,
+                    'category': r.category,
+                    'distance': float(r.distance_from_hq) if r.distance_from_hq else 0.0
+                } for r in pending_routes
             ],
             'holidays': [
                 {'id': h.id, 'name': h.name, 'date': str(h.date)}
@@ -185,6 +195,12 @@ def api_approval_hub(request):
                     'id': t.id,
                     'territory': t.territory.name if t.territory_id else None,
                     'month': t.month, 'year': t.year, 'status': t.status,
+                    'lines': [
+                        {
+                            'product': tt.product.name,
+                            'target_qty': tt.target_qty
+                        } for tt in TerritoryTarget.objects.filter(territory_id=t.territory_id, month=t.month, year=t.year).select_related('product')
+                    ]
                 } for t in pending_targets
             ],
            'free_claims': [
@@ -192,7 +208,6 @@ def api_approval_hub(request):
                     'id': c.id, 'employee': c.employee.name,
                     'stockist': c.stockist.name if c.stockist_id else None,
                     'month': c.month, 'year': c.year, 'status': c.status,
-                    # 🌟 NAYA FIX: Andar ke products aur unki value bhi bhej rahe hain
                     'lines': [
                         {
                             'product_name': line.product.name,
@@ -260,19 +275,6 @@ def api_approval_action(request):
     """
     Approve/Reject action — web ke manager_approval_hub jaisa hi logic,
     REST se. Notification system bhi same (SystemNotification).
-
-    POST body (JSON):
-    {
-        "item_type": "leave",     // mtp|doctor|chemist|monthly_expense|route|
-                                   // holiday|leave|target|free_claim|
-                                   // gift_campaign|chemist_edit|doctor_edit
-        "item_id": 9,
-        "action": "approve",      // approve | reject
-        "remark": "OK approved"   // optional, free_claim/gift_campaign use karte hain
-    }
-
-    Success (200): { "message": "Approved successfully", "new_status": "Approved" }
-    Error (400): { "error": "..." }
     """
     try:
         manager = request.user.employee
@@ -312,11 +314,9 @@ def api_approval_action(request):
     elif itype == 'holiday':
         target_emp = getattr(obj, 'proposed_by', None)
     
-    # Agar object kisika hai, toh check karo ki wo usi company ka hai ya nahi
     if target_emp and target_emp.company_id != manager.company_id:
         return Response({'error': 'Access denied: You cannot approve/reject items from another company.'}, status=403)
         
-    # Target object mein employee nahi hota, usme territory hota hai
     if itype == 'target' and hasattr(obj, 'territory') and obj.territory.company_id != manager.company_id:
         return Response({'error': 'Access denied: You cannot approve/reject items from another company.'}, status=403)
 
@@ -365,7 +365,7 @@ def api_approval_action(request):
         elif itype == 'chemist_edit':
             obj.chemist.name = obj.req_name
             obj.chemist.phone = obj.req_phone
-            obj.chemist.address = obj.req_address  # 🌟 FIX: address copy missing thi (views ke saath sync)
+            obj.chemist.address = obj.req_address
             if obj.req_territory:
                 obj.chemist.territory = obj.req_territory
             if obj.req_route:
@@ -424,7 +424,6 @@ def api_approval_action(request):
 
     obj.save()
 
-    # 🔔 Notification — same as web version
     try:
         from SFA.models import SystemNotification
         if itype == 'target':
@@ -442,9 +441,3 @@ def api_approval_action(request):
         pass
 
     return Response({'message': f'{action.title()}d successfully', 'new_status': obj.status})
-
-
-# ==============================================================================
-# 🩺 4. NETWORK REPORT (Doctor / Chemist listing)
-# ==============================================================================
-
