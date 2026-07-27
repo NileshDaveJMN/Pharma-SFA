@@ -738,6 +738,8 @@ def api_expense_report(request):
                 'da': da,
                 'misc': misc,
                 'total': total,
+                # 🌟 NAYA: Bill Photo ka URL bhejna
+                'misc_bill_url': request.build_absolute_uri(line.misc_bill.url) if line.misc_bill else None,
             })
 
         exp_data = {
@@ -810,7 +812,6 @@ def api_expense_report(request):
         'selected_year': year,
         'expenses': expenses_out
     })
-    
 # ==============================================================================
 # 🏖️ 11. HOLIDAY LIST REPORT
 # ==============================================================================
