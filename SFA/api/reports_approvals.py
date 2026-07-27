@@ -161,6 +161,7 @@ def api_approval_hub(request):
                     'total_claimed': sum((l.ta_amount or 0) + (l.da_amount or 0) + (l.misc_amount or 0) for l in e.daily_lines.all()),
                     'lines': [
                         {
+                            'id': l.id, # 🌟 NAYA
                             'date': l.date.strftime('%d %b'),
                             'category': l.territory_category or 'HQ',
                             'da': float(l.da_amount or 0),
@@ -197,6 +198,7 @@ def api_approval_hub(request):
                     'month': t.month, 'year': t.year, 'status': t.status,
                     'lines': [
                         {
+                            'id': tt.id, # 🌟 NAYA
                             'product': tt.product.name,
                             'target_qty': tt.target_qty
                         } for tt in TerritoryTarget.objects.filter(territory_id=t.territory_id, month=t.month, year=t.year).select_related('product')
