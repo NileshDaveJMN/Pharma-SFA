@@ -1,10 +1,11 @@
+from django.utils import timezone  # 🌟 NAYA IMPORT
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from SFA.models import Employee, InternalMessage, MessageAttachment
 
-# 🌟 Helper function: Token se Employee nikalne ke liye
+# 検 Helper function: Token se Employee nikalne ke liye
 def get_employee_from_user(request):
     try:
         # Agar aapke Employee model mein 'user' field hai (OneToOne)
@@ -40,7 +41,8 @@ def inbox_view(request):
             'subject': m.subject,
             'body': m.body,
             'is_read': m.is_read,
-            'sent_at': m.sent_at.strftime('%Y-%m-%d %H:%M'),
+            # 🌟 FIX: Convert to localtime and format as "30 Jul, 00:29"
+            'sent_at': timezone.localtime(m.sent_at).strftime('%d %b, %H:%M'),
             'attachments': attachments
         })
     return Response({'messages': data})
@@ -84,7 +86,7 @@ def send_message_view(request):
         body = request.data.get('body')
         parent_id = request.data.get('parent_id')
         
-        # 🌟 FIX: Sirf usi company ke employee ko mail bhej sake
+        # 検 FIX: Sirf usi company ke employee ko mail bhej sake
         receiver = Employee.objects.get(id=receiver_id, company=employee.company)
         
         msg = InternalMessage.objects.create(
@@ -105,7 +107,7 @@ def send_message_view(request):
     except Exception as e:
         return Response({'status': 'error', 'message': str(e)}, status=400)
 
-# 🌟 NAYA FUNCTION: Niche ki poori team chain nikalne ke liye
+# 検 NAYA FUNCTION: Niche ki poori team chain nikalne ke liye
 def get_all_subordinates(employee):
     subs = []
     # Sirf active subordinates ko fetch karein
@@ -136,9 +138,10 @@ def employee_list_view(request):
     all_emps = managers + subordinates + admins
     unique_emps = {e.id: e for e in all_emps if e.id != employee.id}
     
-    # 🌟 FIX: designation field alag se bhejni hai taaki Flutter usko filter kar sake
+    # 検 FIX: designation field alag se bhejni hai taaki Flutter usko filter kar sake
     data = [{'id': e.id, 'name': e.name, 'designation': e.designation} for e in unique_emps.values()]
     return Response({'employees': data})
+
 # 6. Sent Items API (Jo messages user ne khud bheje hain)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -161,12 +164,13 @@ def sent_items_view(request):
         data.append({
             'id': m.id,
             'sender_name': m.sender.name,
-            'receiver_name': m.receiver.name, # 🌟 Naya field receiver ka naam
+            'receiver_name': m.receiver.name, # 検 Naya field receiver ka naam
             'sender_id': m.sender.id,
             'subject': m.subject,
             'body': m.body,
             'is_read': m.is_read,
-            'sent_at': m.sent_at.strftime('%Y-%m-%d %H:%M'),
+            # 🌟 FIX: Convert to localtime and format as "30 Jul, 00:29"
+            'sent_at': timezone.localtime(m.sent_at).strftime('%d %b, %H:%M'),
             'attachments': attachments
         })
     return Response({'messages': data})    
