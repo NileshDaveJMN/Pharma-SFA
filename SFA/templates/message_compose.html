@@ -16,9 +16,8 @@
                 {% csrf_token %}
                 
                 <div class="mb-2">
-                    <label class="fw-bold text-secondary mb-1" style="font-size: 0.70rem;">To:</label>
-                    <select name="receiver_id" class="form-select form-select-sm bg-light border-0 fw-bold" style="border-radius: 6px; font-size: 0.75rem;" required>
-                        <option value="" disabled selected>👤 Select Recipient</option>
+                    <label class="fw-bold text-secondary mb-1" style="font-size: 0.70rem;">To: <span class="fw-normal text-muted">(multiple select ke liye Ctrl/Cmd dabaye rakhein)</span></label>
+                    <select name="receiver_ids" class="form-select form-select-sm bg-light border-0 fw-bold" style="border-radius: 6px; font-size: 0.75rem;" multiple size="5" required>
                         {% for c in contacts %}
                             {# 🌟 REPLY LOGIC: Agar reply ho rahi hai, toh sender auto-select ho jaye #}
                             <option value="{{ c.id }}" {% if reply_to_msg and c.id == reply_to_msg.sender_id %}selected{% endif %}>

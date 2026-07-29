@@ -1266,24 +1266,31 @@ def web_compose_view(request, employee):
             forward_to_msg = get_object_or_404(InternalMessage, id=forward_to_id)
             
     elif request.method == 'POST':
-        receiver_id = request.POST.get('receiver_id')
+        # 🌟 FIX: Multiple "To" recipients ab supported hain
+        receiver_ids = request.POST.getlist('receiver_ids')
         subject = request.POST.get('subject')
         body = request.POST.get('body')
-        
-        if receiver_id and subject:
-            receiver = get_object_or_404(Employee, id=receiver_id)
-            msg = InternalMessage.objects.create(
-                sender=employee,
-                receiver=receiver,
-                subject=subject,
-                body=body
-            )
-            
+
+        if receiver_ids and subject:
             files = request.FILES.getlist('attachments')
-            for f in files:
-                MessageAttachment.objects.create(message=msg, file=f)
-                
-            messages.success(request, "✉️ Mail sent successfully!")
+            sent_count = 0
+            for rid in receiver_ids:
+                receiver = get_object_or_404(Employee, id=rid)
+                msg = InternalMessage.objects.create(
+                    sender=employee,
+                    receiver=receiver,
+                    subject=subject,
+                    body=body
+                )
+                for f in files:
+                    f.seek(0)  # Har recipient ke liye file pointer reset karna zaroori hai
+                    MessageAttachment.objects.create(message=msg, file=f)
+                sent_count += 1
+
+            if sent_count > 1:
+                messages.success(request, f"✉️ Mail sent to {sent_count} recipients!")
+            else:
+                messages.success(request, "✉️ Mail sent successfully!")
             return redirect('web_inbox')
     
     # Contacts ke liye Hierarchy Logic

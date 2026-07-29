@@ -70,6 +70,16 @@
                                     {% endfor %}
                                 </div>
                             {% endif %}
+
+                            <!-- 🌟 NAYA: Har mail ke niche Reply/Forward -->
+                            <div class="d-flex gap-2 mt-2 pt-2 border-top">
+                                <a href="{% url 'web_compose' %}?reply_to={{ msg.id }}" class="btn btn-outline-primary btn-sm fw-bold flex-fill py-0" style="font-size: 0.62rem;">
+                                    <i class="bi bi-reply-fill"></i> Reply
+                                </a>
+                                <a href="{% url 'web_compose' %}?forward_to={{ msg.id }}" class="btn btn-outline-info btn-sm fw-bold flex-fill py-0" style="font-size: 0.62rem;">
+                                    <i class="bi bi-forward-fill"></i> Forward
+                                </a>
+                            </div>
                         </div>
                     </div>
                 {% empty %}
@@ -108,6 +118,16 @@
                                     {% endfor %}
                                 </div>
                             {% endif %}
+
+                            <!-- 🌟 NAYA: Har mail ke niche Reply/Forward -->
+                            <div class="d-flex gap-2 mt-2 pt-2 border-top">
+                                <a href="{% url 'web_compose' %}?reply_to={{ msg.id }}" class="btn btn-outline-primary btn-sm fw-bold flex-fill py-0" style="font-size: 0.62rem;">
+                                    <i class="bi bi-reply-fill"></i> Reply
+                                </a>
+                                <a href="{% url 'web_compose' %}?forward_to={{ msg.id }}" class="btn btn-outline-info btn-sm fw-bold flex-fill py-0" style="font-size: 0.62rem;">
+                                    <i class="bi bi-forward-fill"></i> Forward
+                                </a>
+                            </div>
                         </div>
                     </div>
                 {% empty %}
