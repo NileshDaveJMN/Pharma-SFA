@@ -1451,10 +1451,10 @@ def profile_view(request, employee):
     # Team Data fetch for TEAM TAB
     team_members = []
     if target_employee.designation != 'MR':
-        team_members = Employee.objects.filter(manager=target_employee, is_active=True).order_by('name')
+        # 🌟 NAYA FIX: Sirf direct subordinates nahi, poori hierarchy fetch karega
+        team_members = get_full_team_employees(target_employee).exclude(id=target_employee.id).order_by('designation', 'name')
 
-    return render(request, 'profile.html', {
-        'employee': target_employee, 
+    return render(request, 'profile.html', {        'employee': target_employee, 
         'team_members': team_members
     })
 
