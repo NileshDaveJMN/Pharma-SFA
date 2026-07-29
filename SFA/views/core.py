@@ -1273,14 +1273,20 @@ def web_compose_view(request, employee):
 
         if receiver_ids and subject:
             files = request.FILES.getlist('attachments')
+
+            # 🌟 FIX: Pehle saare recipients ke naam nikal lo, taaki har copy mein
+            # poori "To" list dikhe — recipient ko sirf apna naam nahi, sabka pata chale
+            recipients = list(Employee.objects.filter(id__in=receiver_ids))
+            recipients_display = ', '.join(r.name for r in recipients)
+
             sent_count = 0
-            for rid in receiver_ids:
-                receiver = get_object_or_404(Employee, id=rid)
+            for receiver in recipients:
                 msg = InternalMessage.objects.create(
                     sender=employee,
                     receiver=receiver,
                     subject=subject,
-                    body=body
+                    body=body,
+                    all_recipients=recipients_display
                 )
                 for f in files:
                     f.seek(0)  # Har recipient ke liye file pointer reset karna zaroori hai

@@ -1066,6 +1066,10 @@ class InternalMessage(models.Model):
     # 🌟 Reply/Forward ke liye parent message (Optional)
     parent_message = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='replies')
 
+    # 🌟 NAYA: Jab ek mail multiple logo ko jaaye, to sabke naam yahan store honge
+    # taaki har recipient ko pata chale ki aur kisko bheja gaya tha (BCC jaisa na dikhe)
+    all_recipients = models.CharField(max_length=500, blank=True, default='')
+
     def __str__(self):
         return f"From {self.sender} to {self.receiver}: {self.subject}"
 

@@ -28,7 +28,7 @@
                         <i class="bi bi-person-fill"></i> From: {{ msg.sender.name }}
                     </span>
                     <span class="fw-bold text-secondary" style="font-size: 0.70rem;">
-                        <i class="bi bi-send"></i> To: {{ msg.receiver.name }}
+                        <i class="bi bi-send"></i> To: {{ msg.all_recipients|default:msg.receiver.name }}
                     </span>
                 </div>
                 <small class="text-muted fw-bold" style="font-size: 0.60rem;">{{ msg.sent_at|date:"d M Y, h:i A" }}</small>
