@@ -287,6 +287,112 @@ def view_hub_view(request, employee):
     selected_emp = get_object_or_404(Employee, id=request.GET.get('employee_id', str(employee.id)))
     return render(request, 'view_hub.html', {'team_employees': get_full_team_employees(employee).order_by('-designation', 'name') if employee.designation != 'MR' else [employee], 'selected_emp_id': selected_emp.id, 'selected_employee_name': selected_emp.name, 'is_manager_view': employee.designation != 'MR'})
 
+
+@employee_required
+def calendar_view(request, employee):
+    from collections import defaultdict
+
+    today = timezone.now().date()
+    year = int(request.GET.get('year', today.year))
+    month = int(request.GET.get('month', today.month))
+
+    # 1. Hierarchy Logic: MR ko khud ka, Manager ko team ka
+    if employee.designation == 'MR':
+        team_employees = [employee]
+    else:
+        team_employees = list(get_full_team_employees(employee))
+        if employee not in team_employees:
+            team_employees.append(employee)
+    team_ids = [e.id for e in team_employees]
+
+    events_map = defaultdict(list)
+
+    # 2. Holidays Scan
+    holidays = Holiday.objects.filter(company=employee.company, date__year=year, date__month=month, status='Approved')
+    for h in holidays:
+        events_map[h.date.day].append(f"🏖️ {h.name}")
+
+    # 3. Leaves Scan (Date range check)
+    start_date = datetime(year, month, 1).date()
+    end_date = datetime(year, month, calendar.monthrange(year, month)[1]).date()
+    leaves = LeaveApplication.objects.filter(
+        employee_id__in=team_ids, start_date__lte=end_date, end_date__gte=start_date
+    ).exclude(status='Rejected')
+    for leave in leaves:
+        current = max(leave.start_date, start_date)
+        end = min(leave.end_date, end_date)
+        while current <= end:
+            events_map[current.day].append(f"🏖️ {leave.employee.name} on Leave")
+            current += timedelta(days=1)
+
+    # 4. Employee Birthdays & Anniversaries Scan
+    for emp in team_employees:
+        if emp.dob and emp.dob.month == month:
+            events_map[emp.dob.day].append(f"🎂 {emp.name} Birthday")
+        if emp.anniversary and emp.anniversary.month == month:
+            events_map[emp.anniversary.day].append(f"💍 {emp.name} Anniversary")
+
+    # 5. Doctor Birthdays & Anniversaries Scan
+    doctors = Doctor.objects.filter(allocated_to_id__in=team_ids)
+    for doc in doctors:
+        if doc.dob and doc.dob.month == month:
+            events_map[doc.dob.day].append(f"🎂 Dr. {doc.name} Birthday")
+        if doc.dom and doc.dom.month == month:
+            events_map[doc.dom.day].append(f"💍 Dr. {doc.name} Anniversary")
+
+    # 6. Chemist Owner Birthdays Scan
+    chemists = Chemist.objects.filter(allocated_to_id__in=team_ids)
+    for chem in chemists:
+        if chem.owner_dob and chem.owner_dob.month == month:
+            events_map[chem.owner_dob.day].append(f"🎂 {chem.name} (Owner) Birthday")
+
+    # ── Build the month grid (Sunday-start, India convention) ──
+    cal = calendar.Calendar(firstweekday=6)
+    weeks = []
+    for week in cal.monthdayscalendar(year, month):
+        week_data = []
+        for day in week:
+            if day == 0:
+                week_data.append(None)
+            else:
+                week_data.append({
+                    'day': day,
+                    'events': events_map.get(day, []),
+                    'is_today': (day == today.day and month == today.month and year == today.year),
+                })
+        weeks.append(week_data)
+
+    # ── Prev / Next month navigation ──
+    if month == 1:
+        prev_month, prev_year = 12, year - 1
+    else:
+        prev_month, prev_year = month - 1, year
+    if month == 12:
+        next_month, next_year = 1, year + 1
+    else:
+        next_month, next_year = month + 1, year
+
+    # ── Upcoming Alerts (Next 3 Days) ──
+    upcoming_alerts = []
+    for i in range(0, 4):
+        d = today + timedelta(days=i)
+        if d.month == month and d.year == year:
+            evs = events_map.get(d.day, [])
+            if evs:
+                upcoming_alerts.append({'date': d, 'events': evs})
+
+    context = {
+        'weeks': weeks,
+        'month_name': calendar.month_name[month],
+        'year': year,
+        'month': month,
+        'prev_month': prev_month, 'prev_year': prev_year,
+        'next_month': next_month, 'next_year': next_year,
+        'upcoming_alerts': upcoming_alerts,
+        'weekday_labels': ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    }
+    return render(request, 'calendar.html', context)
+
 @employee_required
 def vacancy_list_view(request, employee):
     """

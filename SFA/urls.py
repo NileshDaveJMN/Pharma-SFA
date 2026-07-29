@@ -44,6 +44,7 @@ urlpatterns = [
     path('request/add-tp/', views.add_tour_program_view, name='add_tour_program'),
     path('request/add-route/', views.add_route_view, name='add_route'),
     path('view/', views.view_hub_view, name='view_hub'),
+    path('calendar/', views.calendar_view, name='calendar_view'),
     path('expense/', views.expense_hub_view, name='expense_hub'),
     path('reports/primary-sales/', views.primary_sales_report_view, name='primary_sales_report'),
     path('reports/smart-secondary-statement/', views.smart_secondary_report_view, name='smart_secondary_statement'),

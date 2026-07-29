@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid p-0">
+
+    <!-- ── Upcoming Alerts (Next 3 Days) ── -->
+    <h6 class="fw-bold text-secondary mb-2 px-1" style="font-size: 0.7rem; letter-spacing: 0.5px;">🔔 UPCOMING ALERTS (NEXT 3 DAYS)</h6>
+
+    {% if upcoming_alerts %}
+        <div class="mb-3">
+            {% for alert in upcoming_alerts %}
+                <div class="card border-0 shadow-sm mb-2 p-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <span style="font-size: 1.2rem;">🔔</span>
+                        <div>
+                            <div class="fw-bold" style="font-size: 0.85rem;">{{ alert.date|date:"d M Y" }}</div>
+                            {% for ev in alert.events %}
+                                <div class="text-muted" style="font-size: 0.8rem;">{{ ev }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-muted mb-3" style="font-size: 0.85rem;">No upcoming alerts in the next 3 days.</p>
+    {% endif %}
+
+    <!-- ── Calendar Card ── -->
+    <div class="card border-0 shadow-sm p-2 mb-3">
+
+        <!-- Month Navigation -->
+        <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+            <a href="{% url 'calendar_view' %}?year={{ prev_year }}&month={{ prev_month }}" class="btn btn-sm btn-light border">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+            <span class="fw-bold" style="font-size: 0.95rem;">{{ month_name }} {{ year }}</span>
+            <a href="{% url 'calendar_view' %}?year={{ next_year }}&month={{ next_month }}" class="btn btn-sm btn-light border">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </div>
+
+        <!-- Weekday Header -->
+        <div class="d-flex text-center mb-1">
+            {% for wd in weekday_labels %}
+                <div class="flex-fill fw-bold text-secondary" style="font-size: 0.65rem;">{{ wd }}</div>
+            {% endfor %}
+        </div>
+
+        <!-- Days Grid -->
+        {% for week in weeks %}
+            <div class="d-flex mb-1" style="gap: 2px;">
+                {% for cell in week %}
+                    {% if cell %}
+                        <div class="flex-fill text-center p-1"
+                             style="min-height: 52px; border-radius: 6px; font-size: 0.75rem;
+                                    {% if cell.is_today %}background-color: rgba(0,86,179,0.12); border: 1px solid #0056b3;{% else %}background-color: #fafbfc;{% endif %}"
+                             {% if cell.events %}data-bs-toggle="tooltip" title="{{ cell.events|join:', ' }}"{% endif %}>
+                            <div class="fw-bold {% if cell.is_today %}text-primary{% endif %}">{{ cell.day }}</div>
+                            {% if cell.events %}
+                                <div class="d-flex justify-content-center flex-wrap mt-1" style="gap: 1px;">
+                                    {% for ev in cell.events|slice:":3" %}
+                                        <span style="width: 5px; height: 5px; border-radius: 50%; background-color: #00a8cc; display: inline-block;"></span>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <div class="flex-fill" style="min-height: 52px;"></div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- ── Legend ── -->
+    <div class="d-flex flex-wrap gap-2 px-1" style="font-size: 0.7rem;">
+        <span>🏖️ Holiday/Leave</span>
+        <span>🎂 Birthday</span>
+        <span>💍 Anniversary</span>
+    </div>
+
+</div>
+
+<script>
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el); });
+</script>
+{% endblock %}
