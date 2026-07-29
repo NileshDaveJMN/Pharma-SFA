@@ -9,14 +9,21 @@ from SFA.decorators import employee_required
 
 from django.contrib import messages # 🌟 NAYA: Ise top imports mein zaroor rakhein
 
-def _save_misc_claims(mr, post_data):
-    """Daily lines ke Misc amount aur Remark POST data se save karta hai. Save aur Submit dono se reuse hota hai."""
+
+
+def _save_misc_claims(mr, post_data, files_data):
+    """Daily lines ke Misc amount, Remark aur Bill POST data se save karta hai. Save aur Submit dono se reuse hota hai."""
     for line in mr.daily_lines.all():
         lid = str(line.id)
         line.misc_amount = float(post_data.get(f'misc_{lid}', 0.00) or 0.00)
         line.remark      = post_data.get(f'remark_{lid}', '')
+        
+        # 🌟 NAYA: Uploaded bill image fetch karke save karna
+        bill_file = files_data.get(f'bill_{lid}')
+        if bill_file:
+            line.misc_bill = bill_file
+            
         line.save()
-
 
 @employee_required
 def expense_hub_view(request, employee):
@@ -27,7 +34,8 @@ def expense_hub_view(request, employee):
     if request.method == 'POST' and request.POST.get('action') == 'bulk_save_claims':
         mr = get_object_or_404(MonthlyExpenseReport, id=request.POST.get('report_id'), employee=employee)
         if mr.status in ('Draft', 'Rejected'):
-            _save_misc_claims(mr, request.POST)
+            # 🌟 FIX: request.FILES pass kiya gaya hai
+            _save_misc_claims(mr, request.POST, request.FILES) 
             messages.warning(request, "📝 Changes Draft mein SAVE ho gaye hain — par abhi tak SUBMIT nahi hua! Manager ko ye approval ke liye nahi dikhega jab tak aap neeche 'Submit for Approval' button na dabayein.")
         return redirect(f'/expense/?active_report={mr.id}')
 
@@ -42,7 +50,8 @@ def expense_hub_view(request, employee):
             return redirect('expense_hub')
 
         if mr.status in ('Draft', 'Rejected'):
-            _save_misc_claims(mr, request.POST)  # 🌟 Submit se pehle current Misc/Remark bhi save ho jaaye, kuch chhutna nahi chahiye
+            # 🌟 FIX: request.FILES pass kiya gaya hai
+            _save_misc_claims(mr, request.POST, request.FILES) 
             _fill_missing_dates(mr, employee)
             mr.status         = 'Pending'
             mr.manager_remark = ''
