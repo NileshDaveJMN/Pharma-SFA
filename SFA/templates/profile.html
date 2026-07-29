@@ -1,165 +1,247 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="container-fluid p-0 mb-4 mt-2">
-    <div class="d-flex align-items-center justify-content-between mb-2 px-2">
-        <h5 class="fw-bold text-dark mb-0" style="font-size: 1.1rem;">👤 My Profile</h5>
-        <button class="btn btn-sm btn-light border text-primary fw-bold shadow-sm px-3" style="border-radius: 8px; font-size: 0.75rem;" data-bs-toggle="modal" data-bs-target="#editProfileModal">
-            <i class="bi bi-pencil-square"></i> Edit
+<div class="container-fluid p-0 mb-5">
+    
+    <!-- HEADER SECTION (Gradient + Avatar) -->
+    <div class="position-relative" style="background: linear-gradient(135deg, #107C41, #0dcaf0); height: 160px;">
+        <a href="javascript:history.back()" class="btn btn-sm btn-light position-absolute top-0 start-0 m-3 rounded-circle shadow-sm" style="width: 32px; height: 32px; line-height: 20px;">
+            <i class="bi bi-arrow-left fw-bold"></i>
+        </a>
+        <button class="btn btn-sm btn-light position-absolute top-0 end-0 m-3 rounded-circle shadow-sm" data-bs-toggle="modal" data-bs-target="#editProfileModal" style="width: 32px; height: 32px; line-height: 20px;">
+            <i class="bi bi-pencil-square text-primary"></i>
         </button>
     </div>
 
-    <div class="mx-1">
-        <div class="card border-0 shadow-sm bg-white" style="border-radius: 12px; border-top: 4px solid #0056b3 !important;">
-            <div class="card-body p-2">
-                
-                <div class="d-flex align-items-center gap-3 mb-2 px-1 mt-1">
-                    <div class="d-flex justify-content-center align-items-center border shadow-sm" style="width: 52px; height: 52px; border-radius: 50%; overflow: hidden; background-color: #eef5ff;">
-                        {% if request.user.employee.photo %}
-                            <img src="{{ request.user.employee.photo.url }}" alt="Profile" style="width: 100%; height: 100%; object-fit: cover;">
-                        {% else %}
-                            <span style="font-size: 1.8rem; padding-top: 2px;">👨‍💼</span>
-                        {% endif %}
-                    </div>
-                    <div style="line-height: 1.2;">
-                        <h6 class="fw-bold text-dark mb-1 fs-6">{{ request.user.employee.name|default:"Employee Name" }}</h6>
-                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25" style="font-size: 0.65rem;">{{ request.user.employee.designation|default:"MR" }}</span>
-                    </div>
-                </div>
+    <div class="text-center position-relative" style="margin-top: -50px;">
+        {% if employee.photo %}
+            <img src="{{ employee.photo.url }}" class="rounded-circle border border-4 border-white shadow" style="width: 100px; height: 100px; object-fit: cover; background-color: #fff;">
+        {% else %}
+            <div class="rounded-circle border border-4 border-white shadow d-flex align-items-center justify-content-center text-white fw-bold mx-auto" style="width: 100px; height: 100px; background-color: #6c757d; font-size: 2.5rem;">
+                {{ employee.name|slice:":1"|upper }}
+            </div>
+        {% endif %}
+        
+        <h4 class="fw-bold text-dark mt-2 mb-1">{{ employee.name }}</h4>
+        <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-1 rounded-pill border border-primary">{{ employee.get_designation_display }}</span>
+    </div>
 
-                <hr class="text-muted opacity-25 my-2">
+    <!-- TABS NAVIGATION -->
+    <ul class="nav nav-pills nav-justified mx-2 mt-4 shadow-sm bg-white rounded-3 p-1" id="profileTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active fw-bold py-2" style="font-size: 0.75rem;" id="info-tab" data-bs-toggle="pill" data-bs-target="#info" type="button" role="tab">INFO</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold py-2" style="font-size: 0.75rem;" id="personal-tab" data-bs-toggle="pill" data-bs-target="#personal" type="button" role="tab">PERSONAL</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold py-2" style="font-size: 0.75rem;" id="team-tab" data-bs-toggle="pill" data-bs-target="#team" type="button" role="tab">TEAM</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold py-2" style="font-size: 0.75rem;" id="settings-tab" data-bs-toggle="pill" data-bs-target="#settings" type="button" role="tab"><i class="bi bi-gear-fill"></i></button>
+        </li>
+    </ul>
 
-                <div class="row g-2 mb-2">
-                    <div class="col-6">
-                        <div class="bg-light border rounded p-2 h-100">
-                            <span class="text-muted fw-bold d-block mb-1" style="font-size: 0.65rem;">📍 HQ / Territory</span>
-                            <span class="text-dark fw-bold text-truncate d-block" style="font-size: 0.75rem;">{{ request.user.employee.headquarter.name|default:"-" }}</span>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="bg-light border rounded p-2 h-100">
-                            <span class="text-muted fw-bold d-block mb-1" style="font-size: 0.65rem;">📞 My Mobile</span>
-                            <a href="tel:{{ request.user.employee.phone|default:'' }}" class="text-success text-decoration-none fw-bold d-block" style="font-size: 0.75rem;">
-                                {{ request.user.employee.phone|default:"-" }}
-                            </a>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="bg-light border rounded p-2 h-100">
-                            <span class="text-muted fw-bold d-block mb-1" style="font-size: 0.65rem;">👔 Manager</span>
-                            <span class="text-dark fw-bold text-truncate d-block" style="font-size: 0.75rem;">{{ request.user.employee.manager.name|default:"N/A" }}</span>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="bg-light border rounded p-2 h-100">
-                            <span class="text-muted fw-bold d-block mb-1" style="font-size: 0.65rem;">📲 Manager No.</span>
-                            <a href="tel:{{ request.user.employee.manager.phone|default:'' }}" class="text-primary text-decoration-none fw-bold d-block" style="font-size: 0.75rem;">
-                                {{ request.user.employee.manager.phone|default:"N/A" }}
-                            </a>
-                        </div>
-                    </div>
-                </div>
+    <style>
+        .nav-pills .nav-link { color: #6c757d; border-radius: 8px; }
+        .nav-pills .nav-link.active { background-color: #107C41 !important; color: white !important; }
+        .info-label { font-size: 0.7rem; color: #6c757d; display: block; margin-bottom: 2px;}
+        .info-value { font-size: 0.9rem; font-weight: 600; color: #212529; }
+        .section-title { font-size: 0.8rem; font-weight: 700; color: #107C41; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;}
+    </style>
 
-                <div class="bg-light border rounded p-2 mb-3">
-                    <span class="text-muted fw-bold d-block mb-1" style="font-size: 0.65rem;">🏠 Home Address</span>
-                    <p class="text-dark fw-bold mb-0" style="font-size: 0.70rem; line-height: 1.3;">
-                        {{ request.user.employee.address|default:"Address not updated" }}
-                    </p>
-                </div>
-
-                {% if tree %}
-                <div class="border rounded p-2 mb-3" style="background: #f8f9ff;">
-                    <span class="text-muted fw-bold d-block mb-2" style="font-size: 0.65rem;">🧑‍🤝‍🧑 My Team</span>
-                    {% for node in tree %}
-                        {% include "partials/team_node.html" with node=node depth=0 %}
-                    {% endfor %}
-                </div>
-                {% endif %}
-
-                <div class="row g-2">
-                    <div class="col-6">
-                        <button type="button" class="btn btn-light border w-100 fw-bold shadow-sm py-1 d-flex justify-content-center align-items-center gap-1" style="border-radius: 8px; font-size: 0.75rem; height: 32px;" data-bs-toggle="modal" data-bs-target="#changePasswordModal">
-                            <i class="bi bi-key-fill text-warning"></i> Password
-                        </button>
-                    </div>
-                    <div class="col-6">
-                        <a href="{% url 'logout' %}" class="btn w-100 fw-bold shadow-sm py-1 d-flex justify-content-center align-items-center gap-1" style="background-color: #ffe5e5; color: #dc3545; border: 1px solid #ffcccc; border-radius: 8px; font-size: 0.75rem; height: 32px;" onclick="return confirm('Kya aap sach mein logout karna chahte hain?');">
-                            <i class="bi bi-power"></i> Logout
-                        </a>
-                    </div>
-                </div>
-
+    <!-- TABS CONTENT -->
+    <div class="tab-content mx-2 mt-3" id="profileTabsContent">
+        
+        <!-- 1. INFO TAB -->
+        <div class="tab-pane fade show active" id="info" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-3">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item p-3 d-flex align-items-center gap-3">
+                        <i class="bi bi-geo-alt-fill fs-4 text-primary"></i>
+                        <div><span class="info-label">HQ / Territory</span><span class="info-value">{{ employee.headquarter.name|default:"Not Assigned" }}</span></div>
+                    </li>
+                    <li class="list-group-item p-3 d-flex align-items-center gap-3">
+                        <i class="bi bi-telephone-fill fs-4 text-success"></i>
+                        <div><span class="info-label">My Mobile Number</span><span class="info-value">{{ employee.phone|default:"-" }}</span></div>
+                    </li>
+                    <li class="list-group-item p-3 d-flex align-items-center gap-3">
+                        <i class="bi bi-person-badge-fill fs-4 text-info"></i>
+                        <div><span class="info-label">Manager</span><span class="info-value">{{ employee.manager.name|default:"No Manager" }}</span></div>
+                    </li>
+                    <li class="list-group-item p-3 d-flex align-items-center gap-3">
+                        <i class="bi bi-phone-vibrate-fill fs-4 text-secondary"></i>
+                        <div><span class="info-label">Manager Mobile</span><span class="info-value">{{ employee.manager.phone|default:"-" }}</span></div>
+                    </li>
+                    <li class="list-group-item p-3 d-flex align-items-center gap-3">
+                        <i class="bi bi-calendar-check-fill fs-4 text-warning"></i>
+                        <div><span class="info-label">Date of Joining</span><span class="info-value">{{ employee.joining_date|date:"d M Y"|default:"-" }}</span></div>
+                    </li>
+                </ul>
             </div>
         </div>
+
+        <!-- 2. PERSONAL TAB -->
+        <div class="tab-pane fade" id="personal" role="tabpanel">
+            
+            <div class="section-title mt-2">Personal Info</div>
+            <div class="card border-0 shadow-sm rounded-3 mb-3">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item p-3"><span class="info-label"><i class="bi bi-cake2"></i> Date of Birth</span><span class="info-value">{{ employee.dob|date:"d M Y"|default:"N/A" }}</span></li>
+                    <li class="list-group-item p-3"><span class="info-label"><i class="bi bi-heart-fill text-danger"></i> Anniversary</span><span class="info-value">{{ employee.anniversary|date:"d M Y"|default:"N/A" }}</span></li>
+                    <li class="list-group-item p-3"><span class="info-label"><i class="bi bi-droplet-fill text-danger"></i> Blood Group</span><span class="info-value">{{ employee.blood_group|default:"N/A" }}</span></li>
+                    <li class="list-group-item p-3"><span class="info-label"><i class="bi bi-telephone-plus-fill text-info"></i> Emergency Contact</span><span class="info-value">{{ employee.emergency_contact|default:"N/A" }}</span></li>
+                </ul>
+            </div>
+
+            <div class="section-title">Address</div>
+            <div class="card border-0 shadow-sm rounded-3 mb-3">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item p-3"><span class="info-label"><i class="bi bi-house-door-fill"></i> Current Address</span><span class="info-value">{{ employee.address|default:"N/A" }}</span></li>
+                    <li class="list-group-item p-3"><span class="info-label"><i class="bi bi-building"></i> Permanent Address</span><span class="info-value">{{ employee.permanent_address|default:"N/A" }}</span></li>
+                </ul>
+            </div>
+
+            <div class="section-title">Family Info</div>
+            <div class="card border-0 shadow-sm rounded-3 mb-3 p-3">
+                <h6 class="fw-bold border-bottom pb-2">Father</h6>
+                <div class="row g-2 mb-3">
+                    <div class="col-6"><span class="info-label">Name</span><span class="info-value">{{ employee.father_name|default:"N/A" }}</span></div>
+                    <div class="col-6"><span class="info-label">DOB</span><span class="info-value">{{ employee.father_dob|date:"d M Y"|default:"N/A" }}</span></div>
+                    <div class="col-6"><span class="info-label">Mobile</span><span class="info-value">{{ employee.father_mobile|default:"N/A" }}</span></div>
+                    <div class="col-6"><span class="info-label">Occupation</span><span class="info-value">{{ employee.father_occupation|default:"N/A" }}</span></div>
+                </div>
+
+                <h6 class="fw-bold border-bottom pb-2">Mother</h6>
+                <div class="row g-2 mb-3">
+                    <div class="col-6"><span class="info-label">Name</span><span class="info-value">{{ employee.mother_name|default:"N/A" }}</span></div>
+                    <div class="col-6"><span class="info-label">DOB</span><span class="info-value">{{ employee.mother_dob|date:"d M Y"|default:"N/A" }}</span></div>
+                    <div class="col-6"><span class="info-label">Mobile</span><span class="info-value">{{ employee.mother_mobile|default:"N/A" }}</span></div>
+                    <div class="col-6"><span class="info-label">Occupation</span><span class="info-value">{{ employee.mother_occupation|default:"N/A" }}</span></div>
+                </div>
+
+                <h6 class="fw-bold border-bottom pb-2">Spouse</h6>
+                <div class="row g-2 mb-3">
+                    <div class="col-6"><span class="info-label">Name</span><span class="info-value">{{ employee.spouse_name|default:"N/A" }}</span></div>
+                    <div class="col-6"><span class="info-label">DOB</span><span class="info-value">{{ employee.spouse_dob|date:"d M Y"|default:"N/A" }}</span></div>
+                    <div class="col-6"><span class="info-label">Mobile</span><span class="info-value">{{ employee.spouse_mobile|default:"N/A" }}</span></div>
+                    <div class="col-6"><span class="info-label">Occupation</span><span class="info-value">{{ employee.spouse_occupation|default:"N/A" }}</span></div>
+                </div>
+
+                <h6 class="fw-bold border-bottom pb-2 mb-2">Children</h6>
+                <div class="row g-2">
+                    <div class="col-6"><span class="info-label">Child 1 Name</span><span class="info-value">{{ employee.child1_name|default:"N/A" }}</span></div>
+                    <div class="col-6"><span class="info-label">DOB</span><span class="info-value">{{ employee.child1_dob|date:"d M Y"|default:"N/A" }}</span></div>
+                    <div class="col-6"><span class="info-label">Child 2 Name</span><span class="info-value">{{ employee.child2_name|default:"N/A" }}</span></div>
+                    <div class="col-6"><span class="info-label">DOB</span><span class="info-value">{{ employee.child2_dob|date:"d M Y"|default:"N/A" }}</span></div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 3. TEAM TAB -->
+        <div class="tab-pane fade" id="team" role="tabpanel">
+            {% if team_members %}
+            <div class="card border-0 shadow-sm rounded-3 overflow-hidden">
+                <ul class="list-group list-group-flush">
+                    {% for member in team_members %}
+                    <li class="list-group-item p-3 d-flex align-items-center gap-3">
+                        <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center fw-bold text-primary border border-primary" style="width: 45px; height: 45px; font-size: 1.2rem;">
+                            {{ member.name|slice:":1"|upper }}
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="fw-bold text-dark" style="font-size: 0.95rem;">{{ member.name }}</div>
+                            <span class="badge bg-primary bg-opacity-10 text-primary px-2 py-0 border border-primary" style="font-size: 0.65rem;">{{ member.get_designation_display }}</span>
+                            <div class="text-muted mt-1" style="font-size: 0.75rem;"><i class="bi bi-geo-alt-fill"></i> {{ member.headquarter.name|default:"-" }}</div>
+                        </div>
+                        <a href="tel:{{ member.phone }}" class="btn btn-sm btn-light rounded-circle"><i class="bi bi-telephone-fill text-success"></i></a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% else %}
+            <div class="text-center text-muted mt-5">
+                <i class="bi bi-people" style="font-size: 3rem;"></i>
+                <p class="mt-2">No team members assigned to you.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- 4. SETTINGS TAB -->
+        <div class="tab-pane fade" id="settings" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-3">
+                <ul class="list-group list-group-flush">
+                    <button class="list-group-item list-group-item-action p-3 d-flex align-items-center gap-3 fw-bold text-dark" data-bs-toggle="modal" data-bs-target="#changePasswordModal">
+                        <i class="bi bi-shield-lock-fill fs-5 text-primary"></i> Change Password
+                    </button>
+                    <a href="{% url 'logout' %}" class="list-group-item list-group-item-action p-3 d-flex align-items-center gap-3 fw-bold text-danger">
+                        <i class="bi bi-box-arrow-right fs-5"></i> Logout
+                    </a>
+                </ul>
+            </div>
+        </div>
+
     </div>
 </div>
 
+<!-- ============================================== -->
+<!-- 📝 EDIT PROFILE MODAL -->
+<!-- ============================================== -->
 <div class="modal fade" id="editProfileModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered px-3">
-        <div class="modal-content border-0 shadow" style="border-radius: 16px;">
-            <form method="POST" enctype="multipart/form-data">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="update_profile">
-                
-                <div class="modal-header bg-light border-bottom-0" style="border-top-left-radius: 16px; border-top-right-radius: 16px; padding: 12px 16px;">
-                    <h6 class="modal-title fw-bold text-dark fs-6">✏️ Edit Profile</h6>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" style="font-size: 0.75rem;"></button>
-                </div>
-                
-                <div class="modal-body p-3">
-                    <div class="mb-3">
-                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.75rem;">Profile Photo</label>
-                        <input type="file" name="photo" class="form-control shadow-sm" accept="image/*" style="font-size: 0.8rem;">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.75rem;">My Mobile No.</label>
-                        <input type="text" name="phone" class="form-control shadow-sm fw-bold" style="font-size: 0.85rem;" value="{{ request.user.employee.phone|default:'' }}">
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.75rem;">Home Address</label>
-                        <textarea name="address" class="form-control shadow-sm fw-bold" rows="2" style="font-size: 0.85rem;">{{ request.user.employee.address|default:'' }}</textarea>
-                    </div>
-                </div>
-                
-                <div class="modal-footer border-top-0 p-3 pt-0">
-                    <button type="submit" class="btn btn-primary w-100 fw-bold shadow-sm py-2" style="border-radius: 8px;">Save Changes</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+    <div class="modal-dialog modal-fullscreen-md-down modal-dialog-scrollable">
+        <div class="modal-content" style="border-radius: 15px 15px 0 0;">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold text-dark">Edit Profile</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="update_profile">
 
-<div class="modal fade" id="changePasswordModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered px-3">
-        <div class="modal-content border-0 shadow" style="border-radius: 16px;">
-            <form method="POST">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="change_password">
-                
-                <div class="modal-header bg-light border-bottom-0" style="border-top-left-radius: 16px; border-top-right-radius: 16px; padding: 12px 16px;">
-                    <h6 class="modal-title fw-bold text-dark fs-6">🔐 Change Password</h6>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" style="font-size: 0.75rem;"></button>
-                </div>
-                
-                <div class="modal-body p-3">
                     <div class="mb-3">
-                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.75rem;">Old Password</label>
-                        <input type="password" name="old_password" class="form-control shadow-sm" style="font-size: 0.85rem;" required>
+                        <label class="form-label text-muted small fw-bold mb-1">Profile Photo</label>
+                        <input type="file" name="photo" class="form-control form-control-sm" accept="image/*">
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.75rem;">New Password</label>
-                        <input type="password" name="new_password" class="form-control shadow-sm" style="font-size: 0.85rem;" required>
+
+                    <div class="section-title mt-4">Contact Info</div>
+                    <div class="row g-2">
+                        <div class="col-12"><label class="form-label small mb-0 text-muted">Mobile No.</label><input type="text" name="phone" value="{{ employee.phone|default:'' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-12"><label class="form-label small mb-0 text-muted">Current Address</label><textarea name="address" class="form-control form-control-sm fw-bold" rows="2">{{ employee.address|default:'' }}</textarea></div>
+                        <div class="col-12"><label class="form-label small mb-0 text-muted">Permanent Address</label><textarea name="permanent_address" class="form-control form-control-sm fw-bold" rows="2">{{ employee.permanent_address|default:'' }}</textarea></div>
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label text-muted fw-bold mb-1" style="font-size: 0.75rem;">Confirm New Password</label>
-                        <input type="password" name="confirm_password" class="form-control shadow-sm" style="font-size: 0.85rem;" required>
+
+                    <div class="section-title mt-4">Personal Info</div>
+                    <div class="row g-2">
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Date of Birth</label><input type="date" name="dob" value="{{ employee.dob|date:'Y-m-d' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Anniversary</label><input type="date" name="anniversary" value="{{ employee.anniversary|date:'Y-m-d' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Blood Group</label><input type="text" name="blood_group" value="{{ employee.blood_group|default:'' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Emergency No.</label><input type="text" name="emergency_contact" value="{{ employee.emergency_contact|default:'' }}" class="form-control form-control-sm fw-bold"></div>
                     </div>
-                </div>
-                
-                <div class="modal-footer border-top-0 p-3 pt-0">
-                    <button type="submit" class="btn btn-warning w-100 fw-bold shadow-sm py-2 text-dark" style="border-radius: 8px;">Update Password</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-{% endblock %}
+
+                    <div class="section-title mt-4">Father's Info</div>
+                    <div class="row g-2">
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Name</label><input type="text" name="father_name" value="{{ employee.father_name|default:'' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">DOB</label><input type="date" name="father_dob" value="{{ employee.father_dob|date:'Y-m-d' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Mobile</label><input type="text" name="father_mobile" value="{{ employee.father_mobile|default:'' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Occupation</label><input type="text" name="father_occupation" value="{{ employee.father_occupation|default:'' }}" class="form-control form-control-sm fw-bold"></div>
+                    </div>
+
+                    <div class="section-title mt-4">Mother's Info</div>
+                    <div class="row g-2">
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Name</label><input type="text" name="mother_name" value="{{ employee.mother_name|default:'' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">DOB</label><input type="date" name="mother_dob" value="{{ employee.mother_dob|date:'Y-m-d' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Mobile</label><input type="text" name="mother_mobile" value="{{ employee.mother_mobile|default:'' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Occupation</label><input type="text" name="mother_occupation" value="{{ employee.mother_occupation|default:'' }}" class="form-control form-control-sm fw-bold"></div>
+                    </div>
+
+                    <div class="section-title mt-4">Spouse Info</div>
+                    <div class="row g-2">
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Name</label><input type="text" name="spouse_name" value="{{ employee.spouse_name|default:'' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">DOB</label><input type="date" name="spouse_dob" value="{{ employee.spouse_dob|date:'Y-m-d' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Mobile</label><input type="text" name="spouse_mobile" value="{{ employee.spouse_mobile|default:'' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Occupation</label><input type="text" name="spouse_occupation" value="{{ employee.spouse_occupation|default:'' }}" class="form-control form-control-sm fw-bold"></div>
+                    </div>
+
+                    <div class="section-title mt-4">Children Info</div>
+                    <div class="row g-2">
+                        <div class="col-6"><label class="form-labe

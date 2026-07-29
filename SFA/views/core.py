@@ -1360,62 +1360,103 @@ def notification_list_view(request, employee):
     return render(request, 'notification_list.html', {
         'notifications': notifications
     })
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
-from django.contrib.auth.decorators import login_required
-# Agar compression use karna hai toh import kijiye:
-# from .core import compress_photo 
+from SFA.models import Employee
+from SFA.decorators import employee_required
+from SFA.services.team import get_full_team_employees
 
-@login_required
-def profile_view(request):
-    employee = request.user.employee
-
-    if request.method == 'POST':
-        action = request.POST.get('action') # Check karenge konsa form submit hua hai
-
-        # 🎯 1. PROFILE UPDATE LOGIC
-        if action == 'update_profile':
-            phone = request.POST.get('phone')
-            address = request.POST.get('address')
-            photo_file = request.FILES.get('photo')
-
-            if phone: employee.phone = phone
-            if address: employee.address = address
-            if photo_file: 
-                # Agar compression function hai toh: employee.photo = compress_photo(photo_file)
-                employee.photo = photo_file 
-
-            employee.save()
-            messages.success(request, "🎉 Profile successfully update ho gayi!")
+@employee_required
+def profile_view(request, employee):
+    # 🌟 Agar Manager kisi aur ka profile dekh raha hai (Organogram ya Dropdown se)
+    emp_id = request.GET.get('employee_id')
+    if emp_id:
+        target_emp = get_object_or_404(Employee, id=emp_id, company=employee.company)
+        team_members = get_full_team_employees(employee)
+        managers = employee.get_my_managers()
+        allowed_ids = set(team_members.values_list('id', flat=True)) | set([m.id for m in managers])
+        
+        if target_emp.id not in allowed_ids and target_emp.id != employee.id:
+            messages.error(request, "Aap sirf apni team ki profile dekh sakte hain.")
             return redirect('profile')
-
-        # 🔐 2. PASSWORD CHANGE LOGIC
-        elif action == 'change_password':
-            old_password = request.POST.get('old_password')
-            new_password = request.POST.get('new_password')
-            confirm_password = request.POST.get('confirm_password')
-
-            # Purana password check karo
-            if not request.user.check_password(old_password):
-                messages.error(request, "⚠️ Purana password galat hai!")
-            # Naye password match check karo
-            elif new_password != confirm_password:
-                messages.error(request, "⚠️ Naya password aur confirm password match nahi kar rahe!")
-            else:
-                # Password set karo aur user ko logged-in rakho
-                request.user.set_password(new_password)
-                request.user.save()
-                update_session_auth_hash(request, request.user) # Ye user ko logout hone se bachayega
-                messages.success(request, "🔐 Password successfully change ho gaya!")
             
+        target_employee = target_emp
+    else:
+        target_employee = employee
+
+    # 🌟 Sirf khud ki profile edit/password change ho sakti hai
+    if request.method == "POST" and target_employee.id == employee.id:
+        action = request.POST.get('action')
+
+        if action == 'update_profile':
+            employee.phone = request.POST.get('phone', employee.phone)
+            employee.address = request.POST.get('address', employee.address)
+            
+            # Personal
+            employee.dob = request.POST.get('dob') or None
+            employee.anniversary = request.POST.get('anniversary') or None
+            employee.blood_group = request.POST.get('blood_group') or None
+            employee.emergency_contact = request.POST.get('emergency_contact') or None
+            employee.permanent_address = request.POST.get('permanent_address') or None
+            
+            # Father
+            employee.father_name = request.POST.get('father_name') or None
+            employee.father_dob = request.POST.get('father_dob') or None
+            employee.father_mobile = request.POST.get('father_mobile') or None
+            employee.father_occupation = request.POST.get('father_occupation') or None
+            
+            # Mother
+            employee.mother_name = request.POST.get('mother_name') or None
+            employee.mother_dob = request.POST.get('mother_dob') or None
+            employee.mother_mobile = request.POST.get('mother_mobile') or None
+            employee.mother_occupation = request.POST.get('mother_occupation') or None
+            
+            # Spouse
+            employee.spouse_name = request.POST.get('spouse_name') or None
+            employee.spouse_dob = request.POST.get('spouse_dob') or None
+            employee.spouse_mobile = request.POST.get('spouse_mobile') or None
+            employee.spouse_occupation = request.POST.get('spouse_occupation') or None
+            
+            # Children
+            employee.child1_name = request.POST.get('child1_name') or None
+            employee.child1_dob = request.POST.get('child1_dob') or None
+            employee.child2_name = request.POST.get('child2_name') or None
+            employee.child2_dob = request.POST.get('child2_dob') or None
+            
+            if 'photo' in request.FILES:
+                from SFA.views.core import compress_photo # Image compression helper
+                employee.photo = compress_photo(request.FILES['photo'])
+                
+            employee.save()
+            messages.success(request, "Profile updated successfully!")
             return redirect('profile')
 
-    # 🌟 NESTED TREE: Kisi bhi designation ke liye — RBM→ABM→MR, ZBM→RBM→ABM→MR, sab
-    # get_team_tree() do DB queries mein poora tree bana deta hai (ek BFS, ek select_related)
-    tree = get_team_tree(employee)
+        elif action == 'change_password':
+            old_pwd = request.POST.get('old_password')
+            new_pwd = request.POST.get('new_password')
+            confirm_pwd = request.POST.get('confirm_password')
+            
+            if new_pwd != confirm_pwd:
+                messages.error(request, "New passwords do not match!")
+            elif not request.user.check_password(old_pwd):
+                messages.error(request, "Old password is wrong!")
+            else:
+                request.user.set_password(new_pwd)
+                request.user.save()
+                update_session_auth_hash(request, request.user) # Login session break na ho
+                messages.success(request, "Password changed successfully!")
+            return redirect('profile')
 
-    return render(request, 'profile.html', {'tree': tree})
+    # Team Data fetch for TEAM TAB
+    team_members = []
+    if target_employee.designation != 'MR':
+        team_members = Employee.objects.filter(manager=target_employee, is_active=True).order_by('name')
+
+    return render(request, 'profile.html', {
+        'employee': target_employee, 
+        'team_members': team_members
+    })
 
 from django.shortcuts import render, redirect
 from django.contrib import messages
