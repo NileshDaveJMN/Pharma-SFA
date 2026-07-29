@@ -185,18 +185,17 @@
                 <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Gift<br>Report</span>
             </div>
         </div>
-
-       
-         {% if request.user.employee.designation != 'MR' %}
         <div class="col-3 mt-1">
             <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
-                 style="cursor:pointer; border-bottom: 3px solid #ffc107 !important; min-height: 62px; border-radius: 8px;"
-                 onclick="location.href='{% url 'organogram' %}';">
-                <span class="mb-1" style="font-size: 1.1rem">🪑</span>
-                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Organogram<br></span>
+                 style="cursor:pointer; border-bottom: 3px solid #28a745 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'free_claim_view_readonly' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🎁</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Free<br>Claims</span>
             </div>
         </div>
-        {% endif %}
+
+       
+        
 
   
     </div>
@@ -221,12 +220,14 @@
                 <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">My<br>Requests</span>
             </div>
         </div>
-      <div class="col-3 mt-1">
+     
+        
+        <div class="col-3 mt-1">
             <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
-                 style="cursor:pointer; border-bottom: 3px solid #28a745 !important; min-height: 62px; border-radius: 8px;"
-                 onclick="location.href='{% url 'free_claim_view_readonly' %}';">
-                <span class="mb-1" style="font-size: 1.1rem">🎁</span>
-                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Free<br>Claims</span>
+                 style="cursor:pointer; border-bottom: 3px solid #ffc107 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'organogram' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🪑</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Organogram<br></span>
             </div>
         </div>
         
