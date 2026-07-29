@@ -191,22 +191,14 @@
         <div class="col-3 mt-1">
             <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
                  style="cursor:pointer; border-bottom: 3px solid #ffc107 !important; min-height: 62px; border-radius: 8px;"
-                 onclick="location.href='{% url 'organogram' %};">
+                 onclick="location.href='{% url 'organogram' %}';">
                 <span class="mb-1" style="font-size: 1.1rem">🪑</span>
                 <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Organogram<br></span>
             </div>
         </div>
         {% endif %}
 
-        <div class="col-3 mt-1">
-            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
-                 style="cursor:pointer; border-bottom: 3px solid #28a745 !important; min-height: 62px; border-radius: 8px;"
-                 onclick="location.href='{% url 'free_claim_view_readonly' %}';">
-                <span class="mb-1" style="font-size: 1.1rem">🎁</span>
-                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Free<br>Claims</span>
-            </div>
-        </div>
-        
+  
     </div>
       <h6 class="fw-bold text-secondary mb-1 px-2 mt-3" style="font-size: 0.65rem; letter-spacing: 0.5px;">📝 MY TRACKERS & STATUS</h6>
     <div class="row g-1 mb-2 px-2">
@@ -229,7 +221,15 @@
                 <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">My<br>Requests</span>
             </div>
         </div>
-
+      <div class="col-3 mt-1">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center"
+                 style="cursor:pointer; border-bottom: 3px solid #28a745 !important; min-height: 62px; border-radius: 8px;"
+                 onclick="location.href='{% url 'free_claim_view_readonly' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🎁</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Free<br>Claims</span>
+            </div>
+        </div>
+        
     </div>
 
 
