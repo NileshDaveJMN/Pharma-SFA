@@ -24,6 +24,14 @@
                     {% if chemist.phone %}
                     <a href="tel:{{ chemist.phone }}" class="btn btn-success btn-sm fw-bold shadow-sm rounded-pill px-3"><i class="bi bi-telephone-fill"></i> Call</a>
                     {% endif %}
+
+                    <!-- 🌟 NAYA: Google Maps Direction Button -->
+                    {% if chemist.latitude and chemist.longitude %}
+                    <a href="https://www.google.com/maps/dir/?api=1&destination={{ chemist.latitude }},{{ chemist.longitude }}" target="_blank" class="btn btn-info btn-sm fw-bold shadow-sm rounded-pill px-3 text-white">
+                        <i class="bi bi-geo-alt-fill"></i> Map
+                    </a>
+                    {% endif %}
+
                     <a href="{% url 'edit_chemist' chemist.id %}" class="btn btn-outline-primary btn-sm fw-bold shadow-sm rounded-pill px-3"><i class="bi bi-pencil-fill"></i> Edit</a>
                 </div>
             </div>
