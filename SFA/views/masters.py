@@ -138,7 +138,7 @@ def add_route_view(request, employee):
 
 @employee_required
 def add_tour_program_view(request, employee):
-    today = date.today()
+    today = timezone.localdate()
     current_year = today.year
     curr_month = today.month
     
@@ -478,7 +478,7 @@ def _get_leave_balance_data(employee):
     (sirf history, View Hub ke liye) — dono yahi se balance nikalte hain,
     taaki calculation duplicate na ho aur dono jagah hamesha sync rahein.
     """
-    current_year = datetime.today().year
+    current_year = timezone.localdate().year
     balance, _ = LeaveBalance.objects.get_or_create(employee=employee, year=current_year)
     rem_cl = balance.cl_total - balance.cl_used
     rem_sl = balance.sl_total - balance.sl_used
@@ -556,8 +556,8 @@ def upload_primary_sales_view(request, employee):
     uploaded_file = request.FILES.get('upload_file') or request.FILES.get('excel_file') or request.FILES.get('csv_file')
 
     if request.method == 'POST' and uploaded_file:
-        selected_month = int(request.POST.get('month', datetime.today().month))
-        selected_year = int(request.POST.get('year', datetime.today().year))
+        selected_month = int(request.POST.get('month', timezone.localdate().month))
+        selected_year = int(request.POST.get('year', timezone.localdate().year))
         selected_rbm_id = request.POST.get('rbm_id')
         
         if not selected_rbm_id:
@@ -699,7 +699,7 @@ def upload_primary_sales_view(request, employee):
             
         return redirect('upload_primary_sales')
         
-    today = datetime.today()
+    today = timezone.localdate()
     # FIX: Company specific fetch
     rbms = Employee.objects.filter(company=employee.company, designation__in=['RBM', 'ZBM', 'NSM'], is_active=True).order_by('name')
     
@@ -1031,8 +1031,8 @@ def promo_dispatch_view(request, employee):
 @employee_required
 def gift_campaign_view(request, employee):
     # Sirf MR access kar sakta hai
-    current_month = timezone.now().month
-    current_year = timezone.now().year
+    current_month = timezone.localdate().month
+    current_year = timezone.localdate().year
 
     selected_month = int(request.GET.get('month', current_month))
     selected_year = int(request.GET.get('year', current_year))

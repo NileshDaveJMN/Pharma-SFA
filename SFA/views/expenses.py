@@ -27,8 +27,8 @@ def _save_misc_claims(mr, post_data, files_data):
 
 @employee_required
 def expense_hub_view(request, employee):
-    current_year = datetime.today().year
-    today        = timezone.now().date()
+    current_year = timezone.localdate().year
+    today        = timezone.localdate()
 
     # ── Save Misc/TA — Draft aur Rejected dono allow ─────────────────
     if request.method == 'POST' and request.POST.get('action') == 'bulk_save_claims':

@@ -39,7 +39,7 @@ def product_sales_report_view(request, employee):
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
     selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
     
-    today = timezone.now().date()
+    today = timezone.localdate()
     from_month = int(request.GET.get('from_month') or today.month)
     to_month = int(request.GET.get('to_month') or today.month)
     selected_year = int(request.GET.get('year') or today.year)
@@ -205,7 +205,7 @@ def view_dcr_report(request, employee, dcr_id):
 
 @employee_required
 def manager_report_view(request, employee):
-    today = timezone.now().date()
+    today = timezone.localdate()
     mr_reports = DailyDCR.objects.filter(employee__company=employee.company, date=today).select_related('employee').annotate(
         total_visits=Count('visits', distinct=True), total_samples=Sum('visits__product_details__sample_qty'), total_orders=Sum('visits__product_details__order_qty')
     ).values('employee__name', 'total_visits', 'total_samples', 'total_orders')
@@ -224,7 +224,7 @@ def dcr_report_view(request, employee):
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
     selected_emp = get_object_or_404(Employee, id=selected_emp_id)
     
-    today = timezone.now().date()
+    today = timezone.localdate()
     selected_month = int(request.GET.get('month') or today.month)
     selected_year = int(request.GET.get('year') or today.year)
 
@@ -512,8 +512,8 @@ def tour_plan_report_view(request, employee):
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
     selected_emp = get_object_or_404(Employee, id=selected_emp_id)
     
-    selected_month = int(request.GET.get('month') or timezone.now().month)
-    selected_year = int(request.GET.get('year') or timezone.now().year)
+    selected_month = int(request.GET.get('month') or timezone.localdate().month)
+    selected_year = int(request.GET.get('year') or timezone.localdate().year)
     
     daily_plans = DailyTourPlan.objects.filter(mtp__employee=selected_emp, date__month=selected_month, date__year=selected_year).select_related('route')
     plan_map = {p.date.day: p.route.name for p in daily_plans if p.route}
@@ -719,8 +719,8 @@ def expense_report_view(request, employee):
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
     selected_emp = get_object_or_404(Employee, id=selected_emp_id)
 
-    selected_month  = int(request.GET.get('month') or timezone.now().month)
-    selected_year   = int(request.GET.get('year') or timezone.now().year)
+    selected_month  = int(request.GET.get('month') or timezone.localdate().month)
+    selected_year   = int(request.GET.get('year') or timezone.localdate().year)
 
     expenses = MonthlyExpenseReport.objects.filter(employee=selected_emp, month=selected_month, year=selected_year).order_by('-year', '-month')
     
@@ -898,7 +898,7 @@ def analysis_hub_view(request, employee):
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
     selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     from_month = int(request.GET.get('from_month') or today.month)
     to_month = int(request.GET.get('to_month') or today.month)
     selected_year = int(request.GET.get('year') or today.year)
@@ -1121,11 +1121,11 @@ def free_claim_view(request, employee):
     selected_emp_id = request.GET.get('employee_id') or request.POST.get('employee_id') or default_emp_id
     selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
 
-    selected_month = int(request.GET.get('month') or timezone.now().month)
-    selected_year = int(request.GET.get('year') or timezone.now().year)
+    selected_month = int(request.GET.get('month') or timezone.localdate().month)
+    selected_year = int(request.GET.get('year') or timezone.localdate().year)
 
     # 🌟 STRICT BLOCKER: Sirf turant-pichle mahine ke liye deadline-day tak, baaki purani months hamesha lock (Admin override sirf submit ke waqt)
-    today = timezone.now().date()
+    today = timezone.localdate()
     setting = SystemSetting.objects.filter(company=employee.company).first()
     deadline = setting.free_claim_deadline_day if setting and setting.free_claim_deadline_day else 4
     prev_month, prev_year = (12, today.year - 1) if today.month == 1 else (today.month - 1, today.year)
@@ -1264,8 +1264,8 @@ def free_claim_view_readonly(request, employee):
     selected_emp_id = request.GET.get('employee_id') or default_emp_id
     selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
 
-    selected_month = int(request.GET.get('month') or timezone.now().month)
-    selected_year = int(request.GET.get('year') or timezone.now().year)
+    selected_month = int(request.GET.get('month') or timezone.localdate().month)
+    selected_year = int(request.GET.get('year') or timezone.localdate().year)
 
     my_terr_ids = [selected_emp.headquarter_id] if selected_emp.headquarter_id else []
     available_stockists = Stockist.objects.filter(territory_id__in=my_terr_ids).order_by('name')
@@ -1488,7 +1488,7 @@ def gift_distribution_report(request, employee):
     team_employees = get_dropdown_team(employee)
     is_manager_view = employee.designation != 'MR'
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     
     # --- STRONG DATE PARSING ---
     try:
@@ -1603,7 +1603,7 @@ def doctor_roi_report(request):
     team_employees = get_dropdown_team(employee)
     is_manager_view = employee.designation != 'MR'
 
-    today = timezone.now().date()
+    today = timezone.localdate()
     
     
     # --- STRONG DATE PARSING ---
@@ -1835,7 +1835,7 @@ def dr_visit_history_view(request, employee):
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
     selected_emp = get_object_or_404(Employee, id=selected_emp_id)
     
-    today = datetime.today()
+    today = timezone.localdate()
     from_month = int(request.GET.get('from_month', 1))
     to_month = int(request.GET.get('to_month', today.month))
     year = int(request.GET.get('year', today.year))
