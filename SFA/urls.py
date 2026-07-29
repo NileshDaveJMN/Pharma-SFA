@@ -111,7 +111,8 @@ urlpatterns = [
     path('profile/', views.profile_view, name='profile'),
     path('admin-tools/transfer-data/', views.transfer_data_view, name='transfer_data'),
     path('resign-employee/', views.resign_employee_view, name='resign_employee'),
-    path('vacancy-list/', views.vacancy_list_view, name='vacancy_list'),
+    path('organogram/', views.organogram_view, name='organogram'),
+
     path('promote-employee/', views.promote_employee_view, name='promote_employee'),
     path('free-claim-view/', views.free_claim_view_readonly, name='free_claim_view_readonly'),
     path('my-requests/', views.my_requests_view, name='my_requests'),

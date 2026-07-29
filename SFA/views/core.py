@@ -394,33 +394,61 @@ def calendar_view(request, employee):
     return render(request, 'calendar.html', context)
 
 @employee_required
-def vacancy_list_view(request, employee):
-    """
-    🌟 NAYA: ABM/RSM/Admin apni hierarchy (get_full_team_employees) ke
-    andar jo bhi 'Vacant_*' placeholder employees hain — unki list dikhata
-    hai, taaki manager ko pata chale ki kahan-kahan abhi tak naya employee
-    nahi mila aur data temporarily Vacant placeholder ke paas hold hai.
-    Admin ke liye ye automatically company-wide ban jata hai, kyunki Admin
-    hierarchy ke sabse top par hota hai (get_full_team_employees use karta
-    hai is_active=True filter ke saath, jo Vacant placeholders ko bhi
-    include karta hai kyunki unka is_active=True hota hai).
-    """
-    vacancies = get_full_team_employees(employee).filter(is_placeholder=True).select_related(
-        'headquarter', 'manager'
-    ).order_by('headquarter__name', 'designation')
-
-    # Har vacancy ke saath kitna data abhi tak uske paas hold hai, wo bhi dikha dete hain
-    vacancy_data = []
-    for v in vacancies:
-        vacancy_data.append({
-            'employee': v,
-            'doc_count': Doctor.objects.filter(allocated_to=v).count(),
-            'chem_count': Chemist.objects.filter(allocated_to=v).count(),
-            'team_count': Employee.objects.filter(manager=v).count(),
+def organogram_view(request, employee):
+    from SFA.models import Employee
+    nodes = []
+    
+    # 1. Upar ke Managers fetch karo
+    managers = employee.get_my_managers(include_inactive=False)
+    managers.reverse() # Taaki sabse bada boss sabse upar aaye
+    for m in managers:
+        nodes.append({
+            'id': m.id,
+            'name': m.name,
+            'role': m.designation,
+            'hq': m.headquarter.name if m.headquarter else 'N/A',
+            'is_me': False,
+            'is_vacant': False,
+            'depth': 0,
+            'padding': 0 # CSS margin ke liye
         })
-
-    return render(request, 'vacancy_list.html', {'vacancy_data': vacancy_data})
-
+        
+    # 2. Khud ko add karo
+    nodes.append({
+        'id': employee.id,
+        'name': f"{employee.name} (You)",
+        'role': employee.designation,
+        'hq': employee.headquarter.name if employee.headquarter else 'N/A',
+        'is_me': True,
+        'is_vacant': False,
+        'depth': 0,
+        'padding': 0
+    })
+    
+    # 3. Neeche ki team fetch karo (Recursive)
+    def get_subs(parent, depth):
+        direct_reports = Employee.objects.filter(manager=parent).exclude(id=parent.id).order_by('name')
+        for sub in direct_reports:
+            # Sirf active ya vacant places dikhani hain
+            if not sub.is_active and not sub.is_placeholder:
+                continue
+                
+            is_vacant = sub.is_placeholder
+            nodes.append({
+                'id': sub.id,
+                'name': 'Vacant Position' if is_vacant else sub.name,
+                'role': sub.designation,
+                'hq': sub.headquarter.name if sub.headquarter else 'N/A',
+                'is_me': False,
+                'is_vacant': is_vacant,
+                'depth': depth,
+                'padding': depth * 24 # UI indent ke liye 24px per depth
+            })
+            get_subs(sub, depth + 1)
+            
+    get_subs(employee, 1)
+        
+    return render(request, 'organogram.html', {'nodes': nodes})
 
 def _normalize_status(raw_status):
     """

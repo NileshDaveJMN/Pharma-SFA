@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-2">
+    <div class="d-flex align-items-center gap-2 mb-3 px-2">
+        <a href="javascript:history.back()" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h5 class="fw-bold text-dark mb-0" style="font-size: 1.1rem;">Organogram & Hierarchy</h5>
+    </div>
+
+    <div class="mx-2">
+        <h6 class="fw-bold text-secondary mb-3">Reporting Chain</h6>
+        
+        <div class="card border-0 shadow-sm bg-white p-3" style="border-radius: 12px;">
+            {% for node in nodes %}
+                
+                <!-- The Node Card -->
+                <a {% if not node.is_vacant %}href="{% url 'profile' %}?employee_id={{ node.id }}"{% endif %} 
+                   class="text-decoration-none d-block mb-1" 
+                   style="margin-left: {{ node.padding }}px;">
+                    
+                    <div class="card border {% if node.is_me %}border-primary bg-primary bg-opacity-10{% elif node.is_vacant %}border-secondary bg-light{% else %}border-light shadow-sm{% endif %} rounded-3 p-2">
+                        <div class="d-flex align-items-center">
+                            
+                            <!-- Avatar Icon -->
+                            <div class="rounded-circle d-flex align-items-center justify-content-center me-2
+                                {% if node.is_vacant %}bg-secondary bg-opacity-25 text-secondary{% else %}bg-info bg-opacity-10 text-info{% endif %}"
+                                style="width: 36px; height: 36px;">
+                                <i class="bi {% if node.is_vacant %}bi-person-plus{% else %}bi-person-fill{% endif %}"></i>
+                            </div>
+                            
+                            <!-- Details -->
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="fw-bold {% if node.is_vacant %}text-secondary{% else %}text-dark{% endif %}" style="font-size: 0.9rem;">
+                                        {{ node.name }}
+                                    </span>
+                                    <span class="badge {% if node.is_me %}bg-primary{% elif node.is_vacant %}bg-secondary bg-opacity-25 text-secondary{% else %}bg-info bg-opacity-10 text-info{% endif %}" style="font-size: 0.65rem;">
+                                        {{ node.role }}
+                                    </span>
+                                </div>
+                                <small class="text-muted d-flex align-items-center gap-1" style="font-size: 0.75rem;">
+                                    <i class="bi bi-geo-alt-fill"></i> {{ node.hq }}
+                                </small>
+                            </div>
+
+                            <!-- Right Arrow -->
+                            {% if not node.is_vacant %}
+                                <i class="bi bi-chevron-right text-muted"></i>
+                            {% endif %}
+                        </div>
+                    </div>
+                </a>
+
+                <!-- Connecting Vertical Line (Last item me nahi dikhegi) -->
+                {% if not forloop.last %}
+                <div class="d-flex" style="margin-left: {{ node.padding }}px;">
+                    <div style="width: 2px; height: 20px; background-color: rgba(108, 117, 125, 0.3); margin-left: 17px;"></div>
+                </div>
+                {% endif %}
+                
+            {% endfor %}
+        </div>
+        
+        <!-- Helper Text -->
+        <p class="text-muted text-center mt-4" style="font-size: 0.75rem;">
+            Filled boxes par click karne par employee ki profile khulegi.<br>Khali boxes vacancy darshate hain.
+        </p>
+    </div>
+</div>
+{% endblock %}
