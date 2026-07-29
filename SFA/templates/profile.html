@@ -241,7 +241,54 @@
                         <div class="col-6"><label class="form-label small mb-0 text-muted">Mobile</label><input type="text" name="spouse_mobile" value="{{ employee.spouse_mobile|default:'' }}" class="form-control form-control-sm fw-bold"></div>
                         <div class="col-6"><label class="form-label small mb-0 text-muted">Occupation</label><input type="text" name="spouse_occupation" value="{{ employee.spouse_occupation|default:'' }}" class="form-control form-control-sm fw-bold"></div>
                     </div>
-
                     <div class="section-title mt-4">Children Info</div>
                     <div class="row g-2">
-                        <div class="col-6"><label class="form-labe
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Child 1 Name</label><input type="text" name="child1_name" value="{{ employee.child1_name|default:'' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Child 1 DOB</label><input type="date" name="child1_dob" value="{{ employee.child1_dob|date:'Y-m-d' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Child 2 Name</label><input type="text" name="child2_name" value="{{ employee.child2_name|default:'' }}" class="form-control form-control-sm fw-bold"></div>
+                        <div class="col-6"><label class="form-label small mb-0 text-muted">Child 2 DOB</label><input type="date" name="child2_dob" value="{{ employee.child2_dob|date:'Y-m-d' }}" class="form-control form-control-sm fw-bold"></div>
+                    </div>
+
+                    <button type="submit" class="btn btn-success w-100 fw-bold mt-4 py-2 rounded-3 shadow-sm">💾 Save Changes</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================== -->
+<!-- 🔐 CHANGE PASSWORD MODAL -->
+<!-- ============================================== -->
+<div class="modal fade" id="changePasswordModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 15px;">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold text-dark"><i class="bi bi-shield-lock text-primary"></i> Change Password</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pt-2">
+                <form method="POST">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="change_password">
+                    
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-bold mb-1">Old Password</label>
+                        <input type="password" name="old_password" class="form-control fw-bold bg-light" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-bold mb-1">New Password</label>
+                        <input type="password" name="new_password" class="form-control fw-bold bg-light" required>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label text-muted small fw-bold mb-1">Confirm New Password</label>
+                        <input type="password" name="confirm_password" class="form-control fw-bold bg-light" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary w-100 fw-bold py-2 rounded-3 shadow-sm">🔒 Update Password</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
