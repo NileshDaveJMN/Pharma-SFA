@@ -140,7 +140,15 @@
 
         <!-- 🌟 NAYA INBOX TAB -->
         <a href="{% url 'web_inbox' %}" class="nav-item {% if request.resolver_match.url_name == 'web_inbox' or request.resolver_match.url_name == 'web_compose' %}active{% endif %}">
-            <span class="nav-icon">📨</span>Inbox
+            <span class="nav-icon position-relative">
+                📨
+                {% if unread_msg_count > 0 %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.55rem; padding: 0.25em 0.4em;">
+                    {{ unread_msg_count }}
+                    <span class="visually-hidden">unread messages</span>
+                </span>
+                {% endif %}
+            </span>Inbox
         </a>
 
         <a href="{% url 'profile' %}" class="nav-item {% if request.resolver_match.url_name == 'profile' %}active{% endif %}">
