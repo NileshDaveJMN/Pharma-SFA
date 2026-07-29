@@ -29,7 +29,7 @@ def api_pob_report(request):
 
     selected_emp, team_employees = _resolve_selected_employee(request, employee)
     
-    today = timezone.now().date()
+    today = timezone.localdate()
     from_month = int(request.GET.get('from_month') or today.month)
     to_month = int(request.GET.get('to_month') or today.month)
     selected_year = int(request.GET.get('year') or today.year)

@@ -281,6 +281,8 @@ def api_my_requests(request):
 
     return Response({'success': True, 'requests': req_list})
 
+
+
 import json
 import calendar
 from datetime import date, datetime, timedelta
@@ -323,7 +325,7 @@ def api_mtp(request):
 
 def handle_get_mtp(employee):
     """Flutter ko MTP ka initial data (Calendar, Routes, Leaves) bhejne ke liye"""
-    today = date.today()
+    today = timezone.localdate()
     current_year = today.year
     curr_month = today.month
     next_month, next_year = (1, current_year + 1) if curr_month == 12 else (curr_month + 1, current_year)
@@ -437,7 +439,7 @@ def handle_post_mtp(employee, request):
     if action == 'create_mtp':
         m = int(data.get('month'))
         y = int(data.get('year'))
-        today = date.today()
+        today = timezone.localdate()
         curr_month, current_year = today.month, today.year
         next_month, next_year = (1, current_year + 1) if curr_month == 12 else (curr_month + 1, current_year)
         
@@ -514,7 +516,7 @@ def api_calendar_events(request):
         return Response({'error': 'Employee profile missing'}, status=400)
 
     # Month aur Year query params se lo (default current month/year)
-    today = timezone.now().date()
+    today = timezone.localdate()
     year = int(request.query_params.get('year', today.year))
     month = int(request.query_params.get('month', today.month))
 

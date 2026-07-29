@@ -113,8 +113,8 @@ def api_expense_detail(request, report_id):
             'da_amount': float(l.da_amount or 0),
             'ta_amount': float(l.ta_amount or 0),
             'misc_amount': float(l.misc_amount or 0),
-            'remark': l.remark or '',
-            'distance_km': float(l.distance_km or 0),
+            'misc_bill_url': request.build_absolute_uri(l.misc_bill.url) if l.misc_bill else None,
+            'remark': l.remark or '',            'distance_km': float(l.distance_km or 0),
             'approved_da': float(l.approved_da) if l.approved_da is not None else None,
             'approved_ta': float(l.approved_ta) if l.approved_ta is not None else None,
             'approved_misc': float(l.approved_misc) if l.approved_misc is not None else None,
@@ -208,7 +208,8 @@ def api_expense_submit(request, report_id):
         return Response({'error': 'Employee profile missing'}, status=400)
 
     mr = get_object_or_404(MonthlyExpenseReport, id=report_id, employee=employee)
-    today = timezone.now().date()
+    today = timezone.localdate()
+
 
     # Current month block
     if mr.year > today.year or (mr.year == today.year and mr.month >= today.month):

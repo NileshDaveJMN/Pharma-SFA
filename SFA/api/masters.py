@@ -553,7 +553,8 @@ def _chemist_dict(chem, full=False):
 @permission_classes([IsAuthenticated])
 def api_leaves(request):
     employee = request.user.employee
-    current_year = datetime.today().year
+    current_year = timezone.localdate().year
+
 
     if request.method == 'GET':
         balance, _ = LeaveBalance.objects.get_or_create(employee=employee, year=current_year)
