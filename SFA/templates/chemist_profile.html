@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-2">
+    <div class="d-flex align-items-center gap-2 mb-3 px-2">
+        <a href="javascript:history.back()" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h5 class="fw-bold text-dark mb-0" style="font-size: 1.1rem;">Chemist Profile</h5>
+    </div>
+
+    <div class="mx-2">
+        <div class="card border-0 shadow-sm bg-white overflow-hidden" style="border-radius: 15px;">
+            <div style="height: 80px; background: linear-gradient(135deg, #107C41, #28a745);"></div>
+            
+            <div class="card-body text-center position-relative pt-0 pb-4">
+                <div class="position-relative d-inline-block" style="margin-top: -45px;">
+                    <div class="rounded-circle border border-4 border-white shadow-sm d-flex align-items-center justify-content-center text-white fw-bold" style="width: 90px; height: 90px; background-color: #107C41; font-size: 2rem;">
+                        {{ chemist.name|slice:":1"|upper }}
+                    </div>
+                </div>
+
+                <h5 class="fw-bold text-dark mt-2 mb-1">{{ chemist.name }}</h5>
+                <p class="text-muted mb-0" style="font-size: 0.85rem;">Status: {{ chemist.status|default:"-" }}</p>
+                
+                <div class="d-flex justify-content-center gap-2 mt-3">
+                    {% if chemist.phone %}
+                    <a href="tel:{{ chemist.phone }}" class="btn btn-success btn-sm fw-bold shadow-sm rounded-pill px-3"><i class="bi bi-telephone-fill"></i> Call</a>
+                    {% endif %}
+                    <a href="{% url 'edit_chemist' chemist.id %}" class="btn btn-outline-primary btn-sm fw-bold shadow-sm rounded-pill px-3"><i class="bi bi-pencil-fill"></i> Edit</a>
+                </div>
+            </div>
+
+            <ul class="list-group list-group-flush border-top">
+                <!-- Owner Info -->
+                <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
+                    <div class="text-primary bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-person-fill"></i></div>
+                    <div><small class="text-muted d-block" style="font-size: 0.65rem;">Owner Name</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ chemist.owner_name|default:"Not Available" }}</span></div>
+                </li>
+                <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
+                    <div class="text-primary bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-phone"></i></div>
+                    <div><small class="text-muted d-block" style="font-size: 0.65rem;">Phone Number</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ chemist.phone|default:"Not Available" }}</span></div>
+                </li>
+                <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
+                    <div class="text-warning bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-calendar-event text-dark"></i></div>
+                    <div><small class="text-muted d-block" style="font-size: 0.65rem;">Owner Date of Birth</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ chemist.owner_dob|date:"d M Y"|default:"Not Available" }}</span></div>
+                </li>
+                
+                <!-- Address -->
+                <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
+                    <div class="text-secondary bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-shop"></i></div>
+                    <div><small class="text-muted d-block" style="font-size: 0.65rem;">Shop Address</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ chemist.address|default:"Not Available" }}</span></div>
+                </li>
+
+                <!-- Mapping Info -->
+                <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
+                    <div class="text-info bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-geo-alt-fill text-info"></i></div>
+                    <div><small class="text-muted d-block" style="font-size: 0.65rem;">Territory & Route</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ chemist.territory.name|default:"-" }} / {{ chemist.route.name|default:"-" }}</span></div>
+                </li>
+                <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
+                    <div class="text-danger bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-box-seam-fill"></i></div>
+                    <div><small class="text-muted d-block" style="font-size: 0.65rem;">Linked Stockist</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ chemist.linked_stockist.name|default:"Not Linked" }}</span></div>
+                </li>
+                <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
+                    <div class="text-success bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-person-badge-fill text-success"></i></div>
+                    <div><small class="text-muted d-block" style="font-size: 0.65rem;">Allocated MR</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ chemist.allocated_to.name|default:"-" }}</span></div>
+                </li>
+
+                <!-- Visiting Card Photo -->
+                {% if chemist.card_photo %}
+                <li class="list-group-item px-3 py-3 text-center">
+                    <small class="text-muted d-block mb-2" style="font-size: 0.65rem;">Visiting Card</small>
+                    <img src="{{ chemist.card_photo.url }}" class="img-fluid rounded shadow-sm" style="max-height: 150px; object-fit: contain;">
+                </li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

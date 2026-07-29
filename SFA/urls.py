@@ -8,7 +8,8 @@ from django.shortcuts import redirect
 from rest_framework.authtoken.views import obtain_auth_token
 from . import views
 from SFA.views import reports  
-from .views import masters, sales, reports 
+from .views import masters, sales, reports from .views.masters import edit_chemist_list_view, edit_chemist_view, view_doctor_profile, view_chemist_profile
+
 from .views.reports import gift_distribution_report
 from SFA.views import auth as auth_views
 
@@ -17,6 +18,8 @@ urlpatterns = [
     path('', lambda request: redirect('login/')),
 
     path('hub/view/gift-report/', gift_distribution_report, name='gift_distribution_report'),
+    path('chemist/profile/<int:chem_id>/', view_chemist_profile, name='view_chemist_profile'),
+
     path('reports/free-claim/', reports.free_claim_view, name='free_claim_report'),
     path('update-location/<str:role>/<int:target_id>/', views.update_location_view, name='update_location'),
 

@@ -41,6 +41,7 @@
                 </div>
             </div>
 
+            <!-- 🌟 UPDATED LIST WITH ALL DOCTOR CLASS FIELDS -->
             <ul class="list-group list-group-flush border-top">
                 <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
                     <div class="text-primary bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-phone"></i></div>
@@ -50,10 +51,41 @@
                     <div class="text-danger bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-envelope"></i></div>
                     <div><small class="text-muted d-block" style="font-size: 0.65rem;">Email ID</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ doctor.email|default:"Not Available" }}</span></div>
                 </li>
+                
+                <!-- 🌟 Naye Added Fields: Addresses -->
+                <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
+                    <div class="text-secondary bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-hospital"></i></div>
+                    <div><small class="text-muted d-block" style="font-size: 0.65rem;">Clinic/Hospital Address</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ doctor.address|default:"Not Available" }}</span></div>
+                </li>
+                <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
+                    <div class="text-secondary bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-house-door"></i></div>
+                    <div><small class="text-muted d-block" style="font-size: 0.65rem;">Residential Address</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ doctor.residential_address|default:"Not Available" }}</span></div>
+                </li>
+
+                <!-- 🌟 Family & Dates -->
                 <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
                     <div class="text-warning bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-calendar-event text-dark"></i></div>
                     <div><small class="text-muted d-block" style="font-size: 0.65rem;">Date of Birth</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ doctor.dob|date:"d M Y"|default:"Not Available" }}</span></div>
                 </li>
+                <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
+                    <div class="text-danger bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-heart-fill"></i></div>
+                    <div><small class="text-muted d-block" style="font-size: 0.65rem;">Date of Marriage (DOM)</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ doctor.dom|date:"d M Y"|default:"Not Available" }}</span></div>
+                </li>
+                <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
+                    <div class="text-info bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-person-heart"></i></div>
+                    <div><small class="text-muted d-block" style="font-size: 0.65rem;">Spouse Date of Birth</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ doctor.spouse_dob|date:"d M Y"|default:"Not Available" }}</span></div>
+                </li>
+                
+                <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
+                    <div class="text-primary bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-emoji-smile"></i></div>
+                    <div><small class="text-muted d-block" style="font-size: 0.65rem;">Child 1 Date of Birth</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ doctor.child_1_dob|date:"d M Y"|default:"Not Available" }}</span></div>
+                </li>
+                <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
+                    <div class="text-primary bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-emoji-smile"></i></div>
+                    <div><small class="text-muted d-block" style="font-size: 0.65rem;">Child 2 Date of Birth</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ doctor.child_2_dob|date:"d M Y"|default:"Not Available" }}</span></div>
+                </li>
+
+                <!-- System Fields -->
                 <li class="list-group-item px-3 py-2 d-flex align-items-center gap-3">
                     <div class="text-info bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-geo-alt-fill text-info"></i></div>
                     <div><small class="text-muted d-block" style="font-size: 0.65rem;">Territory & Route</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ doctor.territory.name|default:"-" }} / {{ doctor.route.name|default:"-" }}</span></div>
@@ -62,6 +94,14 @@
                     <div class="text-success bg-light rounded-circle d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;"><i class="bi bi-person-badge-fill text-success"></i></div>
                     <div><small class="text-muted d-block" style="font-size: 0.65rem;">Allocated MR</small><span class="fw-bold text-dark text-break" style="font-size: 0.85rem;">{{ doctor.allocated_to.name|default:"-" }}</span></div>
                 </li>
+
+                <!-- 🌟 Optional: Visiting Card Photo -->
+                {% if doctor.vcard_photo %}
+                <li class="list-group-item px-3 py-3 text-center">
+                    <small class="text-muted d-block mb-2" style="font-size: 0.65rem;">Visiting Card</small>
+                    <img src="{{ doctor.vcard_photo.url }}" class="img-fluid rounded shadow-sm" style="max-height: 150px; object-fit: contain;">
+                </li>
+                {% endif %}
             </ul>
         </div>
     </div>

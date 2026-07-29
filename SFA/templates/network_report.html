@@ -163,7 +163,9 @@
                         <tbody id="networkTableBody">
                             {% for chem in chemists %}
                             <tr>
-                                <td class="fw-bold text-dark text-start" title="{{ chem.name }}">{{ chem.name }}</td>
+                                <td class="text-start" title="{{ chem.name }}">
+    <a href="{% url 'view_chemist_profile' chem.id %}" class="fw-bold text-decoration-none" style="color: #0b5e31;">{{ chem.name }}</a>
+</td>
                                 <td class="text-secondary">{{ chem.route.name|default:"-" }}</td>
                                 <td>
                                     {% if not chem.latitude %}

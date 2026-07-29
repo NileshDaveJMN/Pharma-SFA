@@ -1122,3 +1122,12 @@ def view_doctor_profile(request, employee, doc_id):
     doctor = get_object_or_404(Doctor, id=doc_id, allocated_to__in=team_employees)
     
     return render(request, 'doctor_profile.html', {'doctor': doctor})
+
+from django.shortcuts import render, get_object_or_404
+from SFA.models import Chemist
+from SFA.decorators import employee_required
+
+@employee_required
+def view_chemist_profile(request, employee, chem_id):
+    chemist = get_object_or_404(Chemist, id=chem_id)
+    return render(request, 'chemist_profile.html', {'chemist': chemist})
