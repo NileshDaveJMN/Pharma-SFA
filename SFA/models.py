@@ -29,6 +29,11 @@ class Territory(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='territories') # 🌟 CHANGED
     name = models.CharField(max_length=100)
     city = models.CharField(max_length=100)
+    
+    class Meta:
+        # 🌟 NAYA: SaaS Fix - Har company ka apna unique territory naam ho sakta hai
+        unique_together = ('company', 'name')
+
     def __str__(self): return f"{self.name} - {self.city}"
 
 class Route(models.Model):
@@ -45,6 +50,10 @@ class Route(models.Model):
     distance_from_hq = models.DecimalField(max_digits=6, decimal_places=1, default=0.0, help_text="Distance in KM from HQ")
     requested_by = models.ForeignKey('Employee', on_delete=models.SET_NULL, null=True, blank=True, related_name='requested_routes')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+
+    class Meta:
+        # 🌟 NAYA: SaaS Fix - Ek territory me route name unique hoga
+        unique_together = ('territory', 'name')
 
     def save(self, *args, **kwargs):
         # 🌟 FIX: Agar company explicitly pass nahi hui, toh territory se utha lo
@@ -66,7 +75,7 @@ class Employee(models.Model):
         ('Admin', 'System Administrator'),
     ]
     name = models.CharField(max_length=100)
-    employee_code = models.CharField(max_length=50, unique=True)
+    employee_code = models.CharField(max_length=50) # 🌟 FIX: unique=True HATA DIYA HAI
     designation = models.CharField(max_length=5, choices=DESIGNATION_CHOICES, default='MR')
     manager = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subordinates')
     headquarter = models.ForeignKey(Territory, on_delete=models.SET_NULL, null=True, blank=True)
@@ -123,6 +132,10 @@ class Employee(models.Model):
         help_text="True = ye ek 'Vacant_<HQ>' dummy employee hai, asli insaan nahi. Joint Work me normal employee jaisa hi treat hota hai (use individual hi maana jayega)."
     )
 
+    class Meta:
+        # 🌟 NAYA: SaaS Fix - Har company ka employee code waha unique hona chahiye
+        unique_together = ('company', 'employee_code')
+
     def __str__(self):
         # Inactive employees ke naam ke aage (Inactive) dikhayega
         status = "" if self.is_active else " (Inactive)"
@@ -163,10 +176,15 @@ class DARate(models.Model):
         ('Admin', 'System Administrator'),
     ]
     company       = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="da_rates") # 🌟 CHANGED
-    designation   = models.CharField(max_length=5, choices=DESIGNATION_CHOICES, unique=True)
+    designation   = models.CharField(max_length=5, choices=DESIGNATION_CHOICES) # 🌟 FIX: unique=True HATA DIYA HAI
     hq_da         = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
     exhq_da       = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
     outstation_da = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
+    
+    class Meta:
+        # 🌟 NAYA: SaaS Fix
+        unique_together = ('company', 'designation')
+
     def __str__(self): return f"{self.designation} — HQ:{self.hq_da} | ExHQ:{self.exhq_da} | OS:{self.outstation_da}"
 
 class TARate(models.Model):
@@ -179,13 +197,18 @@ class TARate(models.Model):
         ('Admin', 'System Administrator'),
     ]
     company       = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="ta_rates") # 🌟 CHANGED
-    designation   = models.CharField(max_length=5, choices=DESIGNATION_CHOICES, unique=True)
+    designation   = models.CharField(max_length=5, choices=DESIGNATION_CHOICES) # 🌟 FIX: unique=True HATA DIYA HAI
     # Slab 1: 1 to slab1_upto_km
     slab1_upto_km = models.IntegerField(default=100, help_text="Slab 1 upper limit (km)")
     slab1_rate    = models.DecimalField(max_digits=6, decimal_places=2, default=0.00, help_text="₹/km for Slab 1")
     # Slab 2: slab1+1 to slab2_upto_km
     slab2_upto_km = models.IntegerField(default=200, help_text="Slab 2 upper limit (km)")
     slab2_rate    = models.DecimalField(max_digits=6, decimal_places=2, default=0.00, help_text="₹/km for Slab 2")
+    
+    class Meta:
+        # 🌟 NAYA: SaaS Fix
+        unique_together = ('company', 'designation')
+    
     # Slab 3: above slab2 → Actual fare input by MR (Option C)
     # No rate stored — actual_fare field in DailyExpense
     def __str__(self): return f"{self.designation} — Slab1:{self.slab1_rate}/km (≤{self.slab1_upto_km}km) | Slab2:{self.slab2_rate}/km (≤{self.slab2_upto_km}km) | 200+:Actual"
@@ -328,6 +351,10 @@ class Product(models.Model):
     pts = models.DecimalField(max_digits=10, decimal_places=2, default=0)   # Price to Stockist — company ko kitna milta hai
     gst_slab = models.PositiveSmallIntegerField(choices=GST_SLAB_CHOICES, default=12)
 
+    class Meta:
+        # 🌟 NAYA: SaaS Fix
+        unique_together = ('company', 'name')
+
     def __str__(self):
         return f"{self.name} ({self.pack_size})"
 
@@ -400,7 +427,7 @@ class DailyDCRStatus(models.Model):
     
     is_open = models.BooleanField(default=True, help_text="Kya is din ka DCR bharna allowed hai?")
     is_submitted = models.BooleanField(default=False, help_text="Day End hone par True ho jayega")
-    is_admin_unlocked = models.BooleanField(default=False, help_text="Admin Override (True karne par 1 din ke liye auto-block bypass ho jayega)")
+    is_admin_unlocked = models.BooleanField(default=False, help_text="Admin Override (True karne par 1 din ke liye auto-block bypass ho bypass ho jayega)")
     unlocked_until = models.DateField(null=True, blank=True, help_text="Is date tak unlock valid hai. Iske baad khud-ba-khud wapas lock ho jayega. (Khud bhar na karein, save par auto-set hota hai)")
     
     day_type = models.CharField(max_length=20, default='Working') # Working, Holiday, Sunday, Leave
@@ -830,7 +857,6 @@ class SystemSetting(models.Model):
     def __str__(self):
         return "Global Master Settings"
 
-from django.db import models
 
 class FreeQtyClaimMaster(models.Model):
     STATUS_CHOICES = [
@@ -1039,9 +1065,6 @@ class EmployeeTransferLog(models.Model):
         return f"Transfer: {self.old_employee_name} -> {self.new_employee.name}"
         
         
-        
-# SFA/models.py ke sabse niche ye paste karo
-
 class DeviceToken(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='device_tokens')
     token = models.CharField(max_length=255, unique=True)
@@ -1049,9 +1072,6 @@ class DeviceToken(models.Model):
 
     def __str__(self):
         return f"{self.employee.name} - {self.token[:10]}..."
-
-from django.db import models
-from django.conf import settings
 
 class InternalMessage(models.Model):
     # 🌟 FIX: related_name change kiye 'sent_internal_messages' aur 'received_internal_messages'
