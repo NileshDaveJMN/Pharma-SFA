@@ -3,8 +3,7 @@ from django.db import transaction
 from django.contrib import messages
 from django.shortcuts import render, redirect
 from .models import (
-    Company,
-    Territory, Employee, Stockist, Chemist, Doctor, Product,
+    Company, Territory, Employee, Stockist, Chemist, Doctor, Product,
     PrimarySale, SecondarySale, RCPA_Audit, Route,
     MonthlyTourProgram, DailyTourPlan,
     DailyDCR, DCRVisit, DCRProductDetail, DayEnd, DayStart,
@@ -13,32 +12,64 @@ from .models import (
     PartyWiseSaleReport, PartyWiseSaleLine, DoctorRxMapping,
     TerritoryTarget, MonthlyTargetMaster, Holiday, LeaveBalance, 
     LeaveApplication, HQDistance, CompanyNotice, SystemNotification, DirectMessage,
-    DailyDCRStatus,
-    reverse_visit_inventory, DoctorEditRequest, ChemistEditRequest,
+    DailyDCRStatus, reverse_visit_inventory, DoctorEditRequest, ChemistEditRequest,
+    PromoItem, PromoDispatch, MRInventory, GiftCampaignPlan, DoctorROILedger, FreeQtyClaimMaster, FreeQtyClaimLine
 )
+from SFA.models import SystemSetting
 
-@admin.register(Company)
-class CompanyAdmin(admin.ModelAdmin):
-    list_display = ('name', 'code', 'slug', 'subscription_plan', 'subscription_expiry', 'max_users', 'is_active')
-    list_filter = ('is_active', 'subscription_plan')
-    search_fields = ('name', 'code', 'slug')
-    prepopulated_fields = {'slug': ('code',)}
-    fieldsets = (
-        ('Basic Info', {
-            'fields': ('name', 'code', 'slug', 'is_active', 'logo'),
-        }),
-        ('Contact', {
-            'fields': ('email', 'phone', 'address'),
-        }),
-        ('Settings', {
-            'fields': ('financial_year_start', 'currency', 'timezone'),
-        }),
-        ('Subscription', {
-            'fields': ('subscription_plan', 'subscription_expiry', 'max_users'),
-        }),
-    )
+# ==============================================================================
+# 🛡️ SAAS SECURITY MIXIN (THE MAGIC GUARD)
+# Ye ensure karega ki kisi bhi Company Admin ko doosri company ka data na dikhe
+# ==============================================================================
+class TenantIsolationMixin:
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # 1. Agar Superuser (Aap) hain, toh saara data dikhega
+        if request.user.is_superuser:
+            return qs
+        
+        # 2. Agar Company Admin hai, toh uski company filter karo
+        try:
+            admin_company = request.user.employee.company
+            if hasattr(self.model, 'company'):
+                return qs.filter(company=admin_company)
+            elif hasattr(self.model, 'employee'):
+                return qs.filter(employee__company=admin_company)
+            elif hasattr(self.model, 'territory'):
+                return qs.filter(territory__company=admin_company)
+            elif hasattr(self.model, 'stockist'):
+                return qs.filter(stockist__company=admin_company)
+            elif hasattr(self.model, 'doctor'):
+                return qs.filter(doctor__company=admin_company)
+        except Exception:
+            return qs.none() # Error aane par list khali dikhegi
+        return qs
 
-from .models import PromoItem, PromoDispatch, MRInventory, GiftCampaignPlan, DoctorROILedger, FreeQtyClaimMaster, FreeQtyClaimLine
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        # 3. Dropdowns (Select box) mein bhi sirf apni company ka data dikhega
+        if not request.user.is_superuser:
+            try:
+                admin_company = request.user.employee.company
+                if db_field.name in ["employee", "manager", "allocated_to", "proposed_by", "sender", "receiver"]:
+                    kwargs["queryset"] = Employee.objects.filter(company=admin_company)
+                elif db_field.name == "doctor":
+                    kwargs["queryset"] = Doctor.objects.filter(company=admin_company)
+                elif db_field.name == "chemist":
+                    kwargs["queryset"] = Chemist.objects.filter(company=admin_company)
+                elif db_field.name == "stockist":
+                    kwargs["queryset"] = Stockist.objects.filter(company=admin_company)
+                elif db_field.name in ["territory", "from_territory", "to_territory", "headquarter"]:
+                    kwargs["queryset"] = Territory.objects.filter(company=admin_company)
+                elif db_field.name == "route":
+                    kwargs["queryset"] = Route.objects.filter(company=admin_company)
+                elif db_field.name in ["product", "item", "linked_product"]:
+                    kwargs["queryset"] = db_field.related_model.objects.filter(company=admin_company)
+                elif db_field.name == "company":
+                    kwargs["queryset"] = Company.objects.filter(id=admin_company.id)
+            except Exception:
+                pass
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
 
 # ── Reusable Company Assignment Mixin ────────────────────────────────────────
 class AssignCompanyMixin:
@@ -65,178 +96,138 @@ class AssignCompanyMixin:
         })
 
 
-
-admin.site.register(PromoItem)
-admin.site.register(PromoDispatch)
-admin.site.register(MRInventory)
-admin.site.register(GiftCampaignPlan)
-admin.site.register(DoctorROILedger)
+# ==========================================
+# 🏢 SUPER ADMIN ONLY MODELS (No Tenant Mixin)
+# ==========================================
+@admin.register(Company)
+class CompanyAdmin(admin.ModelAdmin):
+    list_display = ('name', 'code', 'slug', 'subscription_plan', 'subscription_expiry', 'max_users', 'is_active')
+    list_filter = ('is_active', 'subscription_plan')
+    search_fields = ('name', 'code', 'slug')
+    prepopulated_fields = {'slug': ('code',)}
+    list_editable = ('is_active', 'subscription_plan')
+    fieldsets = (
+        ('Basic Info', {'fields': ('name', 'code', 'slug', 'is_active', 'logo')}),
+        ('Contact', {'fields': ('email', 'phone', 'address')}),
+        ('Settings', {'fields': ('financial_year_start', 'currency', 'timezone')}),
+        ('Subscription', {'fields': ('subscription_plan', 'subscription_expiry', 'max_users')}),
+    )
 
 # ==========================================
-# MASTER TABLES (Optimized)
+# 🎁 MODELS ACCESSIBLE TO COMPANY ADMINS (With Tenant Mixin)
 # ==========================================
+
+# --- Promo & Inventory ---
+@admin.register(PromoItem)
+class PromoItemAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
+    list_display = ('name', 'item_type', 'price', 'is_active')
+
+@admin.register(PromoDispatch)
+class PromoDispatchAdmin(TenantIsolationMixin, admin.ModelAdmin):
+    list_display = ('item', 'employee', 'quantity', 'status')
+
+@admin.register(MRInventory)
+class MRInventoryAdmin(TenantIsolationMixin, admin.ModelAdmin):
+    list_display = ('employee', 'item', 'stock_qty')
+
+@admin.register(GiftCampaignPlan)
+class GiftCampaignPlanAdmin(TenantIsolationMixin, admin.ModelAdmin):
+    list_display = ('employee', 'doctor', 'item', 'month', 'year', 'status')
+
+@admin.register(DoctorROILedger)
+class DoctorROILedgerAdmin(TenantIsolationMixin, admin.ModelAdmin):
+    list_display = ('doctor', 'employee', 'item', 'quantity', 'total_value', 'date_given')
+
+# --- Masters ---
 @admin.register(Route)
-class RouteAdmin(AssignCompanyMixin, admin.ModelAdmin):
+class RouteAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
     list_display = ('name', 'territory', 'category', 'distance_from_hq', 'status')
     list_filter = ('territory', 'category', 'status')
     list_editable = ('category', 'distance_from_hq', 'status')
     search_fields = ('name',)
     ordering = ('territory', 'category', 'name')
-
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('territory')
+    def get_queryset(self, request): return super().get_queryset(request).select_related('territory')
 
 @admin.register(Territory)
-class TerritoryAdmin(AssignCompanyMixin, admin.ModelAdmin):
+class TerritoryAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
     list_display = ('name', 'city')
     search_fields = ('name', 'city')
     ordering = ('name',)
 
 @admin.register(Employee)
-class EmployeeAdmin(admin.ModelAdmin):
+class EmployeeAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('id', 'name', 'employee_code', 'designation', 'is_active', 'manager', 'headquarter', 'joining_date')
     list_filter = ('is_active', 'designation', 'headquarter')
     search_fields = ('name', 'employee_code', 'user__username')
     list_editable = ('is_active',) 
-
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('manager', 'headquarter', 'user')
-
     actions = ['deactivate_employees']
-
+    def get_queryset(self, request): return super().get_queryset(request).select_related('manager', 'headquarter', 'user')
     @admin.action(description='Mark selected employees as Inactive (Block Login)')
     def deactivate_employees(self, request, queryset):
         from django.utils import timezone
-        
         updated_count = 0
         for emp in queryset:
             if emp.is_active:
                 emp.is_active = False
                 emp.leaving_date = timezone.now().date()
                 emp.save()
-                
                 if emp.user:
                     emp.user.is_active = False
                     emp.user.save()
-                    
                 updated_count += 1
-                
-        self.message_user(request, f"Success: {updated_count} employees aur unke login accounts ko Inactive kar diya gaya hai.")
+        self.message_user(request, f"Success: {updated_count} employees and accounts deactivated.")
 
 @admin.register(Stockist)
-class StockistAdmin(AssignCompanyMixin, admin.ModelAdmin):
+class StockistAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
     list_display = ('name', 'territory', 'contact_person', 'phone')
     search_fields = ('name', 'phone')
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('territory')
+    def get_queryset(self, request): return super().get_queryset(request).select_related('territory')
 
 @admin.register(Chemist)
-class ChemistAdmin(AssignCompanyMixin, admin.ModelAdmin):
+class ChemistAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
     list_display = ('name', 'territory', 'route', 'allocated_to', 'status')
-    list_filter = ('territory', 'route', 'allocated_to', 'status')
+    list_filter = ('territory', 'route', 'status')
     search_fields = ('name', 'phone')
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('territory', 'route', 'allocated_to')
+    def get_queryset(self, request): return super().get_queryset(request).select_related('territory', 'route', 'allocated_to')
 
 @admin.register(Doctor)
-class DoctorAdmin(AssignCompanyMixin, admin.ModelAdmin):
+class DoctorAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
     list_display = ('name', 'specialty', 'territory', 'route', 'allocated_to', 'status')
-    list_filter = ('territory', 'route', 'allocated_to', 'specialty', 'status')
+    list_filter = ('territory', 'route', 'specialty', 'status')
     search_fields = ('name', 'specialty')
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('territory', 'route', 'allocated_to')
+    def get_queryset(self, request): return super().get_queryset(request).select_related('territory', 'route', 'allocated_to')
 
 @admin.register(Product)
-class ProductAdmin(AssignCompanyMixin, admin.ModelAdmin):
+class ProductAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
     list_display = ('id', 'name', 'pack_size', 'price')
     search_fields = ('name',)
 
-
-# ==========================================
-# EXPENSE MANAGEMENT
-# ==========================================
-class DailyExpenseInline(admin.TabularInline):
-    model = DailyExpense
-    extra = 0
-    readonly_fields = ('created_at',) 
-
-@admin.register(MonthlyExpenseReport)
-class MonthlyExpenseReportAdmin(admin.ModelAdmin):
-    list_display = ('employee', 'month', 'year', 'status', 'is_modified')
-    list_filter = ('status', 'month', 'year', 'is_modified', 'employee')
-    list_editable = ('status',)
-    inlines = [DailyExpenseInline]
-    search_fields = ('employee__name',)
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('employee')
-
-
-# ==========================================
-# TOUR PROGRAM
-# ==========================================
-class DailyTourPlanInline(admin.TabularInline):
-    model = DailyTourPlan
-    extra = 0 
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('route')
-
-@admin.register(MonthlyTourProgram)
-class MonthlyTourProgramAdmin(admin.ModelAdmin):
-    list_display = ('date_month_year', 'employee', 'status', 'is_modified')
-    list_filter = ('status', 'month', 'year', 'is_modified', 'employee')
-    list_editable = ('status',)
-    inlines = [DailyTourPlanInline]
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('employee')
-    
-    def date_month_year(self, obj):
-        return f"{obj.month}/{obj.year}"
-    date_month_year.short_description = 'Month/Year'
-
-
-# ==========================================
-# 🚀 SMART DCR & DAY TRACKING (Merged Logic)
-# ==========================================
+# --- Daily Operations & Smart DCR ---
 class DCRProductDetailInline(admin.TabularInline):
     model = DCRProductDetail
     extra = 0
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('product')
+    def get_queryset(self, request): return super().get_queryset(request).select_related('product')
 
 class DCRVisitInline(admin.TabularInline):
     model = DCRVisit
     extra = 0 
     readonly_fields = ('latitude', 'longitude', 'created_at')
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('doctor', 'chemist')
+    def get_queryset(self, request): return super().get_queryset(request).select_related('doctor', 'chemist')
 
-# ==========================================
-# 🚀 SMART DCR & DAY TRACKING (Merged Logic)
-# ==========================================
 @admin.register(DailyDCR)
-class DailyDCRAdmin(admin.ModelAdmin):
+class DailyDCRAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('date', 'employee', 'created_at')
-    list_filter = ('date', 'employee')
+    list_filter = ('date',)
     search_fields = ('employee__name', 'date')
     inlines = [DCRVisitInline] 
     readonly_fields = ('created_at',)
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('employee')
+    def get_queryset(self, request): return super().get_queryset(request).select_related('employee')
 
     def delete_model(self, request, obj):
         with transaction.atomic():
             emp = obj.employee
             target_date = obj.date
-            for visit in obj.visits.all():
-                reverse_visit_inventory(visit)
+            for visit in obj.visits.all(): reverse_visit_inventory(visit)
             DayStart.objects.filter(employee=emp, date=target_date).delete()
             DayEnd.objects.filter(employee=emp, date=target_date).delete()
             DailyExpense.objects.filter(employee=emp, date=target_date).delete()
@@ -249,8 +240,7 @@ class DailyDCRAdmin(admin.ModelAdmin):
             for obj in queryset:
                 emp = obj.employee
                 target_date = obj.date
-                for visit in obj.visits.all():
-                    reverse_visit_inventory(visit)
+                for visit in obj.visits.all(): reverse_visit_inventory(visit)
                 DayStart.objects.filter(employee=emp, date=target_date).delete()
                 DayEnd.objects.filter(employee=emp, date=target_date).delete()
                 DailyExpense.objects.filter(employee=emp, date=target_date).delete()
@@ -258,231 +248,166 @@ class DailyDCRAdmin(admin.ModelAdmin):
                 obj.visits.all().delete()
             super().delete_queryset(request, queryset)
 
-
 @admin.register(DCRVisit)
-class DCRVisitAdmin(admin.ModelAdmin):
+class DCRVisitAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('date_dcr', 'employee_dcr', 'target_name')
-    list_filter = ('daily_dcr__date', 'daily_dcr__employee')
     inlines = [DCRProductDetailInline]
     readonly_fields = ('latitude', 'longitude', 'created_at')
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('daily_dcr', 'daily_dcr__employee', 'doctor', 'chemist')
-    
-    def date_dcr(self, obj):
-        return obj.daily_dcr.date
-    date_dcr.short_description = 'Date'
-    
-    def employee_dcr(self, obj):
-        return obj.daily_dcr.employee.name
-    employee_dcr.short_description = 'Employee'
-    
-    def target_name(self, obj):
-        return obj.doctor.name if obj.doctor else obj.chemist.name
-    target_name.short_description = 'Doctor/Chemist'
-
+    def get_queryset(self, request): return super().get_queryset(request).select_related('daily_dcr', 'daily_dcr__employee', 'doctor', 'chemist')
+    def date_dcr(self, obj): return obj.daily_dcr.date
+    def employee_dcr(self, obj): return obj.daily_dcr.employee.name
+    def target_name(self, obj): return obj.doctor.name if obj.doctor else (obj.chemist.name if obj.chemist else 'N/A')
     def delete_model(self, request, obj):
         with transaction.atomic():
             reverse_visit_inventory(obj)
             super().delete_model(request, obj)
-
     def delete_queryset(self, request, queryset):
         with transaction.atomic():
-            for obj in queryset:
-                reverse_visit_inventory(obj)
+            for obj in queryset: reverse_visit_inventory(obj)
             super().delete_queryset(request, queryset)
 
 @admin.register(DayEnd)
-class DayEndAdmin(admin.ModelAdmin):
+class DayEndAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('employee', 'date', 'is_closed', 'closed_at')
-    list_filter = ('date', 'employee', 'is_closed')
     readonly_fields = ('latitude', 'longitude', 'closed_at')
     
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('employee')
-
 @admin.register(DayStart)
-class DayStartAdmin(admin.ModelAdmin):
+class DayStartAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('employee', 'date', 'territory', 'started_at')
-    list_filter = ('date', 'employee', 'territory')
     readonly_fields = ('latitude', 'longitude', 'started_at')
-    
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('employee', 'territory')
 
+# --- Expense & MTP ---
+class DailyExpenseInline(admin.TabularInline):
+    model = DailyExpense
+    extra = 0
+    readonly_fields = ('created_at',) 
 
-# ==========================================
-# SALES & AUDIT
-# ==========================================
+@admin.register(MonthlyExpenseReport)
+class MonthlyExpenseReportAdmin(TenantIsolationMixin, admin.ModelAdmin):
+    list_display = ('employee', 'month', 'year', 'status', 'is_modified')
+    list_editable = ('status',)
+    inlines = [DailyExpenseInline]
+
+class DailyTourPlanInline(admin.TabularInline):
+    model = DailyTourPlan
+    extra = 0 
+
+@admin.register(MonthlyTourProgram)
+class MonthlyTourProgramAdmin(TenantIsolationMixin, admin.ModelAdmin):
+    list_display = ('date_month_year', 'employee', 'status', 'is_modified')
+    list_editable = ('status',)
+    inlines = [DailyTourPlanInline]
+    def date_month_year(self, obj): return f"{obj.month}/{obj.year}"
+
+# --- Sales, Audit & Statements ---
 @admin.register(PrimarySale)
-class PrimarySaleAdmin(admin.ModelAdmin):
+class PrimarySaleAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('date', 'stockist', 'product', 'quantity', 'batch_number')
-    list_filter = ('date', 'stockist')
-    search_fields = ('stockist__name', 'product__name')
 
 @admin.register(SecondarySale)
-class SecondarySaleAdmin(admin.ModelAdmin):
+class SecondarySaleAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('date', 'employee', 'stockist', 'chemist', 'product', 'quantity')
-    list_filter = ('date', 'employee', 'stockist')
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('employee', 'stockist', 'chemist', 'product')
 
 @admin.register(RCPA_Audit)
-class RCPA_AuditAdmin(admin.ModelAdmin):
+class RCPA_AuditAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('date', 'employee', 'doctor', 'chemist', 'product', 'quantity_prescribed')
-    list_filter = ('date', 'employee')
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('employee', 'doctor', 'chemist', 'product')
 
 @admin.register(StockistProductStatement)
-class StockistProductStatementAdmin(admin.ModelAdmin):
+class StockistProductStatementAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('stockist', 'product', 'month', 'year', 'opening_qty', 'sale_qty')
-    list_filter = ('month', 'year', 'stockist')
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('stockist', 'product', 'employee')
 
-
-# ==========================================
-# DA / TA RATE TABLES
-# ==========================================
+# --- DA / TA Rates ---
 @admin.register(DARate)
-class DARateAdmin(admin.ModelAdmin):
+class DARateAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('designation', 'hq_da', 'exhq_da', 'outstation_da')
     ordering = ('designation',)
 
 @admin.register(TARate)
-class TARateAdmin(admin.ModelAdmin):
+class TARateAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display  = ('designation', 'slab1_upto_km', 'slab1_rate', 'slab2_upto_km', 'slab2_rate')
     list_editable = ('slab1_upto_km', 'slab1_rate', 'slab2_upto_km', 'slab2_rate')
     ordering      = ('designation',)
 
-
-# ==========================================
-# DOCTOR CHEMIST MAPPING & ACTIVITY
-# ==========================================
-@admin.register(DoctorChemistProductMapping)
-class DoctorChemistProductMappingAdmin(admin.ModelAdmin):
-    list_display = ('doctor', 'chemist', 'product')
-    list_filter = ('doctor', 'chemist', 'product')
-    search_fields = ('doctor__name', 'chemist__name', 'product__name')
-
-@admin.register(PharmaActivity)
-class PharmaActivityAdmin(admin.ModelAdmin):
-    list_display = ('title', 'employee', 'doctor', 'status', 'created_at')
-    list_filter = ('status', 'employee')
-    search_fields = ('title', 'doctor__name')
-
-
-# ==========================================
-# PARTY WISE SALE & RX CLASSIFICATION
-# ==========================================
+# --- Targets & Party Wise ---
 class PartyWiseSaleLineInline(admin.TabularInline):
     model = PartyWiseSaleLine
     extra = 0
 
 @admin.register(PartyWiseSaleReport)
-class PartyWiseSaleReportAdmin(admin.ModelAdmin):
+class PartyWiseSaleReportAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('stockist', 'employee', 'month', 'year', 'created_at')
-    list_filter = ('month', 'year', 'stockist', 'employee')
     inlines = [PartyWiseSaleLineInline]
 
 @admin.register(DoctorRxMapping)
-class DoctorRxMappingAdmin(admin.ModelAdmin):
+class DoctorRxMappingAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('doctor', 'party_line', 'mapped_billed_qty', 'mapped_free_qty')
-    search_fields = ('doctor__name', 'party_line__product__name')
 
-
-# ==========================================
-# TARGET SETTING & APPROVAL MASTERS
-# ==========================================
 @admin.register(TerritoryTarget)
-class TerritoryTargetAdmin(admin.ModelAdmin):
+class TerritoryTargetAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('territory', 'product', 'month', 'year', 'target_qty', 'target_value')
-    list_filter = ('territory', 'month', 'year')
-    search_fields = ('territory__name', 'product__name')
 
 @admin.register(MonthlyTargetMaster)
-class MonthlyTargetMasterAdmin(admin.ModelAdmin):
+class MonthlyTargetMasterAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('territory', 'month', 'year', 'status')
-    list_filter = ('status', 'month', 'year', 'territory')
     list_editable = ('status',) 
-    search_fields = ('territory__name',)
 
-
-# ==========================================
-# 🏖️ HOLIDAY & LEAVE MANAGEMENT
-# ==========================================
+# --- Settings, Holidays & Leave ---
 @admin.register(Holiday)
-class HolidayAdmin(AssignCompanyMixin, admin.ModelAdmin):
+class HolidayAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
     list_display = ('name', 'date', 'proposed_by', 'status')
-    list_filter = ('status', 'date')
     list_editable = ('status',) 
-    search_fields = ('name',)
 
 @admin.register(LeaveBalance)
-class LeaveBalanceAdmin(admin.ModelAdmin):
+class LeaveBalanceAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('employee', 'year', 'cl_total', 'sl_total', 'pl_total', 'cl_used', 'sl_used', 'pl_used')
-    search_fields = ('employee__name',)
     list_editable = ('cl_total', 'sl_total', 'pl_total') 
-    list_filter = ('year',)
 
 @admin.register(LeaveApplication)
-class LeaveApplicationAdmin(admin.ModelAdmin):
-    list_display = ('employee', 'leave_type', 'start_date', 'end_date', 'no_of_days', 'status', 'applied_on')
-    list_filter = ('status', 'leave_type', 'start_date')
-    search_fields = ('employee__name',)
+class LeaveApplicationAdmin(TenantIsolationMixin, admin.ModelAdmin):
+    list_display = ('employee', 'leave_type', 'start_date', 'end_date', 'no_of_days', 'status')
 
+@admin.register(SystemSetting)
+class SystemSettingAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
+    list_display = ('__str__', 'company', 'enable_offline_mode', 'dcr_lock_days', 'without_tourplan_dcr_block')
+    list_filter = ('company',)
+    fieldsets = (
+        ('General & App Settings', {'fields': ('company', 'allow_location_capture', 'enable_offline_mode', 'strict_geofence_for_backdate')}),
+        ('Deadlines (Numeric Rules)', {'fields': ('dcr_lock_days', 'mtp_approval_deadline_day', 'expense_submit_deadline_day', 'sale_upload_deadline_day', 'free_claim_deadline_day', 'target_approval_deadline_day')}),
+        ('Strict Blocker Switches', {'fields': ('without_tourplan_dcr_block', 'manager_pending_approval_block')}),
+        ('Exception / Testing Switches', {'fields': ('allow_current_month_mtp',), 'description': 'Testing exception switches.'}),
+    )
+    def has_add_permission(self, request): return super().has_add_permission(request)
 
-# ==========================================
-# MISCELLANEOUS & COMMUNICATIONS
-# ==========================================
-admin.site.register(HQDistance)
-admin.site.register(CompanyNotice)
-admin.site.register(SystemNotification)
-admin.site.register(DirectMessage)
+# --- Misc & Claims ---
+@admin.register(HQDistance)
+class HQDistanceAdmin(TenantIsolationMixin, admin.ModelAdmin):
+    list_display = ('from_territory', 'to_territory', 'distance_km')
 
-from SFA.models import SystemSetting
-from .models import DailyDCRStatus
+@admin.register(CompanyNotice)
+class CompanyNoticeAdmin(TenantIsolationMixin, admin.ModelAdmin):
+    list_display = ('title', 'created_by', 'is_active', 'created_at')
 
-# ==========================================
-# 📅 CALENDAR STATUS ADMIN (FOR UNLOCKING)
-# ==========================================
+@admin.register(SystemNotification)
+class SystemNotificationAdmin(TenantIsolationMixin, admin.ModelAdmin):
+    list_display = ('employee', 'title', 'is_read', 'created_at')
+
+@admin.register(DirectMessage)
+class DirectMessageAdmin(TenantIsolationMixin, admin.ModelAdmin):
+    list_display = ('sender', 'receiver', 'is_read', 'created_at')
+
 @admin.register(DailyDCRStatus)
-class DailyDCRStatusAdmin(admin.ModelAdmin):
+class DailyDCRStatusAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('employee', 'date', 'day_type', 'is_open', 'is_submitted', 'is_admin_unlocked', 'unlocked_until')
-    list_filter = ('is_open', 'is_submitted', 'is_admin_unlocked', 'date', 'employee')
     list_editable = ('is_open', 'is_admin_unlocked')
-    search_fields = ('employee__name',)
     ordering = ('-date', 'employee')
 
+@admin.register(DoctorChemistProductMapping)
+class DoctorChemistProductMappingAdmin(TenantIsolationMixin, admin.ModelAdmin):
+    list_display = ('doctor', 'chemist', 'product')
 
-# ==========================================
-# ⚙️ MASTER SETTINGS OVERRIDE
-# ==========================================
-@admin.register(SystemSetting)
-class SystemSettingAdmin(AssignCompanyMixin, admin.ModelAdmin):
-    list_display = ('__str__', 'enable_offline_mode', 'dcr_lock_days', 'without_tourplan_dcr_block', 'allow_current_month_mtp', 'strict_geofence_for_backdate')
-    
-    fieldsets = (
-        ('General & App Settings', {
-            # 🌟 FIX: 'company' ko yahan add kar diya gaya hai
-            'fields': ('company', 'allow_location_capture', 'enable_offline_mode', 'strict_geofence_for_backdate'),
-        }),
-        ('Deadlines (Numeric Rules)', {
-            'fields': ('dcr_lock_days', 'mtp_approval_deadline_day', 'expense_submit_deadline_day', 'sale_upload_deadline_day', 'free_claim_deadline_day', 'target_approval_deadline_day'),
-        }),
-        ('Strict Blocker Switches', {
-            'fields': ('without_tourplan_dcr_block', 'manager_pending_approval_block'),
-        }),
-        ('Exception / Testing Switches', {
-            'fields': ('allow_current_month_mtp',),
-            'description': 'These settings are for temporary exceptions only — turn OFF once work is done.',
-        }),
-    )
-
-    def has_add_permission(self, request):
-        if self.model.objects.exists(): return False
-        return super().has_add_permission(request)
+@admin.register(PharmaActivity)
+class PharmaActivityAdmin(TenantIsolationMixin, admin.ModelAdmin):
+    list_display = ('title', 'employee', 'doctor', 'status')
 
 class FreeQtyClaimLineInline(admin.TabularInline):
     model = FreeQtyClaimLine
@@ -490,25 +415,14 @@ class FreeQtyClaimLineInline(admin.TabularInline):
     readonly_fields = ('product', 'total_billed_qty', 'total_free_qty', 'claim_value')
 
 @admin.register(FreeQtyClaimMaster)
-class FreeQtyClaimMasterAdmin(admin.ModelAdmin):
+class FreeQtyClaimMasterAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('employee', 'stockist', 'month', 'year', 'status', 'created_at')
-    list_filter = ('status', 'month', 'year', 'employee')
-    search_fields = ('employee__name', 'stockist__name')
     inlines = [FreeQtyClaimLineInline]
-    
-# ==========================================
-# ✏️ EDIT REQUESTS ADMIN
-# ==========================================
+
 @admin.register(DoctorEditRequest)
-class DoctorEditRequestAdmin(admin.ModelAdmin):
+class DoctorEditRequestAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('doctor', 'req_name', 'employee', 'status', 'created_at')
-    list_filter = ('status', 'employee')
-    search_fields = ('doctor__name', 'req_name', 'employee__name')
-    readonly_fields = ('created_at',)
 
 @admin.register(ChemistEditRequest)
-class ChemistEditRequestAdmin(admin.ModelAdmin):
+class ChemistEditRequestAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('chemist', 'req_name', 'employee', 'status', 'created_at')
-    list_filter = ('status', 'employee')
-    search_fields = ('chemist__name', 'req_name', 'employee__name')
-    readonly_fields = ('created_at',)

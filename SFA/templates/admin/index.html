@@ -1,0 +1,23 @@
+{% extends "admin/index.html" %}
+
+{% block content %}
+<!-- 🚀 NAYA SAAS TOOLS SECTION -->
+<div style="background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+    
+    <h2 style="margin-top: 0; color: #333; font-size: 18px; font-weight: bold; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px;">
+        🚀 SaaS Management Tools
+    </h2>
+    
+    <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+        Master admin tools for managing SaaS tenants and bulk onboarding.
+    </p>
+    
+    <a href="{% url 'onboard_company' %}" style="background-color: #417690; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 14px; display: inline-block; transition: background 0.3s;">
+        ➕ Onboard New Company (Excel Wizard)
+    </a>
+
+</div>
+
+<!-- 📦 PURANA DJANGO ADMIN CONTENT -->
+{{ block.super }}
+{% endblock %}
