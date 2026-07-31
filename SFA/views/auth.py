@@ -46,30 +46,31 @@ __all__ = [
 ]
 
 
-# ==============================================================================
-# 🔐 WEB LOGIN / LOGOUT
-# ==============================================================================
-
 def login_view(request):
     """Standard Django session-based login — web browser ke liye."""
     if request.user.is_authenticated:
-        # 🌟 FIX: Agar Employee profile nahi hai, toh admin panel par bhej do, warna loop ban jayega
         if not hasattr(request.user, 'employee'):
             return redirect('/admin/')
         return redirect('mr_dashboard')
 
     if request.method == 'POST':
-        user = authenticate(
-            username=request.POST.get('username'),
-            password=request.POST.get('password'),
-        )
+        # 🌟 NAYA: Company Code aur Mobile Number collect karein
+        comp_code = request.POST.get('company_code', '').strip().upper()
+        phone = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '')
+
+        # Combine karke Django Username banayein (e.g. SUNP_9876543210)
+        # Agar purana admin direct username daal raha hai (bina company code), toh fallback
+        django_username = f"{comp_code}_{phone}" if comp_code else phone
+
+        user = authenticate(username=django_username, password=password)
+        
         if user:
             login(request, user)
-            # 🌟 FIX: Login hone ke baad bhi same check lagana
             if not hasattr(user, 'employee'):
                 return redirect('/admin/')
             return redirect('mr_dashboard')
-        return render(request, 'login.html', {'error': 'Invalid Credentials'})
+        return render(request, 'login.html', {'error': 'Invalid Company Code, Mobile No. or Password'})
 
     return render(request, 'login.html')
 

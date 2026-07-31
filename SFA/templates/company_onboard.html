@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid p-0 mb-4 mt-2">
+    <div class="d-flex align-items-center gap-2 mb-3 px-2">
+        <a href="javascript:history.back()" class="btn btn-light shadow-sm btn-sm px-2 py-0 rounded-2 border bg-white text-secondary">⬅️</a>
+        <h5 class="fw-bold text-dark mb-0" style="font-size: 1.1rem;">Company Onboarding Wizard</h5>
+    </div>
+
+    <div class="mx-2">
+        <!-- INSTRUCTION CARD -->
+        <div class="card border-0 shadow-sm bg-white mb-3" style="border-radius: 12px;">
+            <div class="card-body">
+                <h6 class="fw-bold text-primary mb-3"><i class="bi bi-info-circle-fill"></i> Upload Instructions</h6>
+                <p class="small text-muted mb-2">Ensure your Excel workbook has exactly these 7 sheets in order:</p>
+                <ul class="small text-muted mb-0 ps-3">
+                    <li><strong>Company:</strong> Company Name, Code</li>
+                    <li><strong>Territories:</strong> Territory Name</li>
+                    <li><strong>Expense Rates:</strong> Designation, DA, TA Slabs</li>
+                    <li><strong>Hierarchy:</strong> Employee Name, Designation, Mobile, HQ, Manager Name</li>
+                    <li><strong>Products:</strong> Name, Pack Size, MRP, PTR, PTS</li>
+                    <li><strong>Routes:</strong> Route Name, Territory</li>
+                    <li><strong>Stockists:</strong> Stockist Name, Territory</li>
+                </ul>
+                <div class="mt-3 p-2 bg-light rounded text-center">
+                    <small class="text-danger fw-bold">⚠️ All Default Passwords will be set to: Surname@123</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- UPLOAD CARD -->
+        <div class="card border-0 shadow-sm bg-white" style="border-radius: 12px;">
+            <div class="card-body text-center p-4">
+                <i class="bi bi-cloud-arrow-up text-primary" style="font-size: 3rem;"></i>
+                <h6 class="fw-bold text-dark mt-2 mb-3">Upload Master Excel</h6>
+                
+                <form method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="mb-4 text-start">
+                        <input type="file" name="onboard_file" class="form-control form-control-sm" accept=".xlsx, .xls" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success w-100 fw-bold shadow-sm rounded-pill py-2">
+                        <i class="bi bi-rocket-takeoff-fill"></i> Start Magic Onboarding
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

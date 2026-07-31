@@ -13,10 +13,12 @@ from .views.masters import edit_chemist_list_view, edit_chemist_view, view_docto
 
 from .views.reports import gift_distribution_report
 from SFA.views import auth as auth_views
-
+from .views import superadmin
 urlpatterns = [
     # 🌟 FIX: Root domain par login page redirect karna
     path('', lambda request: redirect('login/')),
+    # Admin tools / Onboarding URL
+    path('admin-tools/onboard-company/', superadmin.onboard_company_view, name='onboard_company'),
 
     path('hub/view/gift-report/', gift_distribution_report, name='gift_distribution_report'),
     path('chemist/profile/<int:chem_id>/', view_chemist_profile, name='view_chemist_profile'),

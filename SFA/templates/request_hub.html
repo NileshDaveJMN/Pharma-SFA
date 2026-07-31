@@ -3,8 +3,6 @@
 {% block content %}
 <div class="container-fluid p-0 mb-4 mt-1">
 
-   
-
     {% if request.user.employee.designation != 'System Administrator' and request.user.employee.designation != 'Admin' %}
     <h6 class="fw-bold text-secondary mb-1 px-2 mt-2" style="font-size: 0.65rem; letter-spacing: 0.5px;">📝 CORE OPERATIONS</h6>
     <div class="row g-1 mb-2 px-2">
@@ -141,7 +139,6 @@
     </div>
     {% endif %}
 
-
     {% if request.user.employee.designation != 'MR' %}
     <h6 class="fw-bold text-secondary mb-1 px-2 mt-3" style="font-size: 0.65rem; letter-spacing: 0.5px;">🛡️ TEAM & ADMIN</h6>
     <div class="row g-1 mb-2 px-2">
@@ -167,6 +164,17 @@
         {% endif %}
 
         {% if request.user.employee.designation == 'System Administrator' or request.user.employee.designation == 'Admin' %}
+        
+        <!-- 🌟 NAYA: COMPANY ONBOARD WIZARD (Sirf Super Admin/Admin ke liye) -->
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #28a745 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'onboard_company' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🚀</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Onboard<br>Company</span>
+            </div>
+        </div>
+
         <div class="col-3">
             <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
                  style="cursor: pointer; border-bottom: 3px solid #0dcaf0 !important; min-height: 62px; border-radius: 8px;" 
@@ -176,7 +184,7 @@
             </div>
         </div>
         
-        <div class="col-3">
+        <div class="col-3 mt-1">
             <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
                  style="cursor: pointer; border-bottom: 3px solid #e83e8c !important; min-height: 62px; border-radius: 8px;" 
                  onclick="location.href='{% url 'bulk_network_upload' %}';">
@@ -185,7 +193,7 @@
             </div>
         </div>
 
-        <div class="col-3">
+        <div class="col-3 mt-1">
             <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
                  style="cursor: pointer; border-bottom: 3px solid #fd7e14 !important; min-height: 62px; border-radius: 8px;" 
                  onclick="location.href='{% url 'promo_dispatch' %}';">
@@ -193,7 +201,8 @@
                 <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Dispatch<br>Promo</span>
             </div>
         </div>
-        <div class="col-3">
+        
+        <div class="col-3 mt-1">
             <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
                  style="cursor: pointer; border-bottom: 3px solid #198754 !important; min-height: 62px; border-radius: 8px;" 
                  onclick="location.href='{% url 'notice_board' %}';">
@@ -201,7 +210,8 @@
                 <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Notice<br>Board</span>
             </div>
         </div>
-                 <div class="col-3">
+        
+        <div class="col-3 mt-1">
             <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
                  style="cursor: pointer; border-bottom: 3px solid #ffc107 !important; min-height: 62px; border-radius: 8px;" 
                  onclick="location.href='{% url 'transfer_data' %}';">
@@ -210,7 +220,7 @@
             </div>
         </div>
 
-        <div class="col-3">
+        <div class="col-3 mt-1">
             <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
                  style="cursor: pointer; border-bottom: 3px solid #dc3545 !important; min-height: 62px; border-radius: 8px;" 
                  onclick="location.href='{% url 'resign_employee' %}';">
@@ -219,7 +229,7 @@
             </div>
         </div>
 
-        <div class="col-3">
+        <div class="col-3 mt-1">
             <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
                  style="cursor: pointer; border-bottom: 3px solid #6610f2 !important; min-height: 62px; border-radius: 8px;" 
                  onclick="location.href='{% url 'promote_employee' %}';">
