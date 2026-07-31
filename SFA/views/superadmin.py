@@ -1,12 +1,11 @@
 import openpyxl
 from django.db import transaction
 from django.contrib import messages
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 from django.shortcuts import render, redirect
 from SFA.models import Company, Territory, Employee, DARate, TARate, Product, Route, Stockist, SystemSetting
 
 def onboard_company_view(request):
-    # Sirf Superuser ko allow karein
     if not request.user.is_superuser:
         messages.error(request, "Access Denied! Only Super Admins can onboard companies.")
         return redirect('login')
@@ -43,36 +42,41 @@ def onboard_company_view(request):
                         DARate.objects.create(company=new_company, designation=desig, hq_da=row[1], exhq_da=row[2], outstation_da=row[3])
                         TARate.objects.create(company=new_company, designation=desig, slab1_upto_km=row[4], slab1_rate=row[5], slab2_upto_km=row[6], slab2_rate=row[7])
 
-                # 4. EMPLOYEES & HIERARCHY (2-Pass Logic)
+                # 4. EMPLOYEES & HIERARCHY
                 sheet_emp = wb['Hierarchy']
                 emp_objects = {}
                 
-                # PASS 1: Create all Users and Employees (Without Managers)
+                # 🌟 Group Ensure karna (Agar nahi hai toh ban jayega)
+                admin_group, _ = Group.objects.get_or_create(name='Company Admin')
+                
                 for row in sheet_emp.iter_rows(min_row=2, values_only=True):
                     if row[0]:
                         name, desig, phone, hq_name, manager_name = row
                         name = str(name).strip()
                         phone = str(phone).strip()
+                        desig_str = str(desig).strip()
                         
-                        # Generate SaaS Unique Username (e.g. SUNP_9876543210)
                         django_username = f"{comp_code}_{phone}"
-                        
-                        # Default Password Logic (Surname@123)
                         name_parts = name.split()
                         surname = name_parts[-1].capitalize() if len(name_parts) > 1 else name.capitalize()
                         default_password = f"{surname}@123"
 
+                        # Create User
                         user = User.objects.create_user(username=django_username, password=default_password)
                         
+                        # 🌟 NAYA LOGIC: Agar Admin hai, toh Staff banakar Group mein daalo
+                        if desig_str.lower() == 'admin':
+                            user.is_staff = True
+                            user.save()
+                            user.groups.add(admin_group)
+
                         hq_obj = territory_dict.get(str(hq_name).strip().lower()) if hq_name else None
-                        
-                        # Calculate Employee Code (e.g. SUNP-001)
                         emp_count = Employee.objects.filter(company=new_company).count() + 1
                         emp_code = f"{comp_code}-{emp_count:03d}"
 
                         emp = Employee.objects.create(
                             user=user, company=new_company, name=name, 
-                            employee_code=emp_code, designation=str(desig).strip(), 
+                            employee_code=emp_code, designation=desig_str, 
                             phone=phone, headquarter=hq_obj
                         )
                         emp_objects[name.lower()] = emp
@@ -116,6 +120,6 @@ def onboard_company_view(request):
             return redirect('onboard_company')
 
         except Exception as e:
-            messages.error(request, f"❌ Upload Failed! Please check Excel format. Error: {str(e)}")
+            messages.error(request, f"❌ Upload Failed! Error: {str(e)}")
 
     return render(request, 'company_onboard.html')
