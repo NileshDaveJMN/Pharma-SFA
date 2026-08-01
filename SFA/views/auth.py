@@ -16,6 +16,8 @@ Doosri views files import karein:
 
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.models import User
+from django.contrib import messages
 
 # 🌟 Re-export saare helpers from services layer
 # Purane imports (from .auth import get_full_team_employees) todenge nahi
@@ -43,47 +45,62 @@ __all__ = [
     'get_own_territories_and_routes',
     'login_view',
     'logout_view',
+    'custom_logout_view',
 ]
 
 
+# ==============================================================================
+# 🔐 LOGIN — Web browser ke liye (session-based)
+# ==============================================================================
+
+def login_view(request):
     if request.method == 'POST':
-        comp_code = request.POST.get('company_code', '').strip().upper()
-        
+        comp_code = request.POST.get('company_code', '').strip()
+
         # Dabbe se jo bhi input mila (mobile number ya sirf naam)
         entered_username = (
-            request.POST.get('mobile_number') or 
-            request.POST.get('username') or 
+            request.POST.get('mobile_number') or
+            request.POST.get('username') or
             request.POST.get('phone') or ''
         ).strip()
-        
+
         password = request.POST.get('password', '')
 
-        # 🎯 LOGIC 1: Pehle purane users ke liye EXACT match try karo (e.g., 'bhavesh' ya 'admin')
-        user = authenticate(username=entered_username, password=password)
+        user = None
 
-        # 🎯 LOGIC 2: Agar exact match fail ho gaya, toh naye users ke liye combine karke check karo
-        if not user and comp_code and entered_username:
-            user = authenticate(username=f"{comp_code}_{entered_username}", password=password)
+        # 🎯 LOGIC 1: Purane users ke liye — exact username match (case-insensitive lookup)
+        if entered_username:
+            candidate = User.objects.filter(username__iexact=entered_username).first()
+            if candidate:
+                user = authenticate(username=candidate.username, password=password)
 
-        # 🎯 LOGIC 3: Fallback (Agar case ka koi issue ho)
+        # 🎯 LOGIC 2: Naye users ke liye — "COMPCODE_mobile" pattern (case-insensitive lookup)
         if not user and comp_code and entered_username:
-            user = authenticate(username=f"{comp_code.lower()}_{entered_username}", password=password)
+            combined = f"{comp_code}_{entered_username}"
+            candidate = User.objects.filter(username__iexact=combined).first()
+            if candidate:
+                user = authenticate(username=candidate.username, password=password)
 
         if user:
             login(request, user)
             if not hasattr(user, 'employee'):
                 return redirect('/admin/')
             return redirect('mr_dashboard')
-            
+
         return render(request, 'login.html', {'error': 'Invalid Company Code, Username or Password'})
+
+    return render(request, 'login.html')
+
+
+# ==============================================================================
+# 🚪 LOGOUT — Session logout
+# ==============================================================================
 
 def logout_view(request):
     """Session logout — web browser ke liye."""
     logout(request)
     return redirect('login')
-from django.contrib.auth import logout
-from django.shortcuts import redirect
-from django.contrib import messages
+
 
 def custom_logout_view(request):
     logout(request)  # 🧹 Ye line actual session/cookies destroy karti hai
