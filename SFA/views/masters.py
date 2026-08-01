@@ -171,7 +171,7 @@ def add_tour_program_view(request, employee):
             # 🌟 STRICT BLOCKER: Koi URL manipulation (Inspect Element) karke past mahine na bhej de
             is_allowed = any(am['month'] == m and am['year'] == y for am in allowed_months)
             if not is_allowed:
-                messages.error(request, "⚠️ Kripya sirf allowed mahine ka hi Tour Plan banayein.")
+                messages.error(request, "⚠️ Please create a Tour Plan only for the allowed month.")
                 return redirect('add_tour_program')
             
             # 🌟 SMART DOJ BLOCKER: Joining se pehle ka MTP block karna (Extra Security)
@@ -179,14 +179,14 @@ def add_tour_program_view(request, employee):
                 mtp_val = y * 12 + m
                 join_val = employee.joining_date.year * 12 + employee.joining_date.month
                 if mtp_val < join_val:
-                    messages.error(request, f"❌ Aap apni joining date ({employee.joining_date.strftime('%d %b %Y')}) se pehle ka Tour Plan nahi bana sakte!")
+                    messages.error(request, f"❌ You cannot create a Tour Plan for a date before your joining date ({employee.joining_date.strftime('%d %b %Y')})!")
                     return redirect('add_tour_program')
 
             if not MonthlyTourProgram.objects.filter(employee=employee, month=m, year=y).exists():
                 MonthlyTourProgram.objects.create(employee=employee, month=m, year=y, status='Draft')
                 messages.success(request, f"Draft created for {calendar.month_name[m]} {y}. Now select routes.")
             else:
-                messages.warning(request, "Is mahine ka plan pehle se maujood hai!")
+                messages.warning(request, "A plan for this month already exists!")
             return redirect('add_tour_program')
 
         elif action in ['bulk_save_plan', 'submit_plan']:
@@ -221,7 +221,7 @@ def add_tour_program_view(request, employee):
                 messages.success(request, f"🚀 MTP for {calendar.month_name[mtp.month]} submitted to Manager!")
                 return redirect('request_hub')
             else:
-                messages.success(request, "💾 Draft saved successfully! Aap ise baad mein submit kar sakte hain.")
+                messages.success(request, "💾 Draft saved successfully! You can submit it later.")
                 return redirect('add_tour_program')
 
     # 2. GET REQUEST
@@ -499,7 +499,7 @@ def apply_leave_view(request, employee):
         days = (e_date - s_date).days + 1
         
         if days <= 0:
-            messages.error(request, "Error! End date start date ke baad ki honi chahiye.")
+            messages.error(request, "Error! The end date must be after the start date.")
         else:
             # Check if sufficient balance is available
             is_valid = True
@@ -561,7 +561,7 @@ def upload_primary_sales_view(request, employee):
         selected_rbm_id = request.POST.get('rbm_id')
         
         if not selected_rbm_id:
-            messages.error(request, "❌ Kripya pehle RBM (State) select karein!")
+            messages.error(request, "❌ Please select an RBM (State) first!")
             return redirect('upload_primary_sales')
 
         try:
@@ -584,7 +584,7 @@ def upload_primary_sales_view(request, employee):
                 reader = csv.reader(io_string)
                 all_rows = list(reader)
                 if len(all_rows) < 2:
-                    messages.error(request, "❌ CSV File empty hai ya data missing hai.")
+                    messages.error(request, "❌ The CSV file is empty or data is missing.")
                     return redirect('upload_primary_sales')
                 # 🌟 FIX: Replace spaces with underscores automatically in Headers
                 headers = [str(h).strip().lower().replace(' ', '_') if h else '' for h in all_rows[0]]
@@ -596,13 +596,13 @@ def upload_primary_sales_view(request, employee):
                 sheet = wb.active
                 all_rows = list(sheet.iter_rows(values_only=True))
                 if len(all_rows) < 2:
-                    messages.error(request, "❌ Excel File empty hai ya data missing hai.")
+                    messages.error(request, "❌ The Excel file is empty or data is missing.")
                     return redirect('upload_primary_sales')
                 # 🌟 FIX: Replace spaces with underscores automatically in Headers
                 headers = [str(h).strip().lower().replace(' ', '_') if h else '' for h in all_rows[0]]
                 rows = all_rows[1:]
             else:
-                messages.error(request, "❌ Kripya sirf .csv ya .xlsx file hi upload karein.")
+                messages.error(request, "❌ Please upload only a .csv or .xlsx file.")
                 return redirect('upload_primary_sales')
 
             # SAFE DELETE PURANA DATA
@@ -645,12 +645,12 @@ def upload_primary_sales_view(request, employee):
                             else:
                                 raise ValueError
                         except ValueError:
-                            errors.append(f"Row {row_num}: Date '{raw_date}' theek nahi hai. 'dd/mm/yyyy' use karein.")
+                            errors.append(f"Row {row_num}: Date '{raw_date}' is invalid. Please use 'dd/mm/yyyy' format.")
                             continue
                     
                     # 🌟 FIX: Date mahine/saal se match na kare toh warn karega, silent skip nahi
                     if sale_date.month != selected_month or sale_date.year != selected_year:
-                        errors.append(f"Row {row_num}: Date {sale_date.strftime('%d-%b-%Y')} aapke select kiye gaye mahine ({selected_month}/{selected_year}) ki nahi hai.")
+                        errors.append(f"Row {row_num}: Date {sale_date.strftime('%d-%b-%Y')} does not belong to the month you selected ({selected_month}/{selected_year}).")
                         continue
 
                     # FIX: Company specific fetch
@@ -658,13 +658,13 @@ def upload_primary_sales_view(request, employee):
                     prod = Product.objects.filter(company=employee.company, name__iexact=pr_name).first()
                     
                     if not stockist:
-                        errors.append(f"Row {row_num}: Stockist '{st_name}' nahi mila.")
+                        errors.append(f"Row {row_num}: Stockist '{st_name}' not found.")
                         continue
                     if stockist not in state_stockists:
-                        errors.append(f"Row {row_num}: Stockist '{st_name}' RBM ({rbm_emp.name}) ke list mein nahi hai.")
+                        errors.append(f"Row {row_num}: Stockist '{st_name}' is not in RBM ({rbm_emp.name})'s list.")
                         continue
                     if not prod:
-                        errors.append(f"Row {row_num}: Product '{pr_name}' nahi mila.")
+                        errors.append(f"Row {row_num}: Product '{pr_name}' not found.")
                         continue
                         
                     emp = Employee.objects.filter(headquarter=stockist.territory).first()
@@ -680,20 +680,20 @@ def upload_primary_sales_view(request, employee):
                         stat.save()
                         count += 1
                     else:
-                        errors.append(f"Row {row_num}: Stockist '{st_name}' par koi MR assign nahi hai.")
+                        errors.append(f"Row {row_num}: No MR is assigned to Stockist '{st_name}'.")
                 else:
                     # 🌟 FIX: Missing data ka reason bhi screen par print hoga
-                    errors.append(f"Row {row_num}: Data Missing (Date, Stockist Name, Product Name khali hai, ya Qty 0 hai).")
+                    errors.append(f"Row {row_num}: Data Missing (Date, Stockist Name, or Product Name is empty, or Qty is 0).")
                         
-            messages.success(request, f"🚀 {count} records successfully upload ho gaye for State: {rbm_emp.name}!")
+            messages.success(request, f"🚀 {count} records uploaded successfully for State: {rbm_emp.name}!")
             if errors:
                 for err in errors[:5]: messages.warning(request, err)
-                if len(errors) > 5: messages.warning(request, f"...aur {len(errors) - 5} aur errors hain.")
+                if len(errors) > 5: messages.warning(request, f"...and {len(errors) - 5} more errors.")
                     
         except Exception as e:
             # 🌟 Custom error catch if corrupt excel uploaded
             if "list index out of range" in str(e):
-                messages.error(request, "❌ File Formatting Error! Aapki Excel file internally thodi corrupt hai (styling issue). Kripya isi file ko CSV mein save karein, ya Nayi Excel sheet mein 'Paste as Values' karke daalein.")
+                messages.error(request, "❌ File Formatting Error! Your Excel file is internally a bit corrupt (a styling issue). Please save this file as CSV, or paste it into a new Excel sheet using 'Paste as Values'.")
             else:
                 messages.error(request, f"❌ File processing error: {str(e)}")
             
@@ -746,7 +746,7 @@ def edit_chemist_view(request, employee, chem_id):
     chem = get_object_or_404(Chemist, id=chem_id, allocated_to__in=team_employees)
     
     if ChemistEditRequest.objects.filter(chemist=chem, status='Pending').exists():
-        messages.warning(request, "⚠️ Is Chemist ka Edit Request Manager ke paas pehle se pending hai!")
+        messages.warning(request, "⚠️ An Edit Request for this Chemist is already pending with the Manager!")
         return redirect('edit_chemist_list')
         
     sub_team = Employee.objects.filter(id=chem.allocated_to.id)
@@ -764,7 +764,7 @@ def edit_chemist_view(request, employee, chem_id):
             req_route_id=request.POST.get('route') or None,
             status='Pending'
         )
-        messages.success(request, f"🚀 Chemist '{chem.name}' ki Update Request Manager ko approval ke liye bhej di gayi hai!")
+        messages.success(request, f"🚀 The Update Request for Chemist '{chem.name}' has been sent to the Manager for approval!")
         return redirect('edit_chemist_list')
 
     return render(request, 'edit_chemist.html', {'chemist': chem, 'territories': territories, 'routes': routes})
@@ -775,7 +775,7 @@ def edit_doctor_view(request, employee, doc_id):
     doc = get_object_or_404(Doctor, id=doc_id, allocated_to__in=team_employees)
     
     if DoctorEditRequest.objects.filter(doctor=doc, status='Pending').exists():
-        messages.warning(request, "⚠️ Is Doctor ka Edit Request Manager ke paas pehle se pending hai!")
+        messages.warning(request, "⚠️ An Edit Request for this Doctor is already pending with the Manager!")
         return redirect('edit_doctor_list')
         
     sub_team = Employee.objects.filter(id=doc.allocated_to.id)
@@ -809,7 +809,7 @@ def edit_doctor_view(request, employee, doc_id):
             req_vcard_photo=req_vcard_compressed,                     # 🪪 Compressed V-Card Photo
             status='Pending'
         )
-        messages.success(request, f"🚀 Doctor '{doc.name}' ki Update Request Manager ko bhej di gayi hai!")
+        messages.success(request, f"🚀 The Update Request for Doctor '{doc.name}' has been sent to the Manager!")
         return redirect('edit_doctor_list')
 
     return render(request, 'edit_doctor.html', {
@@ -859,7 +859,7 @@ import io
 def bulk_network_upload_view(request):
     allowed_roles = ['Admin', 'System Administrator', 'Manager', 'NSM']
     if request.user.employee.designation not in allowed_roles:
-        messages.error(request, "Aapko yeh page access karne ki permission nahi hai.")
+        messages.error(request, "You do not have permission to access this page.")
         return redirect('view_hub')
 
     employees = Employee.objects.filter(company=request.user.employee.company, is_active=True).order_by('name')  # 🌟 FIX: Resigned exclude
@@ -872,11 +872,11 @@ def bulk_network_upload_view(request):
         uploaded_file = request.FILES.get('upload_file') or request.FILES.get('csv_file')
 
         if not uploaded_file:
-            messages.error(request, "❌ Kripya file upload karein!")
+            messages.error(request, "❌ Please upload a file!")
             return redirect('bulk_network_upload')
             
         if not selected_emp_id:
-            messages.error(request, "❌ Please ek Employee select karein!")
+            messages.error(request, "❌ Please select an Employee!")
             return redirect('bulk_network_upload')
 
         # FIX: Company specific fetch
@@ -896,7 +896,7 @@ def bulk_network_upload_view(request):
                 reader = csv.reader(io_string)
                 all_rows = list(reader)
                 if len(all_rows) < 2:
-                    messages.error(request, "❌ CSV File empty hai ya headers missing hain.")
+                    messages.error(request, "❌ The CSV file is empty or headers are missing.")
                     return redirect('bulk_network_upload')
                 headers = [str(h).strip().lower() if h else '' for h in all_rows[0]]
                 rows = all_rows[1:]
@@ -906,12 +906,12 @@ def bulk_network_upload_view(request):
                 sheet = wb.active
                 all_rows = list(sheet.iter_rows(values_only=True))
                 if len(all_rows) < 2:
-                    messages.error(request, "❌ Excel File empty hai ya headers missing hain.")
+                    messages.error(request, "❌ The Excel file is empty or headers are missing.")
                     return redirect('bulk_network_upload')
                 headers = [str(h).strip().lower() if h else '' for h in all_rows[0]]
                 rows = all_rows[1:]
             else:
-                messages.error(request, "❌ Kripya sirf .csv ya .xlsx file hi upload karein.")
+                messages.error(request, "❌ Please upload only a .csv or .xlsx file.")
                 return redirect('bulk_network_upload')
 
             success_count = 0
@@ -974,12 +974,12 @@ def bulk_network_upload_view(request):
                     print(f"Row {row_number} Exception: {e} | Data: {clean_row}")
                     error_count += 1
 
-            messages.success(request, f"✅ Upload Complete! {success_count} records {emp_obj.name} ko assign hue. ({error_count} errors)")
+            messages.success(request, f"✅ Upload Complete! {success_count} records assigned to {emp_obj.name}. ({error_count} errors)")
             return redirect('bulk_network_upload')
 
         except Exception as e:
             if "list index out of range" in str(e):
-                messages.error(request, "❌ File Formatting Error! Aapki Excel file internally corrupt hai. Kripya CSV use karein ya naye sheet me paste karein.")
+                messages.error(request, "❌ File Formatting Error! Your Excel file is internally corrupt. Please use a CSV file or paste into a new sheet.")
             else:
                 messages.error(request, f"❌ File processing error: {e}")
             return redirect('bulk_network_upload')
@@ -1042,7 +1042,7 @@ def gift_campaign_view(request, employee):
         doctor_ids = request.POST.getlist('doctor_ids')
 
         if not item_id or not doctor_ids:
-            messages.error(request, "❌ Item aur kam se kam ek Doctor select karein.")
+            messages.error(request, "❌ Please select an Item and at least one Doctor.")
             return redirect('gift_campaign')
 
         item = get_object_or_404(PromoItem, id=item_id, item_type='HighValue')
@@ -1050,7 +1050,7 @@ def gift_campaign_view(request, employee):
         # Check karo MR ke paas yeh item inventory mein hai
         inventory = MRInventory.objects.filter(employee=employee, item=item, stock_qty__gt=0).first()
         if not inventory:
-            messages.error(request, f"❌ Aapke paas {item.name} ka stock nahi hai.")
+            messages.error(request, f"❌ You do not have stock of {item.name}.")
             return redirect('gift_campaign')
 
         # 🌟 FIX: Stock limit check karna
@@ -1081,9 +1081,9 @@ def gift_campaign_view(request, employee):
             created += 1
 
         if created:
-            messages.success(request, f"✅ {created} Doctor(s) ke liye Gift Campaign Manager ko bhej diya!")
+            messages.success(request, f"✅ Gift Campaign sent to Manager for {created} Doctor(s)!")
         else:
-            messages.warning(request, "⚠️ Sab doctors already is month plan mein hain.")
+            messages.warning(request, "⚠️ All doctors are already in this month's plan.")
         return redirect('gift_campaign')
 
     # GET — MR ki HighValue inventory

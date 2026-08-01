@@ -104,5 +104,5 @@ def logout_view(request):
 
 def custom_logout_view(request):
     logout(request)  # 🧹 Ye line actual session/cookies destroy karti hai
-    messages.success(request, "Aap successfully logout ho gaye hain.")
+    messages.success(request, "You have been logged out successfully.")
     return redirect('/login')  # Logout hone ke baad login page par bhejein

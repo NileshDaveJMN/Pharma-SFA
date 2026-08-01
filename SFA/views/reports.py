@@ -420,7 +420,7 @@ def manager_approval_hub(request, employee):
                 if applicant:
                     formatted_type = itype.replace('_', ' ').title()
                     # 🌟 FIX: Message ab status ke hisaab se badlega
-                    msg = f"Aapka {formatted_type} {manager.name} ne {obj.status} kar diya hai."
+                    msg = f"Your {formatted_type} has been {obj.status} by {manager.name}."
                     SystemNotification.objects.create(
                         employee=applicant, 
                         title=f"{formatted_type} {obj.status}!", 
@@ -1155,22 +1155,22 @@ def free_claim_view(request, employee):
         
         # 🌟 NAYA RULE: Current month ka claim generate/submit hone se rokein
         if selected_year > today.year or (selected_year == today.year and selected_month >= today.month):
-            messages.error(request, "⚠️ Current mahine ka Free Claim abhi generate nahi kiya ja sakta. Kripya mahina khatam hone ke baad secondary sale upload hone ka wait karein.")
+            messages.error(request, "⚠️ The Free Claim for the current month cannot be generated yet. Please wait for the secondary sale to be uploaded after the month ends.")
             return redirect(f"{request.path}?employee_id={selected_emp.id}&stockist_id={selected_stockist_id}&month={selected_month}&year={selected_year}")      
         
         # 🌟 STRICT BLOCKER: Deadline ke baad lock (is_locked upar pehle se compute ho chuka hai)
         if is_locked and employee.designation not in ['Admin', 'System Administrator']:
-            messages.error(request, f"⚠️ Edit Locked! Free Claim ki entry sirf har mahine ki {deadline} tareekh tak allow hoti hai. Kripya Admin se sampark karein.")
+            messages.error(request, f"⚠️ Edit Locked! Free Claim entries are only allowed until the {deadline} of each month. Please contact Admin.")
             return redirect(f"{request.path}?employee_id={selected_emp.id}&stockist_id={selected_stockist_id}&month={selected_month}&year={selected_year}")
         
         if not selected_stockist:
-            messages.error(request, "⚠️ Stockist missing hai!")
+            messages.error(request, "⚠️ Stockist is missing!")
             return redirect(request.path)
 
         # 🚀 ACTION 1: AUTO-GENERATE / RE-GENERATE REPORT
         if action == 'generate':
             if master and master.status not in ['Draft', 'Rejected']:
-                messages.error(request, f"⚠️ Yeh report '{master.status}' state mein hai. Ab regenerate nahi kar sakte.")
+                messages.error(request, f"⚠️ This report is in '{master.status}' state. It can no longer be regenerated.")
             else:
                 sales = PartyWiseSaleLine.objects.filter(
                     report__employee=selected_emp,
@@ -1188,7 +1188,7 @@ def free_claim_view(request, employee):
                     if master and master.status in ['Draft', 'Rejected']:
                         master.delete()
                         master = None
-                    messages.warning(request, f"Is mahine {selected_stockist.name} ki koi free scheme (secondary sale) entry nahi hai. Agar koi purana Draft tha, toh wo bhi clear kar diya gaya hai.")
+                    messages.warning(request, f"There is no free scheme (secondary sale) entry for {selected_stockist.name} this month. If there was an old Draft, it has been cleared as well.")
                 else:
                     if not master:
                         master = FreeQtyClaimMaster.objects.create(
@@ -1208,7 +1208,7 @@ def free_claim_view(request, employee):
                             master=master, stockist=selected_stockist, product=prod,
                             total_billed_qty=s['tot_billed'], total_free_qty=s['tot_free'], claim_value=val
                         )
-                    messages.success(request, f"🎉 {selected_stockist.name} ki Free Claim Report successfully sync ho gayi!")
+                    messages.success(request, f"🎉 {selected_stockist.name}'s Free Claim Report has been synced successfully!")
 
         # 🚀 ACTION 2: SUBMIT TO MANAGER
         elif action == 'submit':
@@ -1309,7 +1309,7 @@ def free_claim_view_readonly(request, employee):
 @employee_required
 def approve_free_claims_view(request, employee):
     if employee.designation == 'MR':
-        messages.error(request, "Aapko yeh page access karne ki permission nahi hai.")
+        messages.error(request, "You do not have permission to access this page.")
         return redirect('request_hub')
 
     if request.method == "POST":
@@ -1328,13 +1328,13 @@ def approve_free_claims_view(request, employee):
                 claim.manager_remark = remark
                 claim.status = 'Pending_Manager' if employee.manager_id else 'Pending_Admin'
             claim.save()
-            messages.success(request, f"✅ {claim.employee.name} ki Free Claim Report approve ho gayi!")
+            messages.success(request, f"✅ {claim.employee.name}'s Free Claim Report has been approved!")
         elif action == 'reject':
             claim.status = 'Rejected'
             if employee.designation == 'Admin': claim.admin_remark = remark
             else: claim.manager_remark = remark
             claim.save()
-            messages.error(request, f"❌ Claim reject kar di gayi.")
+            messages.error(request, f"❌ Claim has been rejected.")
         return redirect('approve_free_claims')
 
     if employee.designation == 'Admin':
@@ -1374,9 +1374,9 @@ def mr_inventory_view(request, employee):
                 inv_obj.stock_qty += dispatch.quantity
                 inv_obj.save()
                 
-                messages.success(request, f"✅ {dispatch.item.name} ka stock (Qty: {dispatch.quantity}) aapki inventory me add ho gaya!")
+                messages.success(request, f"✅ Stock of {dispatch.item.name} (Qty: {dispatch.quantity}) has been added to your inventory!")
             except PromoDispatch.DoesNotExist:
-                messages.error(request, "⚠️ Ye dispatch ya toh pehle hi receive ho chuka hai, ya galat ID hai.")
+                messages.error(request, "⚠️ This dispatch has either already been received, or the ID is invalid.")
                 
         # Redirect taaki form resubmit na ho
         return redirect(f"{request.path}?employee_id={employee.id}")

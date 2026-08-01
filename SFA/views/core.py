@@ -62,7 +62,7 @@ def update_location_view(request, employee, role, target_id):
 
     # Agar location pehle se set hai AUR Admin ka switch OFF hai, toh block kar do!
     if target.latitude and not is_global_open:
-        messages.error(request, f"⚠️ {target.name} ki location pehle se lock hai. Update karne ke liye Admin se sampark karein.")
+        messages.error(request, f"⚠️ {target.name}'s location is already locked. Please contact Admin to update it.")
         return redirect(redirect_url)
 
     if request.method == "POST":
@@ -73,9 +73,9 @@ def update_location_view(request, employee, role, target_id):
             target.latitude = lat
             target.longitude = lng
             target.save()
-            messages.success(request, f"📍 {target.name} ki exact location successfully save ho gayi!")
+            messages.success(request, f"📍 {target.name}'s exact location has been saved successfully!")
         else:
-            messages.error(request, "⚠️ GPS fetch nahi ho paya. Kripya apne phone ki Location ON karein.")
+            messages.error(request, "⚠️ Could not fetch GPS. Please turn on Location on your phone.")
             
         return redirect(redirect_url)
 
@@ -181,7 +181,7 @@ def mr_dashboard_view(request, employee):
     open_day, stuck_day = get_open_day(employee)
 
     if stuck_day:
-        messages.error(request, f"🚫 {stuck_day.date.strftime('%d %b %Y')} ka ek purana Day Start band (DayEnd) nahi hua tha, aur ab wo date lock/joining-se-pehle ki ho gayi hai. Naya kaam shuru karne ke liye Admin ko ye din Django Admin se manually close karna hoga (DayEnd add karke).")
+        messages.error(request, f"🚫 An older Day Start on {stuck_day.date.strftime('%d %b %Y')} was never closed (Day End), and that date is now locked or before your joining date. To start new work, Admin needs to manually close this day from Django Admin (by adding a Day End).")
 
     # 🌟 REMOVED: Pehle yahan har dashboard-load par "Draft Expense" warning
     # dikhti thi — jo galat jagah thi (roz-roz, chahe Draft kitna bhi purana
@@ -213,7 +213,7 @@ def mr_dashboard_view(request, employee):
 
     if request.method == "POST" and "add_extra_route" in request.POST:
         new_route_id = request.POST.get('extra_route')
-        if new_route_id and open_day and not is_day_ended: open_day.routes.add(new_route_id); messages.success(request, "Extra route add ho gaya!")
+        if new_route_id and open_day and not is_day_ended: open_day.routes.add(new_route_id); messages.success(request, "Extra route added!")
         return redirect('mr_dashboard')
 
     active_routes, available_routes, pending_doctors, visited_docs, pending_chemists, visited_chems = [], [], [], [], [], []
@@ -597,14 +597,14 @@ def day_start_view(request, employee):
     dcr_status = DailyDCRStatus.objects.filter(employee=employee, date=working_date).first()
     if dcr_status and not dcr_status.is_open:
         if dcr_status.is_submitted:
-            messages.success(request, f"✅ {working_date.strftime('%d %b')} ka Day End already ho chuka hai (DCR submit ho gaya). Agar kuch pending purani dates hain to wo agli baar khud khulegi.")
+            messages.success(request, f"✅ Day End for {working_date.strftime('%d %b')} is already completed (DCR submitted). If there are any pending older dates, they will open automatically next time.")
         else:
-            messages.error(request, f"🚫 DATE BLOCKED: {working_date.strftime('%d %b')} ka DCR lock ho chuka hai (Allowed limit cross ho gayi ya Sunday/Holiday hai). Kripya Admin se sampark karein.")
+            messages.error(request, f"🚫 DATE BLOCKED: DCR for {working_date.strftime('%d %b')} is locked (allowed limit exceeded, or it's a Sunday/Holiday). Please contact Admin.")
         return redirect('mr_dashboard')
 
     # 🔄 2. SEQUENTIAL CHECK (Pichla pending chhod kar aage nahi badh sakte)
     if oldest_open and working_date > oldest_open.date:
-        messages.error(request, f"🚫 SEQUENCE BLOCKED: Aap dates skip nahi kar sakte. Pehle {oldest_open.date.strftime('%d %b')} ka DCR submit karein.")
+        messages.error(request, f"🚫 SEQUENCE BLOCKED: You cannot skip dates. Please submit the DCR for {oldest_open.date.strftime('%d %b')} first.")
         # Dashboard par fekne ke bajaye seedha usi date ke form par redirect kar do!
         return redirect(f'/start/?date={oldest_open.date}')
 
@@ -613,7 +613,7 @@ def day_start_view(request, employee):
         employee=employee, status='Approved', start_date__lte=working_date, end_date__gte=working_date
     ).exists()
     if is_on_leave:
-        messages.error(request, f"🚫 Action Blocked: Aapki {working_date.strftime('%d %b')} ki chhutti (Leave) Approved hai! Aap Day Start nahi kar sakte.")
+        messages.error(request, f"🚫 Action Blocked: Your leave for {working_date.strftime('%d %b')} is approved! You cannot start the day.")
         return redirect('mr_dashboard')
 
     # =======================================================
@@ -631,15 +631,15 @@ def day_start_view(request, employee):
     if employee.designation == 'MR':
         # 1. CURRENT MONTH MTP RULE
         if not is_new_joiner and not MonthlyTourProgram.objects.filter(employee=employee, month=curr_month, year=curr_year, status__in=['Pending', 'Approved']).exists():
-            msg = f"Aapka is mahine ({curr_month}/{curr_year}) ka Tour Plan system mein nahi hai (ya Reject ho gaya hai)!"
+            msg = f"Your Tour Plan for this month ({curr_month}/{curr_year}) is not in the system (or has been rejected)!"
             if setting and setting.without_tourplan_dcr_block:
-                messages.error(request, f"🚫 ACTION BLOCKED: {msg} Pehle is mahine ka MTP banakar Manager ko submit karein.")
+                messages.error(request, f"🚫 ACTION BLOCKED: {msg} Please create this month's MTP and submit it to your Manager first.")
                 return redirect('mr_dashboard')
             alerts.append(msg)
             
         # 2. NEXT MONTH MTP RULE
         if not is_new_joiner and today.day > (setting.mtp_approval_deadline_day if setting else 25) and not MonthlyTourProgram.objects.filter(employee=employee, month=next_month, year=next_year, status__in=['Pending', 'Approved']).exists():
-            msg = f"Agale mahine ({next_month}/{next_year}) ka Tour Plan submit nahi hua hai (ya Reject ho gaya hai)!"
+            msg = f"Next month's ({next_month}/{next_year}) Tour Plan has not been submitted (or has been rejected)!"
             if setting and setting.without_tourplan_dcr_block:
                 messages.error(request, f"🚫 ACTION BLOCKED: {msg}")
                 return redirect('mr_dashboard')
@@ -647,7 +647,7 @@ def day_start_view(request, employee):
             
         # Target Rule
         if today.day > (setting.target_approval_deadline_day if setting else 4) and not MonthlyTargetMaster.objects.filter(territory=employee.headquarter, month=curr_month, year=curr_year, status='Approved').exists():
-            msg = f"Is mahine ({curr_month}/{curr_year}) ka Target abhi tak Approved nahi hua hai!"
+            msg = f"This month's ({curr_month}/{curr_year}) Target has not been approved yet!"
             if setting and setting.without_tourplan_dcr_block:
                 messages.error(request, f"🚫 ACTION BLOCKED: {msg}")
                 return redirect('mr_dashboard')
@@ -657,7 +657,7 @@ def day_start_view(request, employee):
         if worked_last_month:
             # Expense Rule
             if today.day > (setting.expense_submit_deadline_day if setting else 4) and not MonthlyExpenseReport.objects.filter(employee=employee, month=prev_month, year=prev_year, status__in=['Pending', 'Approved']).exists():
-                msg = f"Pichle mahine ({prev_month}/{prev_year}) ki Expense Report pending ya Rejected hai!"
+                msg = f"Last month's ({prev_month}/{prev_year}) Expense Report is pending or rejected!"
                 if setting and setting.without_tourplan_dcr_block:
                     messages.error(request, f"🚫 ACTION BLOCKED: {msg}")
                     return redirect('mr_dashboard')
@@ -692,7 +692,7 @@ def day_start_view(request, employee):
             pending_items.append('Free Claims')
         
         if pending_items:
-            msg = f"Aapki Team ki kuch requests ({', '.join(pending_items)}) approval ke liye pending hain! Kripya clear karein."
+            msg = f"Some of your team's requests ({', '.join(pending_items)}) are pending approval! Please clear them."
             if setting and setting.manager_pending_approval_block:
                 messages.error(request, f"🚫 MANAGER DCR BLOCKED: {msg}")
                 return redirect('manager_approvals')
@@ -700,15 +700,15 @@ def day_start_view(request, employee):
 
         # Manager's Own MTP Check 
         if not is_new_joiner and not MonthlyTourProgram.objects.filter(employee=employee, month=curr_month, year=curr_year, status__in=['Pending', 'Approved']).exists():
-            msg = f"Aapka is mahine ({curr_month}/{curr_year}) ka Tour Plan system mein nahi hai (ya Reject ho gaya hai)!"
+            msg = f"Your Tour Plan for this month ({curr_month}/{curr_year}) is not in the system (or has been rejected)!"
             if setting and setting.without_tourplan_dcr_block:
-                messages.error(request, f"🚫 ACTION BLOCKED: {msg} Pehle is mahine ka MTP banakar submit karein.")
+                messages.error(request, f"🚫 ACTION BLOCKED: {msg} Please create and submit this month's MTP first.")
                 return redirect('mr_dashboard')
             alerts.append(msg)
             
         # Manager's Own NEXT MONTH MTP Check
         if not is_new_joiner and today.day > (setting.mtp_approval_deadline_day if setting else 25) and not MonthlyTourProgram.objects.filter(employee=employee, month=next_month, year=next_year, status__in=['Pending', 'Approved']).exists():
-            msg = f"Aapka agale mahine ({next_month}/{next_year}) ka Tour Plan submit nahi hua hai!"
+            msg = f"Your Tour Plan for next month ({next_month}/{next_year}) has not been submitted!"
             if setting and setting.without_tourplan_dcr_block:
                 messages.error(request, f"🚫 ACTION BLOCKED: {msg}")
                 return redirect('mr_dashboard')
@@ -738,11 +738,11 @@ def day_start_view(request, employee):
         lng = request.POST.get('longitude') or None
 
         if not sd:
-            messages.error(request, "⚠️ Date missing hai! Kripya page refresh karke wapas try karein.")
+            messages.error(request, "⚠️ Date is missing! Please refresh the page and try again.")
             return redirect('day_start')
 
         if DayEnd.objects.filter(employee=employee, date=sd, is_closed=True).exists():
-            messages.error(request, f"⚠️ Aap {sd} ka Day End already kar chuke hain. Is date ko dobaara start nahi kiya ja sakta.")
+            messages.error(request, f"⚠️ You have already completed Day End for {sd}. This date cannot be started again.")
             return redirect('mr_dashboard')
 
         try:
@@ -764,9 +764,9 @@ def day_start_view(request, employee):
             if created:
                 if route_id and work_type == 'Field Work': 
                     day_start.routes.add(route_id)
-                messages.success(request, f"🚀 {sd} ka Day Start successfully ho gaya!")
+                messages.success(request, f"🚀 Day Start for {sd} completed successfully!")
             else:
-                messages.warning(request, f"⚠️ {sd} ka Day Start pehle se system mein maujood hai.")
+                messages.warning(request, f"⚠️ Day Start for {sd} already exists in the system.")
                 
             return redirect('mr_dashboard')
             
@@ -793,11 +793,11 @@ def day_end_view(request, employee):
     open_day, stuck_day = get_open_day(employee)
 
     if stuck_day:
-        messages.error(request, f"🚫 {stuck_day.date.strftime('%d %b %Y')} ka purana Day Start lock ho gaya hai. Admin se sampark karein — wo Django Admin se ye din manually close (DayEnd add) kar sakte hain.")
+        messages.error(request, f"🚫 The old Day Start for {stuck_day.date.strftime('%d %b %Y')} is locked. Please contact Admin — they can manually close this day (add a Day End) from Django Admin.")
         return redirect('mr_dashboard')
 
     if not open_day: 
-        messages.error(request, "Pehle Day Start karein!")
+        messages.error(request, "Please start your day first!")
         return redirect('mr_dashboard')
 
     working_date = open_day.date
@@ -982,7 +982,7 @@ def doctor_visit_view(request, employee, doc_id):
     open_day, stuck_day = get_open_day(employee)
 
     if stuck_day:
-        messages.error(request, f"🚫 {stuck_day.date.strftime('%d %b %Y')} ka purana Day Start lock ho gaya hai. Admin se sampark karein.")
+        messages.error(request, f"🚫 The old Day Start for {stuck_day.date.strftime('%d %b %Y')} is locked. Please contact Admin.")
         return redirect('mr_dashboard')
 
     if not open_day: return redirect('mr_dashboard')
@@ -1093,7 +1093,7 @@ def chemist_visit_view(request, employee, chem_id):
     open_day, stuck_day = get_open_day(employee)
 
     if stuck_day:
-        messages.error(request, f"🚫 {stuck_day.date.strftime('%d %b %Y')} ka purana Day Start lock ho gaya hai. Admin se sampark karein.")
+        messages.error(request, f"🚫 The old Day Start for {stuck_day.date.strftime('%d %b %Y')} is locked. Please contact Admin.")
         return redirect('mr_dashboard')
 
     if not open_day: return redirect('mr_dashboard')
@@ -1114,7 +1114,7 @@ def edit_visit_view(request, employee, visit_id):
     visit = get_object_or_404(DCRVisit, id=visit_id, daily_dcr__employee=employee)
     visit_date = visit.daily_dcr.date
     if DayEnd.objects.filter(employee=employee, date=visit_date, is_closed=True).exists():
-        messages.error(request, "⚠️ Ye visit lock ho gayi hai (Day End ho chuka hai), ab edit nahi ho sakti.")
+        messages.error(request, "⚠️ This visit is locked (Day End is complete) and can no longer be edited.")
         return redirect('mr_dashboard')
 
     products = Product.objects.filter(company=employee.company)
@@ -1233,7 +1233,7 @@ def notice_board_view(request, employee):
             except Exception as e:
                 print(f"FCM Push Error: {e}")
                     
-            messages.success(request, "📢 Notice successfully broadcast ho gaya!")
+            messages.success(request, "📢 Notice broadcast successfully!")
             return redirect('notice_board')
 
     # Latest notices sabse upar
@@ -1378,7 +1378,7 @@ def profile_view(request, employee):
         allowed_ids = set(team_members.values_list('id', flat=True)) | set([m.id for m in managers])
         
         if target_emp.id not in allowed_ids and target_emp.id != employee.id:
-            messages.error(request, "Aap sirf apni team ki profile dekh sakte hain.")
+            messages.error(request, "You can only view your own team's profile.")
             return redirect('profile')
             
         target_employee = target_emp
@@ -1536,7 +1536,7 @@ def _transfer_employee_data(old_emp, new_emp):
 def transfer_data_view(request):
     # 🔒 Security: Sirf Admin ya NSM hi ye kar sakta hai
     if request.user.employee.designation not in ['Admin', 'NSM']:
-        messages.error(request, "⚠️ Aapko Data Handover karne ka access nahi hai.")
+        messages.error(request, "⚠️ You do not have access to perform Data Handover.")
         return redirect('mr_dashboard') # Ya jo bhi aapka home URL ho
 
     # 🌟 AJAX: "Old Employee" select hote hi stats box ke liye live counts
@@ -1581,7 +1581,7 @@ def transfer_data_view(request):
         new_status = STATUS_MAP.get(old_emp_status_raw, 'resigned')
 
         if old_emp_id == new_emp_id:
-            messages.warning(request, "⚠️ Old aur New employee same nahi ho sakte!")
+            messages.warning(request, "⚠️ Old and New employee cannot be the same!")
             return redirect('transfer_data')
 
         try:
@@ -1607,10 +1607,10 @@ def transfer_data_view(request):
                     old_emp.user.is_active = False
                     old_emp.user.save()
 
-                success_msg = f"🎉 Handover Complete! {r['doc_count']} Doctors, {r['chem_count']} Chemists, {r['team_count']} Team Members, {r['sale_count']} Sale Reports, {r['gift_count']} Gift Plans, aur {r['claim_count']} Free Qty Claims successfully '{new_emp.name}' ko transfer ho gaye."
+                success_msg = f"🎉 Handover Complete! {r['doc_count']} Doctors, {r['chem_count']} Chemists, {r['team_count']} Team Members, {r['sale_count']} Sale Reports, {r['gift_count']} Gift Plans, and {r['claim_count']} Free Qty Claims have been successfully transferred to '{new_emp.name}'."
                 if r['claim_skipped']:
-                    success_msg += f" ⚠️ {r['claim_skipped']} Free Qty Claims skip hue (same stockist/month ka claim '{new_emp.name}' ke paas already maujood hai — unhe manually merge karein)."
-                success_msg += f" '{old_emp.name}' ka account inactive kar diya gaya hai. Note: Samples/Gifts ka physical stock (MRInventory) transfer NAHI hua hai — wo physical handover ke baad alag se karein."
+                    success_msg += f" ⚠️ {r['claim_skipped']} Free Qty Claims were skipped (a claim for the same stockist/month already exists for '{new_emp.name}' — please merge these manually)."
+                success_msg += f" '{old_emp.name}''s account has been deactivated. Note: the physical stock of Samples/Gifts (MRInventory) has NOT been transferred — please handle that separately after the physical handover."
                 messages.success(request, success_msg)
 
                 # 🌟 Audit Log: kisne, kab, kis-se-kis-ko, kitna data transfer kiya
@@ -1628,7 +1628,7 @@ def transfer_data_view(request):
                 )
                 
         except Exception as e:
-            messages.error(request, f"❌ Data transfer fail ho gaya: {str(e)}")
+            messages.error(request, f"❌ Data transfer failed: {str(e)}")
             
         return redirect('transfer_data')
 
@@ -1691,7 +1691,7 @@ def promote_employee_view(request):
     (offload + inherit) ban sakti hain.
     """
     if request.user.employee.designation not in ['Admin', 'NSM']:
-        messages.error(request, "⚠️ Aapko ye action karne ka access nahi hai.")
+        messages.error(request, "⚠️ You do not have access to perform this action.")
         return redirect('mr_dashboard')
 
     DESIGNATION_LEVELS = ['MR', 'ABM', 'RBM', 'ZBM', 'NSM', 'Admin']
@@ -1737,7 +1737,7 @@ def promote_employee_view(request):
         vacancy_id = request.POST.get('vacancy')
 
         if new_designation not in DESIGNATION_LEVELS:
-            messages.error(request, "⚠️ Invalid designation select kiya gaya.")
+            messages.error(request, "⚠️ An invalid designation was selected.")
             return redirect('promote_employee')
 
         try:
@@ -1746,11 +1746,11 @@ def promote_employee_view(request):
                 vacancy = Employee.objects.select_related('manager', 'headquarter').get(id=vacancy_id, is_placeholder=True)
 
                 if emp.is_placeholder:
-                    messages.warning(request, "⚠️ Vacant placeholder ko promote nahi kiya ja sakta.")
+                    messages.warning(request, "⚠️ A vacant placeholder cannot be promoted.")
                     return redirect('promote_employee')
 
                 if DESIGNATION_LEVELS.index(new_designation) <= DESIGNATION_LEVELS.index(emp.designation):
-                    messages.warning(request, f"⚠️ Naya designation '{new_designation}' current designation '{emp.designation}' se upar hona chahiye.")
+                    messages.warning(request, f"⚠️ The new designation '{new_designation}' must be higher than the current designation '{emp.designation}'.")
                     return redirect('promote_employee')
 
                 offload_msg_part = ""
@@ -1763,8 +1763,8 @@ def promote_employee_view(request):
                 if old_doc_count or old_chem_count or old_team_count:
                     old_dummy, r_old = _create_vacant_dummy_and_offload(emp)
                     offload_msg_part = (
-                        f" Iska purana data ('{r_old['doc_count']}' Doctors, '{r_old['chem_count']}' Chemists, "
-                        f"'{r_old['team_count']}' Team) '{old_dummy.name}' (naya placeholder) ko offload ho gaya."
+                        f" Their previous data ('{r_old['doc_count']}' Doctors, '{r_old['chem_count']}' Chemists, "
+                        f"'{r_old['team_count']}' Team) has been offloaded to '{old_dummy.name}' (new placeholder)."
                     )
                     EmployeeTransferLog.objects.create(
                         transferred_by=request.user.employee,
@@ -1807,17 +1807,17 @@ def promote_employee_view(request):
 
                 messages.success(
                     request,
-                    f"🎉 '{emp.name}' ko '{old_designation}' se '{new_designation}' promote kar diya gaya. "
-                    f"'{vacancy.name}' ka data ('{r_new['doc_count']}' Doctors, '{r_new['chem_count']}' Chemists, "
+                    f"🎉 '{emp.name}' has been promoted from '{old_designation}' to '{new_designation}'. "
+                    f"'{vacancy.name}''s data ('{r_new['doc_count']}' Doctors, '{r_new['chem_count']}' Chemists, "
                     f"'{r_new['team_count']}' Team, '{r_new['sale_count']}' Sale Reports, "
                     f"'{r_new['gift_count']}' Gift Plans, '{r_new['claim_count']}' Free Qty Claims) "
-                    f"ab '{emp.name}' ke account me hai." + offload_msg_part
+                    f"is now in '{emp.name}''s account." + offload_msg_part
                 )
 
         except Employee.DoesNotExist:
-            messages.error(request, "❌ Employee ya Vacancy nahi mila.")
+            messages.error(request, "❌ Employee or Vacancy not found.")
         except Exception as e:
-            messages.error(request, f"❌ Promotion fail ho gaya: {str(e)}")
+            messages.error(request, f"❌ Promotion failed: {str(e)}")
 
         return redirect('promote_employee')
 
@@ -1846,7 +1846,7 @@ def resign_employee_view(request):
     is_active=True hone ki wajah se dikh jayegi).
     """
     if request.user.employee.designation not in ['Admin', 'NSM']:
-        messages.error(request, "⚠️ Aapko ye action karne ka access nahi hai.")
+        messages.error(request, "⚠️ You do not have access to perform this action.")
         return redirect('mr_dashboard')
 
     # Sirf un employees ko dropdown me dikhayenge jo abhi active hain aur
@@ -1866,7 +1866,7 @@ def resign_employee_view(request):
                 old_emp = Employee.objects.select_related('headquarter', 'manager').get(id=emp_id)
 
                 if old_emp.is_placeholder:
-                    messages.warning(request, "⚠️ Ye already ek Vacant placeholder hai, ise resign nahi kiya ja sakta.")
+                    messages.warning(request, "⚠️ This is already a Vacant placeholder and cannot be resigned.")
                     return redirect('resign_employee')
 
                 dummy, r = _create_vacant_dummy_and_offload(old_emp)
@@ -1882,13 +1882,13 @@ def resign_employee_view(request):
 
                 messages.success(
                     request,
-                    f"✅ '{old_emp.name}' ko '{reason}' mark kar diya gaya. "
-                    f"Iska data ('{r['doc_count']}' Doctors, '{r['chem_count']}' Chemists, "
+                    f"✅ '{old_emp.name}' has been marked as '{reason}'. "
+                    f"Their data ('{r['doc_count']}' Doctors, '{r['chem_count']}' Chemists, "
                     f"'{r['team_count']}' Team Members, '{r['sale_count']}' Sale Reports, "
                     f"'{r['gift_count']}' Gift Plans, '{r['claim_count']}' Free Qty Claims) "
-                    f"'{dummy.name}' (placeholder) ko transfer ho gaya hai. "
-                    f"Jab naya Employee mile, 'Transfer Data' screen se '{dummy.name}' ko select karke "
-                    f"naye employee ko sab transfer kar dena."
+                    f"has been transferred to '{dummy.name}' (placeholder). "
+                    f"Once a new Employee is available, select '{dummy.name}' from the 'Transfer Data' screen "
+                    f"and transfer everything to the new employee."
                 )
 
                 # 🌟 Audit Log: Resign hote waqt Old Employee -> Dummy transfer ka record
@@ -1906,7 +1906,7 @@ def resign_employee_view(request):
                 )
 
         except Exception as e:
-            messages.error(request, f"❌ Resign process fail ho gaya: {str(e)}")
+            messages.error(request, f"❌ Resignation process failed: {str(e)}")
 
         return redirect('resign_employee')
 

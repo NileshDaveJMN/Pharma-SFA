@@ -36,7 +36,7 @@ def expense_hub_view(request, employee):
         if mr.status in ('Draft', 'Rejected'):
             # 🌟 FIX: request.FILES pass kiya gaya hai
             _save_misc_claims(mr, request.POST, request.FILES) 
-            messages.warning(request, "📝 Changes Draft mein SAVE ho gaye hain — par abhi tak SUBMIT nahi hua! Manager ko ye approval ke liye nahi dikhega jab tak aap neeche 'Submit for Approval' button na dabayein.")
+            messages.warning(request, "📝 Changes have been saved as a Draft — but not yet SUBMITTED! The Manager will not see this for approval until you click the 'Submit for Approval' button below.")
         return redirect(f'/expense/?active_report={mr.id}')
 
     # ── Submit for approval (Draft ya Rejected → Pending) ────────────
@@ -46,7 +46,7 @@ def expense_hub_view(request, employee):
         
         # 🌟 STRICT RULE: Current month expense blocker
         if mr.year > today.year or (mr.year == today.year and mr.month >= today.month):
-            messages.error(request, "⚠️ Current month ka expense abhi chal raha hai! Ise sirf mahina khatam hone ke baad (agle mahine) hi submit kiya ja sakta hai.")
+            messages.error(request, "⚠️ The current month's expense is still ongoing! It can only be submitted after the month ends (next month).")
             return redirect('expense_hub')
 
         if mr.status in ('Draft', 'Rejected'):
@@ -66,7 +66,7 @@ def expense_hub_view(request, employee):
         MonthlyExpenseReport.objects.filter(
             id=rep_id, employee=employee, status='Rejected'
         ).update(status='Draft')
-        messages.info(request, "📝 Report ko wapas Draft mein daal diya gaya hai. Ab aap isme changes kar sakte hain.")
+        messages.info(request, "📝 The report has been reverted to Draft. You can now make changes to it.")
         return redirect(f'/expense/?active_report={rep_id}')
 
     # ── GET: load active report ───────────────────────────────────────

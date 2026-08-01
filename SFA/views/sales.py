@@ -342,19 +342,19 @@ def party_wise_sale_entry_view(request, employee):
 
     if request.method == 'POST':
         if is_locked and employee.designation not in ['Admin', 'System Administrator']:
-            messages.error(request, f"⚠️ Edit Locked! Pichle mahine ki entry sirf har mahine ki {deadline} tareekh tak allow hoti hai. Kripya Admin se sampark karein.")
+            messages.error(request, f"⚠️ Edit Locked! Last month's entry is only allowed until the {deadline} of each month. Please contact Admin.")
             return redirect(f'/reports/party-wise-sale/?stockist_id={selected_stockist_id}&employee_id={selected_emp.id}')
 
         posted_stockist_id = request.POST.get('stockist_id') or selected_stockist_id
         if not posted_stockist_id:
-            messages.error(request, "⚠️ Stockist missing! Kripya Stockist select karein.")
+            messages.error(request, "⚠️ Stockist missing! Please select a Stockist.")
             return redirect(f'/reports/party-wise-sale/?employee_id={selected_emp.id}')
             
         posted_stockist = get_object_or_404(Stockist, id=posted_stockist_id)
         chemist_id = request.POST.get('chemist_id')
         
         if not chemist_id:
-            messages.error(request, "⚠️ Chemist select karna zaroori hai!")
+            messages.error(request, "⚠️ Selecting a Chemist is required!")
             return redirect(f'/reports/party-wise-sale/?stockist_id={posted_stockist.id}&employee_id={selected_emp.id}')
             
         chemist = get_object_or_404(Chemist, id=chemist_id)
@@ -373,7 +373,7 @@ def party_wise_sale_entry_view(request, employee):
         if saved_any:
             messages.success(request, f"✅ Sale saved for {chemist.name} (By: {selected_emp.name}).")
         else:
-            messages.warning(request, "⚠️ Form blank tha ya quantities 0 the, isliye kuch save nahi hua.")
+            messages.warning(request, "⚠️ The form was blank or quantities were 0, so nothing was saved.")
             
         return redirect(f'/reports/party-wise-sale/?stockist_id={posted_stockist.id}&employee_id={selected_emp.id}')
 
@@ -480,7 +480,7 @@ def classify_rx_entry_view(request, employee):
     lines_data = []
 
     if not stockist_id: 
-        messages.error(request, f"{selected_emp.name} ki territory mein koi Stockist map nahi hai!")
+        messages.error(request, f"No Stockist is mapped in {selected_emp.name}'s territory!")
     else:
         stockist = get_object_or_404(Stockist, id=stockist_id)
         report = PartyWiseSaleReport.objects.filter(stockist=stockist, month=month, year=year, employee=selected_emp).first()
@@ -499,7 +499,7 @@ def classify_rx_entry_view(request, employee):
     if request.method == "POST":
         # 🌟 STRICT BLOCKER: Deadline ke baad lock
         if is_locked and employee.designation not in ['Admin', 'System Administrator']:
-            messages.error(request, f"⚠️ Edit Locked! Classify Rx ki entry sirf har mahine ki {deadline} tareekh tak allow hoti hai. Admin se sampark karein.")
+            messages.error(request, f"⚠️ Edit Locked! Classify Rx entries are only allowed until the {deadline} of each month. Please contact Admin.")
             return redirect(f"{request.path}?stockist_id={stockist_id}&employee_id={selected_emp.id}")
 
         target_line = PartyWiseSaleLine.objects.get(id=request.POST.get('line_id'))
@@ -510,7 +510,7 @@ def classify_rx_entry_view(request, employee):
         current_mapped_free = sum(m.mapped_free_qty for m in target_line.dr_mappings.all())
         
         if m_billed > (target_line.billed_qty - current_mapped_billed) or m_free > (target_line.free_qty - current_mapped_free): 
-            messages.error(request, "Error! Allocation qty Balance se zyada nahi ho sakti.")
+            messages.error(request, "Error! Allocation qty cannot be more than the Balance.")
         elif m_billed > 0 or m_free > 0: 
             DoctorRxMapping.objects.create(party_line=target_line, doctor_id=request.POST.get('doctor_id'), mapped_billed_qty=m_billed, mapped_free_qty=m_free)
             messages.success(request, f"Rx Classified for {selected_emp.name}!")
