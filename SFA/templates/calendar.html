@@ -53,9 +53,9 @@
                 {% for cell in week %}
                     {% if cell %}
                         <div class="flex-fill text-center p-1"
-                             style="min-height: 52px; border-radius: 6px; font-size: 0.75rem;
+                             style="min-height: 52px; border-radius: 6px; font-size: 0.75rem; cursor: pointer;
                                     {% if cell.is_today %}background-color: rgba(0,86,179,0.12); border: 1px solid #0056b3;{% else %}background-color: #fafbfc;{% endif %}"
-                             {% if cell.events %}data-bs-toggle="tooltip" title="{{ cell.events|join:', ' }}"{% endif %}>
+                             onclick="showDayModal('{{ year }}-{{ month }}-{{ cell.day }}')">
                             <div class="fw-bold {% if cell.is_today %}text-primary{% endif %}">{{ cell.day }}</div>
                             {% if cell.events %}
                                 <div class="d-flex justify-content-center flex-wrap mt-1" style="gap: 1px;">
@@ -65,12 +65,41 @@
                                 </div>
                             {% endif %}
                         </div>
+
+                        <!-- Hidden template holding this day's event list (used by the modal on click) -->
+                        <template id="events-{{ year }}-{{ month }}-{{ cell.day }}">
+                            <div class="fw-bold mb-2" style="font-size: 0.95rem;">{{ month_name }} {{ cell.day }}, {{ year }}</div>
+                            {% if cell.events %}
+                                <ul class="list-unstyled mb-0">
+                                    {% for ev in cell.events %}
+                                        <li class="mb-1" style="font-size: 0.85rem;">{{ ev }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="text-muted mb-0" style="font-size: 0.85rem;">No events on this day.</p>
+                            {% endif %}
+                        </template>
                     {% else %}
                         <div class="flex-fill" style="min-height: 52px;"></div>
                     {% endif %}
                 {% endfor %}
             </div>
         {% endfor %}
+    </div>
+
+    <!-- ── Day Events Modal ── -->
+    <div class="modal fade" id="dayEventsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2">
+                    <h6 class="modal-title mb-0">📅 Day Details</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="dayModalBody">
+                    <!-- Filled dynamically on click -->
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- ── Legend ── -->
@@ -83,7 +112,12 @@
 </div>
 
 <script>
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (el) { return new bootstrap.Tooltip(el); });
+    function showDayModal(key) {
+        var tpl = document.getElementById('events-' + key);
+        if (!tpl) return;
+        document.getElementById('dayModalBody').innerHTML = tpl.innerHTML;
+        var modal = new bootstrap.Modal(document.getElementById('dayEventsModal'));
+        modal.show();
+    }
 </script>
 {% endblock %}
