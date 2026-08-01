@@ -49,17 +49,17 @@
                 </div>
                 {% endif %}
 
-                <form method="POST">
+                                <form method="POST">
                     {% csrf_token %}
                     
-                    <!-- 🌟 NAYA: Company Code Input -->
+                    <!-- 🌟 FIX: Company Code Input -->
                     <div class="mb-3">
-                        <input type="text" name="company_code" class="form-control py-2.5 px-3 bg-light border-0 fw-bold text-primary" placeholder="Company Code (e.g. SUNP)" style="border-radius: 8px;" required>
+                        <input type="text" name="company_code" class="form-control py-2.5 px-3 bg-light border-0 fw-bold text-primary" placeholder="Company Code" style="border-radius: 8px;" required>
                     </div>
 
-                    <!-- 🌟 UPDATE: Username ko Mobile Number ka placeholder de diya -->
+                    <!-- 🌟 FIX: Username / Mobile Number Input -->
                     <div class="mb-3">
-                        <input type="text" name="username" class="form-control py-2.5 px-3 bg-light border-0" placeholder="Mobile Number" style="border-radius: 8px;" required>
+                        <input type="text" name="mobile_number" class="form-control py-2.5 px-3 bg-light border-0" placeholder="Mobile Number" style="border-radius: 8px;" required>
                     </div>
                     
                     <div class="mb-4">
@@ -70,6 +70,7 @@
                         <p class="text-danger mt-3 text-center small fw-semibold">❌ {{ error }}</p>
                     {% endif %}
                 </form>
+
             </div>
         </div>
     </div>

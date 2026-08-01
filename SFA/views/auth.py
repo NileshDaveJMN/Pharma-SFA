@@ -54,22 +54,35 @@ def login_view(request):
         return redirect('mr_dashboard')
 
     if request.method == 'POST':
-        # 🌟 NAYA: Company Code aur Mobile Number collect karein
         comp_code = request.POST.get('company_code', '').strip().upper()
-        phone = request.POST.get('username', '').strip()
+        
+        # 🌟 FIX: Mobile number ko teeno possible names se check karo
+        phone = (
+            request.POST.get('mobile_number') or 
+            request.POST.get('username') or 
+            request.POST.get('phone') or ''
+        ).strip()
+        
         password = request.POST.get('password', '')
 
-        # Combine karke Django Username banayein (e.g. SUNP_9876543210)
-        # Agar purana admin direct username daal raha hai (bina company code), toh fallback
-        django_username = f"{comp_code}_{phone}" if comp_code else phone
+        # 1. Company Code + Phone combine karke username banao
+        if comp_code and phone:
+            django_username = f"{comp_code}_{phone}"
+        else:
+            django_username = phone  # Fallback for direct username / admin
 
         user = authenticate(username=django_username, password=password)
-        
+
+        # 2. Fallback: Agar upar se authenticate na hua ho (case difference etc.)
+        if not user and comp_code and phone:
+            user = authenticate(username=f"{comp_code.lower()}_{phone}", password=password)
+
         if user:
             login(request, user)
             if not hasattr(user, 'employee'):
                 return redirect('/admin/')
             return redirect('mr_dashboard')
+            
         return render(request, 'login.html', {'error': 'Invalid Company Code, Mobile No. or Password'})
 
     return render(request, 'login.html')
