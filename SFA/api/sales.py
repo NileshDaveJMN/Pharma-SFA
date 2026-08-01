@@ -3,7 +3,7 @@ SFA/api/sales.py
 ================
 Flutter ke liye Sales & Visit REST API endpoints.
 """
-
+from datetime import datetime
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Sum, Q
@@ -223,10 +223,6 @@ def api_chemist_visit_submit(request):
         return Response({'error': str(e)}, status=500)
 
 
-# ==============================================================================
-# 📋 TODAY'S VISITS
-# ==============================================================================
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_today_visits(request):
@@ -235,15 +231,26 @@ def api_today_visits(request):
     except AttributeError:
         return Response({'error': 'Employee profile missing'}, status=400)
 
-    open_day, _ = get_open_day(employee)
-    if not open_day:
-        return Response({
-            'working_date': str(timezone.localdate()),
-            'doctor_visits': [], 'chemist_visits': [],
-            'summary': {'dr_count': 0, 'chem_count': 0, 'total_samples': 0, 'total_pob': 0.0}
-        })
+    # 🌟 FIX: Agar 'date' query param diya hai (jaise ?date=2026-07-22),
+    # to wahi date use karo — chahe wo din band (closed) ho chuka ho.
+    # Nahi to purana behavior: abhi jo din khula hai wahi dikhao.
+    date_param = request.query_params.get('date')
 
-    working_date = open_day.date
+    if date_param:
+        try:
+            working_date = datetime.strptime(date_param, '%Y-%m-%d').date()
+        except ValueError:
+            return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=400)
+    else:
+        open_day, _ = get_open_day(employee)
+        if not open_day:
+            return Response({
+                'working_date': str(timezone.localdate()),
+                'doctor_visits': [], 'chemist_visits': [],
+                'summary': {'dr_count': 0, 'chem_count': 0, 'total_samples': 0, 'total_pob': 0.0}
+            })
+        working_date = open_day.date
+
     daily_dcr = DailyDCR.objects.filter(employee=employee, date=working_date).first()
 
     if not daily_dcr:
@@ -278,7 +285,6 @@ def api_today_visits(request):
                 'remark': v.remark or '',
                 'time': v.created_at.strftime('%I:%M %p') if hasattr(v, 'created_at') and v.created_at else None,
                 'products_detailed': detailed, 'samples_given': samples, 'pob': round(pob, 2),
-                # 🌟 NAYA: Distance calculate karne ke liye coordinates
                 'visit_lat': str(v.latitude) if v.latitude else None,
                 'visit_lng': str(v.longitude) if v.longitude else None,
                 'target_lat': str(v.doctor.latitude) if v.doctor.latitude else None,
@@ -293,7 +299,6 @@ def api_today_visits(request):
                 'route': v.route.name if v.route else None,
                 'time': v.created_at.strftime('%I:%M %p') if hasattr(v, 'created_at') and v.created_at else None,
                 'products_ordered': ordered,
-                # 🌟 NAYA: Distance calculate karne ke liye coordinates
                 'visit_lat': str(v.latitude) if v.latitude else None,
                 'visit_lng': str(v.longitude) if v.longitude else None,
                 'target_lat': str(v.chemist.latitude) if v.chemist.latitude else None,
@@ -305,7 +310,6 @@ def api_today_visits(request):
         'doctor_visits': doctor_visits, 'chemist_visits': chemist_visits,
         'summary': {'dr_count': len(doctor_visits), 'chem_count': len(chemist_visits), 'total_samples': total_samples, 'total_pob': round(total_pob, 2)}
     })
-
 # ==============================================================================
 # 🗑️ DELETE VISIT
 # ==============================================================================
