@@ -46,18 +46,11 @@ __all__ = [
 ]
 
 
-def login_view(request):
-    """Standard Django session-based login — web browser ke liye."""
-    if request.user.is_authenticated:
-        if not hasattr(request.user, 'employee'):
-            return redirect('/admin/')
-        return redirect('mr_dashboard')
-
     if request.method == 'POST':
         comp_code = request.POST.get('company_code', '').strip().upper()
         
-        # 🌟 FIX: Mobile number ko teeno possible names se check karo
-        phone = (
+        # Dabbe se jo bhi input mila (mobile number ya sirf naam)
+        entered_username = (
             request.POST.get('mobile_number') or 
             request.POST.get('username') or 
             request.POST.get('phone') or ''
@@ -65,17 +58,16 @@ def login_view(request):
         
         password = request.POST.get('password', '')
 
-        # 1. Company Code + Phone combine karke username banao
-        if comp_code and phone:
-            django_username = f"{comp_code}_{phone}"
-        else:
-            django_username = phone  # Fallback for direct username / admin
+        # 🎯 LOGIC 1: Pehle purane users ke liye EXACT match try karo (e.g., 'bhavesh' ya 'admin')
+        user = authenticate(username=entered_username, password=password)
 
-        user = authenticate(username=django_username, password=password)
+        # 🎯 LOGIC 2: Agar exact match fail ho gaya, toh naye users ke liye combine karke check karo
+        if not user and comp_code and entered_username:
+            user = authenticate(username=f"{comp_code}_{entered_username}", password=password)
 
-        # 2. Fallback: Agar upar se authenticate na hua ho (case difference etc.)
-        if not user and comp_code and phone:
-            user = authenticate(username=f"{comp_code.lower()}_{phone}", password=password)
+        # 🎯 LOGIC 3: Fallback (Agar case ka koi issue ho)
+        if not user and comp_code and entered_username:
+            user = authenticate(username=f"{comp_code.lower()}_{entered_username}", password=password)
 
         if user:
             login(request, user)
@@ -83,9 +75,7 @@ def login_view(request):
                 return redirect('/admin/')
             return redirect('mr_dashboard')
             
-        return render(request, 'login.html', {'error': 'Invalid Company Code, Mobile No. or Password'})
-
-    return render(request, 'login.html')
+        return render(request, 'login.html', {'error': 'Invalid Company Code, Username or Password'})
 
 def logout_view(request):
     """Session logout — web browser ke liye."""
