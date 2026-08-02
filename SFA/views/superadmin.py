@@ -8,7 +8,8 @@ from SFA.models import Company, Territory, Employee, DARate, TARate, Product, Ro
 def onboard_company_view(request):
     if not request.user.is_superuser:
         messages.error(request, "Access Denied! Only Super Admins can onboard companies.")
-        return redirect('login')
+        # 🌟 THE FIX: 'login' ki jagah direct '/login/' path de diya
+        return redirect('/login/')
 
     if request.method == 'POST' and request.FILES.get('onboard_file'):
         excel_file = request.FILES['onboard_file']
