@@ -21,17 +21,27 @@ from SFA.models import SystemSetting, DeviceToken, Employee
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def api_login(request):
-    company_code = request.data.get('company_code', '').strip()
-    username = request.data.get('username', '').strip()
+    # 🌟 UPPERCASE fix
+    company_code = request.data.get('company_code', '').strip().upper()
+    entered_username = request.data.get('username', '').strip()
     password = request.data.get('password', '').strip()
 
-    if not company_code or not username or not password:
+    if not company_code or not entered_username or not password:
         return Response(
             {'error': 'Company Code, Username aur Password teeno required hain'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    user = authenticate(username=username, password=password)
+    # 🎯 SMART LOGIC 1: Exact match try karo (purane users ya admins ke liye)
+    user = authenticate(username=entered_username, password=password)
+
+    # 🎯 SMART LOGIC 2: Agar nahi mila, toh CompanyCode_Number karke check karo (Naye Excel users ke liye)
+    if not user:
+        user = authenticate(username=f"{company_code}_{entered_username}", password=password)
+
+    # 🎯 SMART LOGIC 3: Fallback agar company code chote letters mein save hua ho
+    if not user:
+        user = authenticate(username=f"{company_code.lower()}_{entered_username}", password=password)
 
     if user is None:
         return Response(
@@ -70,7 +80,6 @@ def api_login(request):
         'employee': _employee_dict(emp),
         'enable_offline_mode': is_offline_mode,
     }, status=status.HTTP_200_OK)
-
 
 # ==============================================================================
 # 🚪 LOGOUT — Token delete karta hai
