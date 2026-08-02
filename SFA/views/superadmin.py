@@ -15,7 +15,8 @@ def onboard_company_view(request):
         excel_file = request.FILES['onboard_file']
         
         try:
-            wb = openpyxl.load_workbook(excel_file, data_only=True)
+            wb = openpyxl.load_workbook(excel_file, data_only=True, read_only=True)
+
             
             with transaction.atomic():
                 # 1. CREATE COMPANY & SETTINGS
