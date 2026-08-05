@@ -659,12 +659,13 @@ def api_holidays(request):
         })
 
     if request.method == 'POST':
-        # 🛑 STRICT BLOCKER: Agar MR ya ABM submit karne ki koshish kare, toh yahi rok do
+        # 🛑 STRICT BLOCKER: Access restricted to authorized managers
         if employee.designation not in allowed_designations:
             return Response({
                 'success': False, 
-                'error': 'Access Denied: Sirf RSM (RBM) aur us-se upar ke managers hi holidays propose kar sakte hain.'
+                'error': 'Access Denied: Only Regional Sales Managers (RSM) and higher designations are authorized to propose holidays.'
             }, status=403)
+
 
         name = request.data.get('name')
         h_date = request.data.get('date')
