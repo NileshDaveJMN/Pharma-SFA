@@ -116,12 +116,29 @@ def api_dashboard(request):
             team_employees = get_full_team_employees(employee)
             route_objs = open_day.routes.all()
 
-            pending_doctors = [
-                {'id': d.id, 'name': d.name, 'route': d.route.name if d.route else None}
-                for d in Doctor.objects.select_related('route').filter(
-                    allocated_to__in=team_employees, route__in=route_objs, status='Approved'
-                ) if d.id not in visited_doc_ids
-            ]
+            # 🌟 SMART FIX: Doctors ke saath unki aakhiri visit ki date bhi nikali ja rahi hai
+            from django.db.models import Max, Q # (Agar top par na ho toh add kar lena)
+            
+            # 1. Pehle pending doctors ki queryset nikalenge aur usme 'last_visit_date' annotate karenge
+            doctors_query = Doctor.objects.select_related('route').filter(
+                allocated_to__in=team_employees, route__in=route_objs, status='Approved'
+            ).exclude(id__in=visited_doc_ids).annotate(
+                last_visit_date=Max(
+                    'dcrvisit__daily_dcr__date', 
+                    filter=Q(dcrvisit__daily_dcr__employee=employee)
+                )
+            )
+            
+            # 2. Phir JSON mein 'last_visit' field add karke bhej denge
+            pending_doctors = []
+            for d in doctors_query:
+                pending_doctors.append({
+                    'id': d.id, 
+                    'name': d.name, 
+                    'route': d.route.name if d.route else None,
+                    # Agar last visit mili, toh date format karke bhejo, warna 'Never'
+                    'last_visit': d.last_visit_date.strftime('%d %b %Y') if d.last_visit_date else 'Never'
+                })
             pending_chemists = [
                 {'id': c.id, 'name': c.name, 'route': c.route.name if c.route else None}
                 for c in Chemist.objects.select_related('route').filter(
@@ -495,8 +512,3 @@ def api_day_end(request):
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
-
-# ==============================================================================
-# 🗑️ DELETE VISIT
-# ==============================================================================
-
