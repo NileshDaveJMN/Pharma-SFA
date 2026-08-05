@@ -361,10 +361,12 @@ def calculate_expense(emp, ds_obj):
         else: eff_cat = 'OUTSTATION'  
     else: eff_cat = raw_cat
 
-    try:
-        da_rate = DARate.objects.get(designation=emp.designation)
+        try:
+        da_rate = DARate.objects.get(company=emp.company, designation=emp.designation)
         da = {'HQ': da_rate.hq_da, 'EX_HQ': da_rate.exhq_da, 'OUTSTATION': da_rate.outstation_da}[eff_cat]
-    except DARate.DoesNotExist: da = 0
+    except DARate.DoesNotExist: 
+        da = 0
+
 
     if not routes.exists() or eff_cat == 'HQ':
         return {'da': round(float(da), 2), 'ta': 0, 'distance': 0, 'territory_category': eff_cat, 'night_stay': night_stay, 'is_slab3': False}
@@ -378,7 +380,7 @@ def calculate_expense(emp, ds_obj):
     billed_distance = (best_local * 2) + (best_transit * transit_multiplier)
 
     try:
-        ta_rate = TARate.objects.get(designation=emp.designation)
+        ta_rate = TARate.objects.get(company=emp.company, designation=emp.designation)
         if billed_distance == 0: return {'da': round(float(da), 2), 'ta': 0, 'distance': distance, 'territory_category': eff_cat, 'night_stay': night_stay, 'is_slab3': False}
         elif distance <= ta_rate.slab1_upto_km: ta = round(billed_distance * float(ta_rate.slab1_rate), 2)
         elif distance <= ta_rate.slab2_upto_km: ta = round(billed_distance * float(ta_rate.slab2_rate), 2)
