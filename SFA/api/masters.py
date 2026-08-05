@@ -632,9 +632,15 @@ def api_leaves(request):
 def api_holidays(request):
     employee = request.user.employee
     
+    # 🌟 NAYA: Allowed roles ki list (MR aur ABM ko bahar rakha hai)
+    allowed_designations = ['RBM', 'ZBM', 'NSM', 'Admin', 'System Administrator']
+    
     if request.method == 'GET':
         subordinate_rbms = []
         is_rbm = (employee.designation == 'RBM')
+        
+        # 🌟 NAYA: Flutter app ko batane ke liye ki UI mein button dikhana hai ya nahi
+        can_propose = (employee.designation in allowed_designations)
         
         if not is_rbm and employee.designation in ['ZBM', 'NSM', 'Admin', 'System Administrator']:
             team = get_full_team_employees(employee)
@@ -648,10 +654,18 @@ def api_holidays(request):
             'success': True, 
             'holidays': data,
             'is_rbm': is_rbm,
-            'subordinate_rbms': subordinate_rbms
+            'subordinate_rbms': subordinate_rbms,
+            'can_propose': can_propose  # Flutter devs is flag ka use kar sakte hain
         })
 
     if request.method == 'POST':
+        # 🛑 STRICT BLOCKER: Agar MR ya ABM submit karne ki koshish kare, toh yahi rok do
+        if employee.designation not in allowed_designations:
+            return Response({
+                'success': False, 
+                'error': 'Access Denied: Sirf RSM (RBM) aur us-se upar ke managers hi holidays propose kar sakte hain.'
+            }, status=403)
+
         name = request.data.get('name')
         h_date = request.data.get('date')
         is_national = request.data.get('is_national', False)
