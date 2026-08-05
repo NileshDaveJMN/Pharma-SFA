@@ -129,16 +129,22 @@ def api_dashboard(request):
                 )
             )
             
-            # 2. Phir JSON mein 'last_visit' field add karke bhej denge
+            # 2. Phir JSON mein name aur date ko ek sath mix karke bhej denge (The Jugaad)
             pending_doctors = []
             for d in doctors_query:
+                # Date ko thoda chota rakhte hain (e.g., "02 Aug") taaki screen se bahar na jaye
+                last_v = d.last_visit_date.strftime('%d %b') if d.last_visit_date else 'Never'
+                
+                # 🌟 ASLI JUGAD: '\n' laga diya taaki app mein date automatically agli line me chali jaye!
+                hacky_name = f"{d.name}\n[L.V: {last_v}]"
+                
                 pending_doctors.append({
                     'id': d.id, 
-                    'name': d.name, 
+                    'name': hacky_name,  # App sochegi ye poora naam hai
                     'route': d.route.name if d.route else None,
-                    # Agar last visit mili, toh date format karke bhejo, warna 'Never'
-                    'last_visit': d.last_visit_date.strftime('%d %b %Y') if d.last_visit_date else 'Never'
+                    'last_visit': last_v # Future ke liye bacha kar rakha hai
                 })
+
             pending_chemists = [
                 {'id': c.id, 'name': c.name, 'route': c.route.name if c.route else None}
                 for c in Chemist.objects.select_related('route').filter(
