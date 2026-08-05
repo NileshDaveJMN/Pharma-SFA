@@ -8,7 +8,6 @@ from SFA.models import Company, Territory, Employee, DARate, TARate, Product, Ro
 def onboard_company_view(request):
     if not request.user.is_superuser:
         messages.error(request, "Access Denied! Only Super Admins can onboard companies.")
-        # 🌟 THE FIX: 'login' ki jagah direct '/login/' path de diya
         return redirect('/login/')
 
     if request.method == 'POST' and request.FILES.get('onboard_file'):
@@ -17,7 +16,6 @@ def onboard_company_view(request):
         try:
             wb = openpyxl.load_workbook(excel_file, data_only=True, read_only=True)
 
-            
             with transaction.atomic():
                 # 1. CREATE COMPANY & SETTINGS
                 sheet_company = wb['Company']
@@ -48,7 +46,6 @@ def onboard_company_view(request):
                 sheet_emp = wb['Hierarchy']
                 emp_objects = {}
                 
-                # 🌟 Group Ensure karna (Agar nahi hai toh ban jayega)
                 admin_group, _ = Group.objects.get_or_create(name='Company Admin')
                 
                 for row in sheet_emp.iter_rows(min_row=2, values_only=True):
@@ -63,10 +60,8 @@ def onboard_company_view(request):
                         surname = name_parts[-1].capitalize() if len(name_parts) > 1 else name.capitalize()
                         default_password = f"{surname}@123"
 
-                        # Create User
                         user = User.objects.create_user(username=django_username, password=default_password)
                         
-                        # 🌟 NAYA LOGIC: Agar Admin hai, toh Staff banakar Group mein daalo
                         if desig_str.lower() == 'admin':
                             user.is_staff = True
                             user.save()
@@ -94,11 +89,28 @@ def onboard_company_view(request):
                                 emp_obj.manager = mgr_obj
                                 emp_obj.save()
 
-                # 5. PRODUCTS
+                # 5. PRODUCTS (Updated with GST support)
                 sheet_prod = wb['Products']
                 for row in sheet_prod.iter_rows(min_row=2, values_only=True):
                     if row[0]:
-                        Product.objects.create(company=new_company, name=str(row[0]).strip(), pack_size=str(row[1]).strip(), mrp=row[2], ptr=row[3], pts=row[4])
+                        raw_gst = str(row[5]).replace('%', '').strip() if len(row) > 5 and row[5] is not None else '12'
+                        
+                        try:
+                            final_gst = int(float(raw_gst))
+                            if final_gst not in [0, 5, 12, 18, 28]:
+                                final_gst = 12
+                        except ValueError:
+                            final_gst = 12
+
+                        Product.objects.create(
+                            company=new_company, 
+                            name=str(row[0]).strip(), 
+                            pack_size=str(row[1]).strip(), 
+                            mrp=row[2], 
+                            ptr=row[3], 
+                            pts=row[4],
+                            gst_slab=final_gst
+                        )
 
                 # 6. ROUTES
                 sheet_route = wb['Routes']
