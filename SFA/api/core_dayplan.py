@@ -361,7 +361,7 @@ def calculate_expense(emp, ds_obj):
         else: eff_cat = 'OUTSTATION'  
     else: eff_cat = raw_cat
 
-        try:
+    try:
         da_rate = DARate.objects.get(company=emp.company, designation=emp.designation)
         da = {'HQ': da_rate.hq_da, 'EX_HQ': da_rate.exhq_da, 'OUTSTATION': da_rate.outstation_da}[eff_cat]
     except DARate.DoesNotExist: 
