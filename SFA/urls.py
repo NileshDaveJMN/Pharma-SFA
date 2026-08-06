@@ -1,4 +1,5 @@
 # SFA/urls.py
+from .secondary_sales import get_pending_stockists, get_focus_products, submit_weekly_sales
 from .views.reports import doctor_roi_report  
 from .views.masters import edit_chemist_list_view, edit_chemist_view, view_doctor_profile
 from .views import reports
@@ -124,4 +125,7 @@ urlpatterns = [
     path('api/', include('SFA.api.urls')), 
     path('logout/', auth_views.custom_logout_view, name='logout'),
     path('request-hub/focus-products/', manage_focus_products, name='manage_focus_products'),
+    path('stock/pending-stockists/', get_pending_stockists, name='api_pending_stockists'),
+    path('stock/focus-products/', get_focus_products, name='api_focus_products'),
+    path('stock/submit/', submit_weekly_sales, name='api_submit_stock'),
 ]
