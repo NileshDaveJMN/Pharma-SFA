@@ -162,6 +162,28 @@
             </div>
         </div>
         {% endif %}
+        {% if request.user.employee.designation in 'RBM, ZBM, NSM, Admin' %}
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #dc3545 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'request_holiday' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">⛱️</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Propose<br>Holiday</span>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 🌟 NEW: FOCUS PRODUCTS CARD (For RSM and above) 🌟 -->
+        {% if request.user.employee.designation in 'RSM, RBM, ZBM, NSM, Admin, System Administrator' %}
+        <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #198754 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'manage_focus_products' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">🌟</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Focus<br>Products</span>
+            </div>
+        </div>
+        {% endif %}
 
         {% if request.user.employee.designation == 'System Administrator' or request.user.employee.designation == 'Admin' %}
         
