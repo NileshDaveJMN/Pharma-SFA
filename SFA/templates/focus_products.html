@@ -1,11 +1,12 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container mt-4">
-       <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container mt-4 mb-5">
+    
+    <!-- HEADER & TOGGLE SWITCH -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="m-0">Manage Focus Products</h2>
         
-        <!-- 🌟 CHHOTA TOGGLE SWITCH (No text, Auto-submits) 🌟 -->
         <form method="POST" class="m-0 d-flex align-items-center">
             {% csrf_token %}
             <input type="hidden" name="action" value="toggle_campaign">
@@ -19,49 +20,68 @@
         </form>
     </div>
 
-
-    <!-- Agar campaign OFF hai toh warning dikhao -->
+    <!-- CAMPAIGN STATUS WARNING -->
     {% if not is_campaign_active %}
-    <div class="alert alert-warning text-center" role="alert">
-        <strong>⚠️ Focus Campaign is currently OFF for your team.</strong><br> 
-        Turn it ON using the button above to set mandatory Focus Products and trigger alerts for your MRs.
+    <div class="alert alert-warning text-center shadow-sm" role="alert">
+        <strong>⚠️ Focus Campaign is OFF.</strong><br> 
+        Toggle it ON to set Focus Products and enable MR alerts.
     </div>
     {% endif %}
 
-    <!-- TOP SECTION: Search & Select -->
-    <div class="card mb-4" {% if not is_campaign_active %}style="opacity: 0.5; pointer-events: none;"{% endif %}>
+    <!-- TOP SECTION: SEARCH & SELECT (CHECKBOXES) -->
+    <div class="card shadow-sm mb-4" {% if not is_campaign_active %}style="opacity: 0.6; pointer-events: none;"{% endif %}>
         <div class="card-header bg-primary text-white">
             <strong>Select Products to Focus</strong>
         </div>
         <div class="card-body">
             <input type="text" id="searchBar" onkeyup="filterProducts()" 
-                   class="form-control mb-3" placeholder="🔍 Search product by name..."
-                   {% if not is_campaign_active %}disabled{% endif %}>
+                   class="form-control mb-3" placeholder="🔍 Search product by name...">
 
             <form method="POST">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="save_products">
                 
-                <div id="productList" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 5px;">
+                <div id="productList" style="max-height: 250px; overflow-y: auto; border: 1px solid #dee2e6; padding: 10px; border-radius: 5px; background: #f8f9fa;">
                     {% for p in all_products %}
-                        <div class="product-item form-check" data-name="{{ p.name|lower }}">
+                        <div class="product-item form-check py-1" data-name="{{ p.name|lower }}">
                             <input class="form-check-input" type="checkbox" name="focus_products" 
                                    value="{{ p.id }}" id="prod_{{ p.id }}" 
-                                   {% if p.id in active_focus_ids %}checked{% endif %}
-                                   {% if not is_campaign_active %}disabled{% endif %}>
-                            <label class="form-check-label" for="prod_{{ p.id }}">
+                                   {% if p.id in active_focus_ids %}checked{% endif %}>
+                            <label class="form-check-label fw-medium" for="prod_{{ p.id }}">
                                 {{ p.name }} <small class="text-muted">({{ p.pack_size }})</small>
                             </label>
                         </div>
                     {% endfor %}
                 </div>
                 
-                <button type="submit" class="btn btn-success mt-3 w-100" {% if not is_campaign_active %}disabled{% endif %}>
+                <button type="submit" class="btn btn-success mt-3 w-100 fw-bold">
                     ✅ Save Focus Products
                 </button>
             </form>
         </div>
     </div>
+
+    <!-- 🌟 NEW SECTION: CURRENT ACTIVE PRODUCTS LIST 🌟 -->
+    <h6 class="fw-bold text-secondary mb-2 px-1" style="font-size: 0.75rem; letter-spacing: 0.5px;">🌟 CURRENT FOCUS PRODUCTS</h6>
+    <div class="card shadow-sm border-0 mb-4">
+        <ul class="list-group list-group-flush" style="border-radius: 8px;">
+            {% if active_focus_ids %}
+                {% for p in all_products %}
+                    {% if p.id in active_focus_ids %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span class="fw-bold text-dark">{{ p.name }} <small class="text-muted">({{ p.pack_size }})</small></span>
+                            <span class="badge bg-success rounded-pill" style="font-size: 0.65rem;">Active</span>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                <li class="list-group-item text-center text-muted py-3" style="font-size: 0.9rem;">
+                    No focus products selected yet.
+                </li>
+            {% endif %}
+        </ul>
+    </div>
+    
 </div>
 
 <script>
