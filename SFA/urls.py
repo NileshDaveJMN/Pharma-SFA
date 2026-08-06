@@ -9,7 +9,7 @@ from django.shortcuts import redirect
 from rest_framework.authtoken.views import obtain_auth_token
 from . import views
 from SFA.views import reports  
-from .views import masters, sales, reports from SFA.views.requests import manage_focus_products
+from SFA.views.requests import manage_focus_products
 from .views.masters import edit_chemist_list_view, edit_chemist_view, view_doctor_profile, view_chemist_profile
 
 from .views.reports import gift_distribution_report
