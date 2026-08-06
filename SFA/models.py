@@ -1157,3 +1157,15 @@ class WeeklyStockistSaleDetail(models.Model):
 
     def __str__(self):
         return f"{self.product.name} - Sec: {self.sec_sale_qty}, Closing: {self.closing_qty}"
+
+class CampaignControl(models.Model):
+    """
+    RSM/ZBM level par campaign (Secondary Sales/Focus Products) ko ON/OFF karne ka toggle.
+    """
+    manager = models.OneToOneField(Employee, on_delete=models.CASCADE, related_name='campaign_control')
+    is_weekly_focus_active = models.BooleanField(default=False) # Default OFF rahega
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        status = "ON" if self.is_weekly_focus_active else "OFF"
+        return f"{self.manager.name} ({self.manager.designation}) - Focus Campaign: {status}"
