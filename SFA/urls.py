@@ -23,6 +23,10 @@ urlpatterns = [
     
     # Web Dashboard & Workflow
     path('login/', views.login_view, name='user_login'), 
+    
+    # 🌟 FIX: Added Missing Logout URL here
+    path('logout/', auth_views.logout_view, name='logout'),
+    
     path('dashboard/', views.mr_dashboard_view, name='mr_dashboard'), 
     path('start/', views.day_start_view, name='day_start'),
     path('day-end/', views.day_end_view, name='day_end'),
