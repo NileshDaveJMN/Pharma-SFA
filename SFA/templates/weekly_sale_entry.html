@@ -8,9 +8,10 @@
     {% if is_locked %}
     <div class="alert alert-danger shadow-sm py-2 px-3 text-center" role="alert">
         <strong>⚠️ Entry Locked!</strong><br>
-        <span style="font-size: 0.85rem;">Aap sirf Saturday, Sunday aur Monday ko hi pichle hafte ka data daal sakte hain.</span>
+        <span style="font-size: 0.85rem;">Data submission for the previous week is only permitted on Saturdays, Sundays, and Mondays.</span>
     </div>
     {% else %}
+
     <div class="alert alert-info shadow-sm py-2 px-3 text-center" role="alert">
         <strong>Week Ending: {{ target_date|date:"d M Y (l)" }}</strong><br>
         <span style="font-size: 0.85rem;">Select a stockist to add or update data.</span>

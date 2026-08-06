@@ -107,7 +107,9 @@ def weekly_secondary_sale_view(request):
     # 💾 POST REQUEST: Data Save/Update karna
     if request.method == 'POST':
         if is_locked:
-            messages.error(request, "Entry locked! AAP sirf Saturday, Sunday aur Monday ko entry kar sakte hain.")
+            messages.error(request, "Entry locked! Data submission for the previous week is only permitted on Saturdays, Sundays, and Mondays.")
+            return redirect('weekly_secondary_sale')
+
             return redirect('weekly_secondary_sale')
             
         stockist_id = request.POST.get('stockist_id')
