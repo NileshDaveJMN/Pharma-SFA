@@ -1097,3 +1097,63 @@ class MessageAttachment(models.Model):
     message = models.ForeignKey(InternalMessage, on_delete=models.CASCADE, related_name='attachments')
     file = models.FileField(upload_to='email_attachments/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
+
+# ------------------------------------------------------------------
+# WEEKLY SECONDARY SALE & STOCK TRACKING MODELS (NEW)
+# ------------------------------------------------------------------
+
+class FocusProductTracking(models.Model):
+    """
+    RSM/Admin dwara set kiye gaye special products jinki field me tracking karni hai.
+    """
+    company = models.ForeignKey(Company, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    added_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True)
+    is_active = models.BooleanField(default=True) # False karne par app me dikhna band
+    added_on = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # Ek company me ek product ek hi baar active list me ho sakta hai
+        unique_together = ('company', 'product')
+
+    def __str__(self):
+        status = "Active" if self.is_active else "Inactive"
+        return f"{self.product.name} ({status})"
+
+
+class WeeklyStockistSaleMaster(models.Model):
+    """
+    Har Saturday MR jo Stockist ka total Value (Mandatory) daalega.
+    """
+    company = models.ForeignKey(Company, on_delete=models.CASCADE)
+    stockist = models.ForeignKey(Stockist, on_delete=models.CASCADE)
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
+    week_ending_date = models.DateField() # Hamesha Saturday ki date hogi
+    
+    # Mandatory values in ₹
+    total_sec_sale_value = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    total_closing_value = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # Ek stockist ka ek hafte ka ek hi record banega (Duplicate entry rokne ke liye)
+        unique_together = ('stockist', 'week_ending_date')
+
+    def __str__(self):
+        return f"{self.stockist.name} - Week Ending: {self.week_ending_date}"
+
+
+class WeeklyStockistSaleDetail(models.Model):
+    """
+    Focus Products ka Qty data (Optional) jo MR ne feed kiya ho.
+    """
+    master = models.ForeignKey(WeeklyStockistSaleMaster, related_name='details', on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    
+    # Qty in Box/Strips
+    sec_sale_qty = models.PositiveIntegerField(default=0)
+    closing_qty = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.product.name} - Sec: {self.sec_sale_qty}, Closing: {self.closing_qty}"
