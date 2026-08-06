@@ -2,6 +2,8 @@
 from django.urls import path, include
 from django.shortcuts import redirect
 from rest_framework.authtoken.views import obtain_auth_token
+# Agar request.py mein add kiya hai:
+from SFA.views.requests import weekly_secondary_sale_view
 
 from . import views
 from .views import reports, masters, superadmin
@@ -127,4 +129,6 @@ urlpatterns = [
     path('promote-employee/', views.promote_employee_view, name='promote_employee'),
     path('free-claim-view/', views.free_claim_view_readonly, name='free_claim_view_readonly'),
     path('leave-status/', views.leave_status_view, name='leave_status'),
+    path('reports/weekly-secondary-sale/', weekly_secondary_sale_view, name='weekly_secondary_sale'),
+
 ]

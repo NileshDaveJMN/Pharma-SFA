@@ -117,7 +117,17 @@
         </div>
 
         {% if request.user.employee.designation == 'MR' %}
+        <!-- 🌟 NEW CARD: WEEKLY SECONDARY SALE ENTRY 🌟 -->
         <div class="col-3">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #28a745 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'weekly_secondary_sale' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">📊</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Weekly<br>Sale</span>
+            </div>
+        </div>
+
+        <div class="col-3 mt-1">
             <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
                  style="cursor: pointer; border-bottom: 3px solid #ffc107 !important; min-height: 62px; border-radius: 8px;" 
                  onclick="location.href='{% url 'target_setting' %}';">
@@ -126,7 +136,7 @@
             </div>
         </div>
         
-        <div class="col-3">
+        <div class="col-3 mt-1">
             <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
                  style="cursor: pointer; border-bottom: 3px solid #198754 !important; min-height: 62px; border-radius: 8px;" 
                  onclick="location.href='{% url 'gift_campaign' %}';">
@@ -161,16 +171,7 @@
                 <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Propose<br>Holiday</span>
             </div>
         </div>
-        {% endif %}
-        {% if request.user.employee.designation in 'RBM, ZBM, NSM, Admin' %}
-        <div class="col-3">
-            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
-                 style="cursor: pointer; border-bottom: 3px solid #dc3545 !important; min-height: 62px; border-radius: 8px;" 
-                 onclick="location.href='{% url 'request_holiday' %}';">
-                <span class="mb-1" style="font-size: 1.1rem">⛱️</span>
-                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Propose<br>Holiday</span>
-            </div>
-        </div>
+        <!-- 🌟 Removed Duplicate 'Propose Holiday' Card Here 🌟 -->
         {% endif %}
 
         <!-- 🌟 NEW: FOCUS PRODUCTS CARD (For RSM and above) 🌟 -->
@@ -186,9 +187,6 @@
         {% endif %}
 
         {% if request.user.employee.designation == 'System Administrator' or request.user.employee.designation == 'Admin' %}
-        
-       
-
         <div class="col-3">
             <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
                  style="cursor: pointer; border-bottom: 3px solid #0dcaf0 !important; min-height: 62px; border-radius: 8px;" 
