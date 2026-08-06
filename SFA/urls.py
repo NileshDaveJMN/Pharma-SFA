@@ -22,9 +22,8 @@ urlpatterns = [
     path('api/login/', obtain_auth_token, name='api_login'),
     
     # Web Dashboard & Workflow
-    path('login/', views.login_view, name='user_login'), 
-    
-    # 🌟 FIX: Added Missing Logout URL here
+    # 👇 YAHAN CHANGE KIYA HAI: name='user_login' ko name='login' kar diya 👇
+    path('login/', views.login_view, name='login'), 
     path('logout/', auth_views.logout_view, name='logout'),
     
     path('dashboard/', views.mr_dashboard_view, name='mr_dashboard'), 
