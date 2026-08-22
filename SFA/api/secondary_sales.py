@@ -238,15 +238,26 @@ def weekly_sale_history(request):
                 week_ending_date__year=year,
             )
 
-        qs = qs.select_related('employee', 'stockist').order_by('-week_ending_date', 'employee__name')
+        qs = qs.select_related('employee', 'stockist').prefetch_related('details__product').order_by('-week_ending_date', 'employee__name')
 
-        history = [{
-            'employee_name': m.employee.name,
-            'stockist_name': m.stockist.name,
-            'week_ending_date': str(m.week_ending_date),
-            'total_sec_sale_value': float(m.total_sec_sale_value),
-            'total_closing_value': float(m.total_closing_value),
-        } for m in qs]
+        history = []
+        for m in qs:
+            products = [{
+                'product_id': d.product_id,
+                'name': d.product.name,
+                'pack_size': d.product.pack_size,
+                'sec_sale_qty': d.sec_sale_qty,
+                'closing_qty': d.closing_qty,
+            } for d in m.details.all()]
+
+            history.append({
+                'employee_name': m.employee.name,
+                'stockist_name': m.stockist.name,
+                'week_ending_date': str(m.week_ending_date),
+                'total_sec_sale_value': float(m.total_sec_sale_value),
+                'total_closing_value': float(m.total_closing_value),
+                'products': products,  # 🌟 NAYA: Focus product-wise Sec/Closing qty (entry screen jaisa hi format)
+            })
 
         return Response({
             'status': 'success',
