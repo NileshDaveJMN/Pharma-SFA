@@ -55,7 +55,9 @@ from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.contrib import messages
 from datetime import date, timedelta
+import calendar
 from SFA.models import Stockist, FocusProductTracking, WeeklyStockistSaleMaster, WeeklyStockistSaleDetail
+from .auth import get_dropdown_team
 
 def weekly_secondary_sale_view(request):
     employee = request.user.employee
@@ -160,3 +162,65 @@ def weekly_secondary_sale_view(request):
         'is_locked': is_locked,
     }
     return render(request, 'weekly_sale_entry.html', context)
+
+
+# ==============================================================================
+# 📊 WEEKLY SALE HISTORY (View-only report — MR: apna, Manager: puri team)
+# ==============================================================================
+def weekly_sale_history_view(request):
+    employee = request.user.employee
+    company = employee.company
+
+    today = date.today()
+    try:
+        month = int(request.GET.get('month', today.month))
+        year = int(request.GET.get('year', today.year))
+    except (TypeError, ValueError):
+        month, year = today.month, today.year
+
+    is_manager_view = employee.designation != 'MR'
+
+    # 🌟 MR: sirf khud ka data. Manager: puri team ka (sub-team bhi shaamil)
+    if is_manager_view:
+        team_employees = get_dropdown_team(employee, ordered=False)
+        team_ids = list(team_employees.values_list('id', flat=True))
+        if employee.id not in team_ids:
+            team_ids.append(employee.id)
+    else:
+        team_ids = [employee.id]
+
+    records = WeeklyStockistSaleMaster.objects.filter(
+        company=company,
+        employee_id__in=team_ids,
+        week_ending_date__month=month,
+        week_ending_date__year=year
+    ).select_related('employee', 'stockist').order_by('employee__name', 'week_ending_date', 'stockist__name')
+
+    # Manager view ke liye employee-wise grouping + subtotal
+    grouped = {}
+    for r in records:
+        grp = grouped.setdefault(r.employee.name, {'rows': [], 'subtotal': 0.0})
+        grp['rows'].append(r)
+        grp['subtotal'] += float(r.total_sec_sale_value or 0)
+
+    # Prev/Next month navigation
+    if month == 1:
+        prev_month, prev_year = 12, year - 1
+    else:
+        prev_month, prev_year = month - 1, year
+    if month == 12:
+        next_month, next_year = 1, year + 1
+    else:
+        next_month, next_year = month + 1, year
+
+    context = {
+        'is_manager_view': is_manager_view,
+        'records': records,
+        'grouped': grouped,
+        'month': month,
+        'year': year,
+        'month_name': calendar.month_name[month],
+        'prev_month': prev_month, 'prev_year': prev_year,
+        'next_month': next_month, 'next_year': next_year,
+    }
+    return render(request, 'weekly_sale_history.html', context)

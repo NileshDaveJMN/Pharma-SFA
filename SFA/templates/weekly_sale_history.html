@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid p-0">
+
+    <!-- ── Month Navigation ── -->
+    <div class="card border-0 shadow-sm p-2 mb-3">
+        <div class="d-flex justify-content-between align-items-center px-1">
+            <a href="?month={{ prev_month }}&year={{ prev_year }}" class="btn btn-sm btn-light border">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+            <span class="fw-bold" style="font-size: 0.95rem;">{{ month_name }} {{ year }}</span>
+            <a href="?month={{ next_month }}&year={{ next_year }}" class="btn btn-sm btn-light border">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </div>
+    </div>
+
+    {% if not records %}
+        <div class="text-center p-4 bg-white shadow-sm" style="border-radius: 8px;">
+            <span class="fs-3 d-block mb-1">📭</span>
+            <span class="text-muted fw-bold" style="font-size: 0.75rem;">Is mahine ka koi data nahi mila.</span>
+        </div>
+    {% elif is_manager_view %}
+        <!-- ── MANAGER VIEW: Employee-wise grouped ── -->
+        {% for emp_name, data in grouped.items %}
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center px-2 py-2 mb-2"
+                     style="background-color: #0056b3; border-radius: 6px;">
+                    <span class="fw-bold text-white" style="font-size: 0.8rem;">👤 {{ emp_name }}</span>
+                    <span class="fw-bold text-white" style="font-size: 0.75rem;">₹{{ data.subtotal|floatformat:0 }}</span>
+                </div>
+                {% for r in data.rows %}
+                    <div class="card border-0 shadow-sm mb-2 p-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold" style="font-size: 0.8rem;">{{ r.stockist.name }}</div>
+                                <div class="text-muted" style="font-size: 0.65rem;">Week ending: {{ r.week_ending_date|date:"d M Y" }}</div>
+                            </div>
+                            <div class="text-end">
+                                <div class="fw-bold text-primary" style="font-size: 0.75rem;">Sec: ₹{{ r.total_sec_sale_value|floatformat:0 }}</div>
+                                <div class="text-muted" style="font-size: 0.7rem;">Closing: ₹{{ r.total_closing_value|floatformat:0 }}</div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    {% else %}
+        <!-- ── MR VIEW: Flat list, khud ka data ── -->
+        {% for r in records %}
+            <div class="card border-0 shadow-sm mb-2 p-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-bold" style="font-size: 0.8rem;">{{ r.stockist.name }}</div>
+                        <div class="text-muted" style="font-size: 0.65rem;">Week ending: {{ r.week_ending_date|date:"d M Y" }}</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-bold text-primary" style="font-size: 0.75rem;">Sec: ₹{{ r.total_sec_sale_value|floatformat:0 }}</div>
+                        <div class="text-muted" style="font-size: 0.7rem;">Closing: ₹{{ r.total_closing_value|floatformat:0 }}</div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+</div>
+{% endblock %}

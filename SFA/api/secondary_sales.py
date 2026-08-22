@@ -2,6 +2,8 @@ import json
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from django.utils import timezone
+from SFA.services.team import get_dropdown_team
 
 from SFA.models import (
     Stockist, 
@@ -206,4 +208,62 @@ def api_rsm_manage_focus_products(request):
         'is_campaign_active': control.is_weekly_focus_active,
         'all_products': product_list,
         'active_products': active_products
+    })
+
+
+# ==============================================================================
+# 5. API to View Weekly Sale HISTORY for a month (MR: apna, Manager: puri team)
+# ==============================================================================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_weekly_sale_history(request):
+    try:
+        employee = request.user.employee
+    except AttributeError:
+        return Response({'status': 'error', 'message': 'Employee profile missing'}, status=400)
+
+    company = employee.company
+    today = timezone.now().date()
+
+    try:
+        month = int(request.query_params.get('month', today.month))
+        year = int(request.query_params.get('year', today.year))
+    except (TypeError, ValueError):
+        return Response({'status': 'error', 'message': 'Invalid month/year.'}, status=400)
+
+    is_manager_view = employee.designation != 'MR'
+
+    # 🌟 MR: sirf khud ka data. Manager: puri team ka (get_dropdown_team se sub-team milta hai)
+    if is_manager_view:
+        team_employees = get_dropdown_team(employee, ordered=False)
+        team_ids = list(team_employees.values_list('id', flat=True))
+        if employee.id not in team_ids:
+            team_ids.append(employee.id)
+    else:
+        team_ids = [employee.id]
+
+    records = WeeklyStockistSaleMaster.objects.filter(
+        company=company,
+        employee_id__in=team_ids,
+        week_ending_date__month=month,
+        week_ending_date__year=year
+    ).select_related('employee', 'stockist').order_by('employee__name', 'week_ending_date', 'stockist__name')
+
+    history = []
+    for r in records:
+        history.append({
+            'employee_id': r.employee_id,
+            'employee_name': r.employee.name,
+            'stockist_name': r.stockist.name,
+            'week_ending_date': r.week_ending_date.strftime('%d %b %Y'),
+            'total_sec_sale_value': float(r.total_sec_sale_value or 0),
+            'total_closing_value': float(r.total_closing_value or 0),
+        })
+
+    return Response({
+        'status': 'success',
+        'is_manager_view': is_manager_view,
+        'month': month,
+        'year': year,
+        'history': history,
     })
