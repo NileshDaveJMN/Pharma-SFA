@@ -387,12 +387,25 @@ def calculate_expense(emp, ds_obj):
 
     try:
         ta_rate = TARate.objects.get(company=emp.company, designation=emp.designation)
-        if billed_distance == 0: return {'da': round(float(da), 2), 'ta': 0, 'distance': distance, 'territory_category': eff_cat, 'night_stay': night_stay, 'is_slab3': False}
-        elif distance <= ta_rate.slab1_upto_km: ta = round(billed_distance * float(ta_rate.slab1_rate), 2)
-        elif distance <= ta_rate.slab2_upto_km: ta = round(billed_distance * float(ta_rate.slab2_rate), 2)
-        else: return {'da': round(float(da), 2), 'ta': 0, 'distance': distance, 'territory_category': eff_cat, 'night_stay': night_stay, 'is_slab3': True}
-        return {'da': round(float(da), 2), 'ta': ta, 'distance': distance, 'territory_category': eff_cat, 'night_stay': night_stay, 'is_slab3': False}
-    except TARate.DoesNotExist: return {'da': round(float(da), 2), 'ta': 0, 'distance': distance, 'territory_category': eff_cat, 'night_stay': night_stay, 'is_slab3': False}
+        if billed_distance == 0: 
+            return {'da': round(float(da), 2), 'ta': 0, 'distance': distance, 'territory_category': eff_cat, 'night_stay': night_stay, 'is_slab3': False, 'multiplier': transit_multiplier, 'base_rate': 0}
+            
+        elif distance <= ta_rate.slab1_upto_km: 
+            ta = round(billed_distance * float(ta_rate.slab1_rate), 2)
+            base_rate = float(ta_rate.slab1_rate)
+            
+        elif distance <= ta_rate.slab2_upto_km: 
+            ta = round(billed_distance * float(ta_rate.slab2_rate), 2)
+            base_rate = float(ta_rate.slab2_rate)
+            
+        else: 
+            return {'da': round(float(da), 2), 'ta': 0, 'distance': distance, 'territory_category': eff_cat, 'night_stay': night_stay, 'is_slab3': True, 'multiplier': transit_multiplier, 'base_rate': 0}
+            
+        return {'da': round(float(da), 2), 'ta': ta, 'distance': distance, 'territory_category': eff_cat, 'night_stay': night_stay, 'is_slab3': False, 'multiplier': transit_multiplier, 'base_rate': base_rate}
+        
+    except TARate.DoesNotExist: 
+        return {'da': round(float(da), 2), 'ta': 0, 'distance': distance, 'territory_category': eff_cat, 'night_stay': night_stay, 'is_slab3': False, 'multiplier': transit_multiplier, 'base_rate': 0}
+
 
 # ==============================================================================
 # 🌇 DAY END
