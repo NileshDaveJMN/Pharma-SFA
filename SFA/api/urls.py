@@ -30,7 +30,7 @@ from SFA.api.reports_core import (
     api_mr_inventory, 
     api_receive_dispatch
 )
-from .secondary_sales import get_pending_stockists, get_focus_products, submit_weekly_sales, get_weekly_sale_detail, weekly_sale_history
+from .secondary_sales import get_pending_stockists, get_focus_products, submit_weekly_sales, get_weekly_sale_detail, weekly_sale_history, api_rsm_manage_focus_products
 
 urlpatterns = [
     # ── Auth ──────────────────────────────────────────────────────────────────
@@ -136,4 +136,5 @@ urlpatterns = [
     path('stock/submit/',                submit_weekly_sales,   name='api_submit_stock'),
     path('stock/detail/',                get_weekly_sale_detail, name='api_weekly_sale_detail'),
     path('stock/history/',               weekly_sale_history,   name='api_weekly_sale_history'),
+    path('stock/manage-focus-products/', api_rsm_manage_focus_products, name='api_manage_focus_products'),
 ]
