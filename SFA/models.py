@@ -3,6 +3,10 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
+from PIL import Image
+from io import BytesIO
+from django.core.files.uploadedfile import InMemoryUploadedFile
+import sys
 
 class Company(models.Model):
     PLAN_CHOICES = [('trial', 'Trial'), ('basic', 'Basic'), ('pro', 'Pro')]
@@ -1213,10 +1217,35 @@ class FieldEvent(models.Model):
 
 
 class EventPhoto(models.Model):
-    # Ek event mein multiple photos ho sakti hain, isliye alag table banayi hai
     event = models.ForeignKey(FieldEvent, related_name='photos', on_delete=models.CASCADE)
     photo = models.ImageField(upload_to='events/photos/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        # 🌟 IMAGE COMPRESSION LOGIC
+        if self.photo and not self.id: # Sirf naye upload par compress kare
+            im = Image.open(self.photo)
+            
+            # Agar image PNG (transparent) hai toh usko JPG format ke liye RGB mein convert karein
+            if im.mode != 'RGB':
+                im = im.convert('RGB')
+                
+            # Image ko resize karein (Max 1024x1024)
+            im.thumbnail((1024, 1024))
+            
+            output = BytesIO()
+            # 70% quality par JPG save karein (5MB ki photo ~200KB ho jayegi)
+            im.save(output, format='JPEG', quality=70)
+            output.seek(0)
+            
+            # Original file ko compressed file se replace karein
+            file_name = self.photo.name.split('.')[0] + '.jpg'
+            self.photo = InMemoryUploadedFile(
+                output, 'ImageField', file_name, 
+                'image/jpeg', sys.getsizeof(output), None
+            )
+            
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Photo for {self.event.subject}"

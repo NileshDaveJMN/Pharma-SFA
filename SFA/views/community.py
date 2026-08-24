@@ -3,6 +3,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
 from SFA.models import FieldEvent, EventPhoto, EventLike, EventComment, Territory
+from django.db.models import Count
+from SFA.models import Employee # Agar Employee import nahi hai toh kar lijiye
 
 # ==============================================================================
 # 📢 1. COMMUNITY FEED (WebApp Wall)
@@ -12,11 +14,22 @@ def community_feed(request):
     emp = request.user.employee
     events = FieldEvent.objects.filter(is_shared_in_community=True).order_by('-created_at')
     
-    # Template mein like status check karne ke liye flag add kar rahe hain
     for ev in events:
         ev.is_liked_by_me = ev.likes.filter(employee=emp).exists()
         
-    return render(request, 'community_feed.html', {'events': events})
+    # ==========================================
+    # 🏆 LEADERBOARD LOGIC (Top 5 Performers)
+    # ==========================================
+    # Un employees ko nikal rahe hain jinhone sabse zyada 'shared' events kiye hain
+    leaderboard = Employee.objects.annotate(
+        total_events=Count('field_events')
+    ).filter(total_events__gt=0).order_by('-total_events')[:5] # Top 5
+        
+    return render(request, 'community_feed.html', {
+        'events': events, 
+        'leaderboard': leaderboard
+    })
+
 
 # ==============================================================================
 # 📸 2. CREATE EVENT (WebApp form submission)
@@ -29,9 +42,10 @@ def create_event(request):
         subject = request.POST.get('subject')
         category = request.POST.get('category', 'Other')
         description = request.POST.get('description', '')
-        
-        # Checkbox handling for boolean
         is_shared = request.POST.get('is_shared_in_community') == 'on'
+        
+        doc_id = request.POST.get('doctor')
+        chem_id = request.POST.get('chemist')
         
         if not subject:
             messages.error(request, "Event Subject is required!")
@@ -45,15 +59,23 @@ def create_event(request):
             is_shared_in_community=is_shared
         )
         
-        # 🌟 Multiple Photos Upload Handling
+        # Save Doctor / Chemist if selected
+        if doc_id: event.doctor_id = doc_id
+        if chem_id: event.chemist_id = chem_id
+        event.save()
+        
         photos = request.FILES.getlist('photos')
         for photo in photos:
             EventPhoto.objects.create(event=event, photo=photo)
             
         messages.success(request, "Event successfully created!")
-        return redirect('community_feed')
+        return redirect('event_report') # Create hone ke baad seedha Report par bhejo taaki wahan se share kar sake
         
-    return render(request, 'create_event.html')
+    # GET request - Show form with doctors/chemists
+    doctors = Doctor.objects.filter(company=emp.company)# Aap chahein toh filter laga sakte hain (e.g., company wise)
+    chemists = Chemist.objects.filter(company=emp.company)
+    
+    return render(request, 'create_event.html', {'doctors': doctors, 'chemists': chemists})
 
 # ==============================================================================
 # 👍 3. TOGGLE LIKE (WebApp)
@@ -89,3 +111,14 @@ def add_comment(request, event_id):
             messages.success(request, "Comment added successfully!")
             
     return redirect(request.META.get('HTTP_REFERER', 'community_feed'))
+
+@login_required
+def share_event_from_report(request, event_id):
+    # Sirf wahi MR share kar payega jisne event banaya hai
+    event = get_object_or_404(FieldEvent, id=event_id, employee=request.user.employee)
+    
+    event.is_shared_in_community = True
+    event.save()
+    
+    messages.success(request, "Event shared to Community Wall successfully! 🎉")
+    return redirect('event_report')

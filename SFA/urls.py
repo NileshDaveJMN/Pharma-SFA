@@ -136,6 +136,6 @@ urlpatterns = [
     path('community/', community_views.community_feed, name='community_feed'),
     path('community/create/', community_views.create_event, name='create_event'),
     path('community/like/<int:event_id>/', community_views.toggle_like, name='toggle_like'),
-    path('community/comment/<int:event_id>/', community_views.add_comment, name='add_comment'),
-
+    path('community/comment/<int:event_id>/', community_views.add_comment, name='add_comment'),    
+    path('reports/events/<int:event_id>/share/', community_views.share_event_from_report, name='share_event_from_report'),
 ]

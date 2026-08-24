@@ -1,29 +1,29 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="container mt-4">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2>📢 Community Wall</h2>
-                <a href="{% url 'create_event' %}" class="btn btn-primary">+ Create Event</a>
-            </div>
+<div class="container mt-4 mb-5 pb-5">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📢 Community Wall</h2>
+        <a href="{% url 'create_event' %}" class="btn btn-primary shadow-sm" style="border-radius: 20px;">+ Create Event</a>
+    </div>
 
-            <!-- Loop through all shared events -->
+    <div class="row">
+        <!-- LEFT COLUMN: The Feed (8 Columns) -->
+        <div class="col-md-8">
             {% for event in events %}
-            <div class="card mb-4 shadow-sm">
+            <div class="card mb-4 shadow-sm" style="border-radius: 12px; border: none;">
                 <!-- Post Header -->
-                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center" style="border-radius: 12px 12px 0 0;">
                     <div>
                         <strong>{{ event.employee.name }}</strong><br>
-                        <small class="text-muted"><i class="fa fa-map-marker"></i> {{ event.territory.name|default:"N/A" }}</small>
+                        <small class="text-muted"><i class="fa fa-map-marker text-danger"></i> {{ event.territory.name|default:"N/A" }}</small>
                     </div>
                     <span class="text-muted small">{{ event.created_at|date:"d M Y, h:i A" }}</span>
                 </div>
 
                 <!-- Post Body -->
                 <div class="card-body">
-                    <h5 class="card-title">
+                    <h5 class="card-title text-primary font-weight-bold">
                         {{ event.subject }} 
                         <span class="badge badge-info float-right">{{ event.category }}</span>
                     </h5>
@@ -33,32 +33,31 @@
                     {% if event.photos.all %}
                     <div class="row mb-3">
                         {% for photo in event.photos.all %}
-                        <div class="col-sm-4 mb-2">
-                            <img src="{{ photo.photo.url }}" class="img-fluid rounded shadow-sm" alt="Event Photo" style="max-height: 150px; object-fit: cover; width: 100%;">
+                        <div class="col-sm-6 col-md-4 mb-2">
+                            <img src="{{ photo.photo.url }}" class="img-fluid rounded shadow-sm" alt="Event Photo" style="max-height: 200px; object-fit: cover; width: 100%;">
                         </div>
                         {% endfor %}
                     </div>
                     {% endif %}
-
-                    <hr>
                     
+                    <hr>
                     <!-- Likes and Comments Count -->
                     <div class="d-flex justify-content-between align-items-center">
                         <form action="{% url 'toggle_like' event.id %}" method="POST">
                             {% csrf_token %}
-                            <button type="submit" class="btn btn-sm {% if event.is_liked_by_me %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                            <button type="submit" class="btn btn-sm {% if event.is_liked_by_me %}btn-primary{% else %}btn-outline-primary{% endif %}" style="border-radius: 20px;">
                                 👍 Like ({{ event.likes.count }})
                             </button>
                         </form>
-                        <span class="text-muted small">{{ event.comments.count }} Comments</span>
+                        <span class="text-muted small font-weight-bold">{{ event.comments.count }} Comments</span>
                     </div>
                 </div>
 
                 <!-- Comments Section -->
-                <div class="card-footer bg-light">
+                <div class="card-footer bg-light" style="border-radius: 0 0 12px 12px;">
                     <div class="comments-list mb-3" style="max-height: 150px; overflow-y: auto;">
                         {% for comment in event.comments.all %}
-                        <div class="mb-2 bg-white p-2 rounded border">
+                        <div class="mb-2 bg-white p-2 shadow-sm" style="border-radius: 8px; border-left: 3px solid #17a2b8;">
                             <strong>{{ comment.employee.name }}</strong> <span class="text-muted small ml-2">{{ comment.created_at|date:"d M, h:i A" }}</span><br>
                             <span class="small">{{ comment.comment }}</span>
                         </div>
@@ -70,18 +69,42 @@
                     <!-- Add Comment Form -->
                     <form action="{% url 'add_comment' event.id %}" method="POST" class="d-flex">
                         {% csrf_token %}
-                        <input type="text" name="comment" class="form-control form-control-sm mr-2" placeholder="Write an encouraging comment..." required>
-                        <button type="submit" class="btn btn-sm btn-success">Post</button>
+                        <input type="text" name="comment" class="form-control form-control-sm mr-2" placeholder="Write a comment..." required style="border-radius: 20px;">
+                        <button type="submit" class="btn btn-sm btn-success" style="border-radius: 20px;"><i class="fa fa-paper-plane"></i></button>
                     </form>
                 </div>
             </div>
             {% empty %}
-            <div class="alert alert-info text-center shadow-sm">
-                No events have been shared in the community yet. Be the first one to post!
+            <div class="alert alert-info text-center shadow-sm" style="border-radius: 12px;">
+                No events have been shared in the community yet. Be the first one!
             </div>
             {% endfor %}
-
         </div>
+
+        <!-- RIGHT COLUMN: LEADERBOARD (4 Columns) -->
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0" style="border-radius: 12px; position: sticky; top: 20px;">
+                <div class="card-header bg-warning text-dark text-center" style="border-radius: 12px 12px 0 0;">
+                    <h5 class="mb-0 font-weight-bold">🏆 Star Performers</h5>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                        {% for leader in leaderboard %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                {% if forloop.counter == 1 %}🥇{% elif forloop.counter == 2 %}🥈{% elif forloop.counter == 3 %}🥉{% else %}🌟{% endif %}
+                                <span class="font-weight-bold ml-1">{{ leader.name }}</span>
+                            </div>
+                            <span class="badge badge-primary badge-pill">{{ leader.total_events }} Events</span>
+                        </li>
+                        {% empty %}
+                        <li class="list-group-item text-center text-muted small">No events logged yet.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 {% endblock %}

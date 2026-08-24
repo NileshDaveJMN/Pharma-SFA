@@ -30,6 +30,27 @@
                                 <option value="Other" selected>Other</option>
                             </select>
                         </div>
+                        <!-- Optional Doctor / Chemist Links -->
+                        <div class="row">
+                            <div class="col-md-6 form-group">
+                                <label class="font-weight-bold text-secondary">Link Doctor (Optional)</label>
+                                <select name="doctor" class="form-control">
+                                    <option value="">-- Select Doctor --</option>
+                                    {% for doc in doctors %}
+                                    <option value="{{ doc.id }}">{{ doc.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6 form-group">
+                                <label class="font-weight-bold text-secondary">Link Chemist (Optional)</label>
+                                <select name="chemist" class="form-control">
+                                    <option value="">-- Select Chemist --</option>
+                                    {% for chem in chemists %}
+                                    <option value="{{ chem.id }}">{{ chem.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
 
                         <div class="form-group">
                             <label class="font-weight-bold">Description</label>

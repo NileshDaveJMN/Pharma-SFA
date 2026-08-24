@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-3 mb-5 pb-5">
+    <h4 class="mb-3">📸 All Events Report</h4>
+    
+    {% for event in events %}
+    <div class="card shadow-sm mb-3 border-0" style="border-radius: 12px;">
+        <div class="card-body">
+            <div class="d-flex justify-content-between">
+                <h6 class="font-weight-bold text-primary mb-1">{{ event.subject }}</h6>
+                <span class="badge badge-light border">{{ event.event_date|date:"d M Y" }}</span>
+            </div>
+            <p class="small text-muted mb-2">By: {{ event.employee.name }} | Category: {{ event.category }}</p>
+            
+            {% if event.is_shared_in_community %}
+                <span class="badge badge-success"><i class="fa fa-globe"></i> Shared in Community</span>
+            {% else %}
+                <span class="badge badge-secondary"><i class="fa fa-lock"></i> Private (Not Shared)</span>
+            {% endif %}
+             {% if not event.is_shared_in_community and event.employee == request.user.employee %}
+            <div class="mt-2">
+                <a href="{% url 'share_event_from_report' event.id %}" class="btn btn-sm btn-outline-primary" style="border-radius: 20px;">
+                    <i class="fa fa-share"></i> Share to Community
+                </a>
+            </div>
+            {% endif %}
+           
+            <hr class="mt-2 mb-2">
+            <p class="small mb-1">{{ event.description|truncatechars:100 }}</p>
+            <span class="small font-weight-bold text-info">{{ event.photos.count }} Photos Uploaded</span>
+        </div>
+    </div>
+    {% empty %}
+    <div class="alert alert-info text-center shadow-sm" style="border-radius: 12px;">
+        No events found for your team.
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
