@@ -612,17 +612,15 @@ class PartyWiseSaleLine(models.Model):
     report = models.ForeignKey(PartyWiseSaleReport, related_name='lines', on_delete=models.CASCADE)
     chemist = models.ForeignKey(Chemist, on_delete=models.SET_NULL, null=True, blank=True)     
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    billed_qty = models.IntegerField(default=0)
+    billed_qty = models.IntegerField(default=0) 
     free_qty = models.IntegerField(default=0)
 
     def __str__(self):
-        return f"{self.chemist.name} - {self.product.name} (B:{self.billed_qty}, F:{self.free_qty})"
-
-class DoctorRxMapping(models.Model):
-    party_line = models.ForeignKey(PartyWiseSaleLine, related_name='dr_mappings', on_delete=models.CASCADE)
-    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
-    mapped_billed_qty = models.IntegerField(default=0)
-    mapped_free_qty = models.IntegerField(default=0)
+        # Safe checks: Agar chemist/product nahi hai toh crash na ho
+        chemist_name = self.chemist.name if self.chemist else "No Chemist"
+        product_name = self.product.name if self.product else "No Product"
+        
+        return f"{chemist_name} - {product_name} (B:{self.billed_qty}, F:{self.free_qty})"
 
     def __str__(self):
         return f"Dr. {self.doctor.name} -> {self.party_line.product.name} ({self.mapped_billed_qty})"
