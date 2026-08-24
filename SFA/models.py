@@ -619,17 +619,21 @@ class PartyWiseSaleLine(models.Model):
         # Safe checks: Agar chemist/product nahi hai toh crash na ho
         chemist_name = self.chemist.name if self.chemist else "No Chemist"
         product_name = self.product.name if self.product else "No Product"
-        
         return f"{chemist_name} - {product_name} (B:{self.billed_qty}, F:{self.free_qty})"
 
-    def __str__(self):
-        return f"Dr. {self.doctor.name} -> {self.party_line.product.name} ({self.mapped_billed_qty})"
-        
 class DoctorRxMapping(models.Model):
     party_line = models.ForeignKey(PartyWiseSaleLine, related_name='dr_mappings', on_delete=models.CASCADE)
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
     mapped_billed_qty = models.IntegerField(default=0)
     mapped_free_qty = models.IntegerField(default=0)
+
+    def __str__(self):
+        # Safe checks for DoctorRxMapping
+        doc_name = self.doctor.name if self.doctor else "No Doctor"
+        prod_name = "No Product"
+        if self.party_line and self.party_line.product:
+            prod_name = self.party_line.product.name
+        return f"Dr. {doc_name} -> {prod_name} ({self.mapped_billed_qty})"
 
 class TerritoryTarget(models.Model):
     # 🌟 Employee ki jagah seedha Territory (HQ) laga diya
