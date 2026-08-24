@@ -1177,3 +1177,69 @@ class CampaignControl(models.Model):
     def __str__(self):
         status = "ON" if self.is_weekly_focus_active else "OFF"
         return f"{self.manager.name} ({self.manager.designation}) - Focus Campaign: {status}"
+# ==============================================================================
+# 🌟 ACTIVITY & COMMUNITY HUB MODULE
+# ==============================================================================
+
+EVENT_CATEGORY_CHOICES = [
+    ('Inauguration', 'Inauguration'),
+    ('Medical Store', 'Medical Store'),
+    ('CME', 'CME'),
+    ('OPD Camp', 'OPD Camp'),
+    ('Doctor RTD', 'Doctor RTD'),
+    ('Birthday', 'Birthday'),
+    ('Special Day', 'Special Day'),
+    ('Other', 'Other'),
+]
+
+class FieldEvent(models.Model):
+    employee = models.ForeignKey('Employee', related_name='field_events', on_delete=models.CASCADE)
+    territory = models.ForeignKey('Territory', on_delete=models.SET_NULL, null=True, blank=True)
+    doctor = models.ForeignKey('Doctor', on_delete=models.SET_NULL, null=True, blank=True)
+    chemist = models.ForeignKey('Chemist', on_delete=models.SET_NULL, null=True, blank=True)
+    
+    subject = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    category = models.CharField(max_length=50, choices=EVENT_CATEGORY_CHOICES, default='Other')
+    
+    event_date = models.DateField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    # 🌟 Toggle for Community Wall (Agar True hai, toh sabko dikhega)
+    is_shared_in_community = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return f"{self.subject} - {self.employee.name} ({self.category})"
+
+
+class EventPhoto(models.Model):
+    # Ek event mein multiple photos ho sakti hain, isliye alag table banayi hai
+    event = models.ForeignKey(FieldEvent, related_name='photos', on_delete=models.CASCADE)
+    photo = models.ImageField(upload_to='events/photos/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Photo for {self.event.subject}"
+
+
+class EventLike(models.Model):
+    event = models.ForeignKey(FieldEvent, related_name='likes', on_delete=models.CASCADE)
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # Yeh rule ensure karega ki ek employee ek post ko sirf ek hi baar like kar paye
+        unique_together = ('event', 'employee')
+
+    def __str__(self):
+        return f"{self.employee.name} liked {self.event.subject}"
+
+
+class EventComment(models.Model):
+    event = models.ForeignKey(FieldEvent, related_name='comments', on_delete=models.CASCADE)
+    employee = models.ForeignKey('Employee', on_delete=models.CASCADE)
+    comment = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Comment by {self.employee.name} on {self.event.subject}"
