@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">📝 Create Activity / Event</h4>
+                </div>
+                <div class="card-body">
+                    <!-- enctype="multipart/form-data" bahut zaroori hai photo upload ke liye! -->
+                    <form action="{% url 'create_event' %}" method="POST" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <div class="form-group">
+                            <label class="font-weight-bold">Event Subject *</label>
+                            <input type="text" name="subject" class="form-control" required placeholder="e.g., Free OPD Camp at City Hospital">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="font-weight-bold">Category</label>
+                            <select name="category" class="form-control">
+                                <option value="Inauguration">Inauguration</option>
+                                <option value="Medical Store">Medical Store</option>
+                                <option value="CME">CME</option>
+                                <option value="OPD Camp">OPD Camp</option>
+                                <option value="Doctor RTD">Doctor RTD</option>
+                                <option value="Birthday">Birthday</option>
+                                <option value="Special Day">Special Day</option>
+                                <option value="Other" selected>Other</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="font-weight-bold">Description</label>
+                            <textarea name="description" class="form-control" rows="4" placeholder="Share details about the event..."></textarea>
+                        </div>
+
+                        <div class="form-group bg-light p-3 rounded border">
+                            <label class="font-weight-bold">Upload Event Photos</label><br>
+                            <input type="file" name="photos" class="form-control-file" multiple accept="image/*">
+                            <small class="form-text text-muted mt-1">You can select and upload multiple photos at once.</small>
+                        </div>
+
+                        <!-- Toggle Switch for Community Sharing -->
+                        <div class="form-group mt-4 p-3 border rounded shadow-sm bg-white">
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="shareCommunity" name="is_shared_in_community" checked>
+                                <label class="custom-control-label font-weight-bold text-primary" for="shareCommunity">
+                                    📢 Share on Community Wall
+                                </label>
+                            </div>
+                            <small class="text-muted d-block mt-1">If enabled, this event will be visible to all employees on the feed.</small>
+                        </div>
+
+                        <button type="submit" class="btn btn-success btn-lg btn-block mt-4">Post Event</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
