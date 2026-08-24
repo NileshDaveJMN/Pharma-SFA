@@ -624,6 +624,12 @@ class PartyWiseSaleLine(models.Model):
 
     def __str__(self):
         return f"Dr. {self.doctor.name} -> {self.party_line.product.name} ({self.mapped_billed_qty})"
+        
+class DoctorRxMapping(models.Model):
+    party_line = models.ForeignKey(PartyWiseSaleLine, related_name='dr_mappings', on_delete=models.CASCADE)
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
+    mapped_billed_qty = models.IntegerField(default=0)
+    mapped_free_qty = models.IntegerField(default=0)
 
 class TerritoryTarget(models.Model):
     # 🌟 Employee ki jagah seedha Territory (HQ) laga diya
