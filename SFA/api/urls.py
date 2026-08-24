@@ -144,6 +144,6 @@ urlpatterns = [
     path('community/like/',    community_api.api_toggle_like,    name='api_toggle_like'),
     path('community/comment/', community_api.api_add_comment,    name='api_add_comment'),
     path('community/report/',  community_api.api_event_report,   name='api_event_report'),
-    path('community/share/',   community_api.api_share_event,    
+    path('community/share/',   community_api.api_share_event),    
 
 ]
