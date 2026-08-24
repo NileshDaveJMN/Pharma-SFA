@@ -2,6 +2,7 @@
 SFA/api/urls.py — Flutter REST API complete URL patterns
 """
 from django.urls import path
+from SFA.api import community as community_api
 
 # ── Core & App Modules ────────────────────────────────────────────────────────
 from SFA.api import auth as auth_api
@@ -137,4 +138,10 @@ urlpatterns = [
     path('stock/detail/',                get_weekly_sale_detail, name='api_weekly_sale_detail'),
     path('stock/history/',               weekly_sale_history,   name='api_weekly_sale_history'),
     path('stock/manage-focus-products/', api_rsm_manage_focus_products, name='api_manage_focus_products'),
+    # ── Community & Events ────────────────────────────────────────────────────
+    path('community/feed/',    community_api.api_community_feed, name='api_community_feed'),
+    path('community/create/',  community_api.api_create_event,   name='api_create_event'),
+    path('community/like/',    community_api.api_toggle_like,    name='api_toggle_like'),
+    path('community/comment/', community_api.api_add_comment,    name='api_add_comment'),
+
 ]

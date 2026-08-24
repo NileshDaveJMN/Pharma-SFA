@@ -4,6 +4,7 @@ from django.shortcuts import redirect
 from rest_framework.authtoken.views import obtain_auth_token
 # Agar request.py mein add kiya hai:
 from SFA.views.requests import weekly_secondary_sale_view, weekly_sale_history_view
+from SFA.views import community as community_views
 
 from . import views
 from .views import reports, masters, superadmin
@@ -131,5 +132,10 @@ urlpatterns = [
     path('leave-status/', views.leave_status_view, name='leave_status'),
     path('reports/weekly-secondary-sale/', weekly_secondary_sale_view, name='weekly_secondary_sale'),
     path('reports/weekly-sale-history/', weekly_sale_history_view, name='weekly_sale_history'),
+    # ── Community & Events (WebApp) ───────────────────────────────────────────
+    path('community/', community_views.community_feed, name='community_feed'),
+    path('community/create/', community_views.create_event, name='create_event'),
+    path('community/like/<int:event_id>/', community_views.toggle_like, name='toggle_like'),
+    path('community/comment/<int:event_id>/', community_views.add_comment, name='add_comment'),
 
 ]
