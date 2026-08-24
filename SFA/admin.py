@@ -426,3 +426,32 @@ class DoctorEditRequestAdmin(TenantIsolationMixin, admin.ModelAdmin):
 @admin.register(ChemistEditRequest)
 class ChemistEditRequestAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('chemist', 'req_name', 'employee', 'status', 'created_at')
+    
+# ==============================================================================
+# 🌟 ACTIVITY & COMMUNITY HUB ADMIN
+# ==============================================================================
+from .models import FieldEvent, EventPhoto, EventLike, EventComment
+
+class EventPhotoInline(admin.TabularInline):
+    model = EventPhoto
+    extra = 1  # Event ke andar hi photo upload/dekhne ka option mil jayega
+
+@admin.register(FieldEvent)
+class FieldEventAdmin(admin.ModelAdmin):
+    list_display = ('subject', 'employee', 'category', 'event_date', 'is_shared_in_community')
+    list_filter = ('category', 'is_shared_in_community', 'event_date', 'territory')
+    search_fields = ('subject', 'employee__name', 'description')
+    inlines = [EventPhotoInline] # Event ke page par hi uski photos dikhengi
+    list_editable = ('is_shared_in_community',) # Admin direct bahar se hi post ko hide/show kar payega
+
+@admin.register(EventLike)
+class EventLikeAdmin(admin.ModelAdmin):
+    list_display = ('event', 'employee', 'created_at')
+    search_fields = ('event__subject', 'employee__name')
+    list_filter = ('created_at',)
+
+@admin.register(EventComment)
+class EventCommentAdmin(admin.ModelAdmin):
+    list_display = ('event', 'employee', 'comment', 'created_at')
+    search_fields = ('event__subject', 'employee__name', 'comment')
+    list_filter = ('created_at',)
