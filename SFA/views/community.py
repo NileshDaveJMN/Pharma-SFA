@@ -123,3 +123,32 @@ def share_event_from_report(request, event_id):
     
     messages.success(request, "Event shared to Community Wall successfully! 🎉")
     return redirect('event_report')
+from SFA.services.team import get_full_team_employees
+
+# ==============================================================================
+# 📸 5. EVENT REPORT (Reports Hub)
+# ==============================================================================
+@login_required
+def event_report(request):
+    emp = request.user.employee
+    # Manager hai toh uski poori team, MR hai toh sirf uski events
+    team_emps = get_full_team_employees(emp)
+    
+    # Isme shared aur unshared dono aayengi
+    events = FieldEvent.objects.filter(employee__in=team_emps).order_by('-event_date', '-created_at')
+    
+    return render(request, 'event_report.html', {'events': events})
+
+# ==============================================================================
+# 🚀 6. SHARE EVENT FROM REPORT
+# ==============================================================================
+@login_required
+def share_event_from_report(request, event_id):
+    # Sirf wahi MR share kar payega jisne event banaya hai
+    event = get_object_or_404(FieldEvent, id=event_id, employee=request.user.employee)
+    
+    event.is_shared_in_community = True
+    event.save()
+    
+    messages.success(request, "Event shared to Community Wall successfully! 🎉")
+    return redirect('event_report')
