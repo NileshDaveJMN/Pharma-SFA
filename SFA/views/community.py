@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
 from SFA.models import FieldEvent, EventPhoto, EventLike, EventComment, Territory
+from SFA.models import FieldEvent, EventPhoto, EventLike, EventComment, Territory, Doctor, Chemist, Employee
 from django.db.models import Count
 from SFA.models import Employee # Agar Employee import nahi hai toh kar lijiye
 

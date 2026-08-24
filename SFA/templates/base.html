@@ -152,9 +152,10 @@
         </a>
 <!-- Community Icon (Inbox ke paas) -->
 <a href="{% url 'community_feed' %}" class="text-decoration-none text-center text-secondary">
-    <h5 class="mb-0"><i class="fa fa-users"></i></h5> <!-- Ya agar aap emoji use karte hain toh 🌍 laga lein -->
-    <span class="small font-weight-bold">Community</span>
+    <h5 class="mb-0" style="font-size: 1.2rem;"><i class="fa fa-users"></i></h5>
+    <span class="font-weight-bold" style="font-size: 10px;">Feed</span>
 </a>
+
 
         <a href="{% url 'profile' %}" class="nav-item {% if request.resolver_match.url_name == 'profile' %}active{% endif %}">
             <span class="nav-icon">👤</span>Profile
