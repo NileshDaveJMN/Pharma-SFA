@@ -1274,7 +1274,6 @@ class EventComment(models.Model):
         return f"Comment by {self.employee.name} on {self.event.subject}"
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from fcm_sender import send_push_notification
 
 # ==============================================================================
 # 🔔 NOTIFICATION SIGNALS FOR LIKES & COMMENTS
@@ -1286,9 +1285,10 @@ def notify_on_like(sender, instance, created, **kwargs):
         title = "New Like! 👍"
         body = f"{instance.employee.name} liked your event: '{instance.event.subject}'"
         
-        # User (employee) token logic based on your system
         if instance.event.employee.user:
             try:
+                # 🌟 Import inside the function to avoid Circular Import crash!
+                from fcm_sender import send_push_notification 
                 send_push_notification(instance.event.employee.user, title, body)
             except Exception as e:
                 print("Notification Error:", e)
@@ -1301,6 +1301,8 @@ def notify_on_comment(sender, instance, created, **kwargs):
         
         if instance.event.employee.user:
             try:
+                # 🌟 Import inside the function here too!
+                from fcm_sender import send_push_notification 
                 send_push_notification(instance.event.employee.user, title, body)
             except Exception as e:
                 print("Notification Error:", e)
