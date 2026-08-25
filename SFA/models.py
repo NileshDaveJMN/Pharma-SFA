@@ -1221,10 +1221,9 @@ class EventPhoto(models.Model):
     photo = models.ImageField(upload_to='events/photos/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
-    def save(self, *args, **kwargs):
+        def save(self, *args, **kwargs):
         if self.photo:
             try:
-                # Photo open aur compress karne ka try karega
                 from PIL import Image
                 from io import BytesIO
                 from django.core.files.uploadedfile import InMemoryUploadedFile
@@ -1244,12 +1243,13 @@ class EventPhoto(models.Model):
                     'image/jpeg', sys.getsizeof(output), None
                 )
             except Exception as e:
-                # Agar photo .heic (iPhone) ya kisi unsupported format mein hai,
-                # toh crash hone ke bajaye use bina compress kiye direct save kar dega
-                # (Cloudinary automatically usko handle kar lega)
-                pass 
+                # 🌟 FIX: Agar Pillow fail ho jaye, toh file pointer ko wapas 0 par lana zaroori hai
+                # Warna Cloudinary ko 0 bytes ki khali file milti hai
+                if hasattr(self.photo, 'seek'):
+                    self.photo.seek(0)
 
         super().save(*args, **kwargs)
+
 
     def __str__(self):
         return f"Photo for {self.event.subject}"
