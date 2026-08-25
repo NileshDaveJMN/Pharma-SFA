@@ -20,3 +20,5 @@ dj-database-url
 whitenoise
 django-jazzmin
 openpyxl
+cloudinary
+django-cloudinary-storage
