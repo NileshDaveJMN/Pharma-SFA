@@ -1272,3 +1272,35 @@ class EventComment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.employee.name} on {self.event.subject}"
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from SFA.fcm_sender import send_push_notification # Aapki file se direct import
+
+# ==============================================================================
+# 🔔 NOTIFICATION SIGNALS FOR LIKES & COMMENTS
+# ==============================================================================
+
+@receiver(post_save, sender=EventLike)
+def notify_on_like(sender, instance, created, **kwargs):
+    if created and instance.employee != instance.event.employee:
+        title = "New Like! 👍"
+        body = f"{instance.employee.name} liked your event: '{instance.event.subject}'"
+        
+        # User (employee) token logic based on your system
+        if instance.event.employee.user:
+            try:
+                send_push_notification(instance.event.employee.user, title, body)
+            except Exception as e:
+                print("Notification Error:", e)
+
+@receiver(post_save, sender=EventComment)
+def notify_on_comment(sender, instance, created, **kwargs):
+    if created and instance.employee != instance.event.employee:
+        title = "New Comment! 💬"
+        body = f"{instance.employee.name} commented: {instance.comment}"
+        
+        if instance.event.employee.user:
+            try:
+                send_push_notification(instance.event.employee.user, title, body)
+            except Exception as e:
+                print("Notification Error:", e)
