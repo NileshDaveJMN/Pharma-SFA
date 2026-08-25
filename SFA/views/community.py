@@ -15,7 +15,7 @@ from SFA.models import Employee # Agar Employee import nahi hai toh kar lijiye
 def community_feed(request):
     emp = request.user.employee
     # Saari events nikalenge
-    event_list = FieldEvent.objects.filter(is_shared_in_community=True).order_by('-created_at')
+    event_list = FieldEvent.objects.filter(is_shared_in_community=True).select_related('employee', 'territory', 'doctor', 'chemist').order_by('-created_at')
     
     # 🌟 PAGINATION LOGIC: Ek baar mein sirf 15 events
     paginator = Paginator(event_list, 15) 
@@ -138,7 +138,7 @@ def event_report(request):
     team_emps = get_full_team_employees(emp)
     
     # Isme shared aur unshared dono aayengi
-    events = FieldEvent.objects.filter(employee__in=team_emps).order_by('-event_date', '-created_at')
+    events = FieldEvent.objects.filter(employee__in=team_emps).select_related('employee', 'territory', 'doctor', 'chemist').order_by('-event_date', '-created_at')
     
     return render(request, 'event_report.html', {'events': events})
 

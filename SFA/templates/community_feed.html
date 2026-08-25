@@ -36,6 +36,13 @@
                     <!-- Post Subject & Description -->
                     <h6 class="font-weight-bold text-dark mb-1 mt-3" style="font-size: 0.95rem;">{{ event.subject }}</h6>
                     <p class="text-secondary mb-2" style="font-size: 0.85rem; line-height: 1.4;">{{ event.description }}</p>
+
+                    {% if event.doctor or event.chemist %}
+                    <div class="mb-2">
+                        {% if event.doctor %}<span class="badge bg-info text-dark border me-1" style="font-size: 0.7rem;">👨‍⚕️ Dr. {{ event.doctor.name }}</span>{% endif %}
+                        {% if event.chemist %}<span class="badge bg-warning text-dark border" style="font-size: 0.7rem;">💊 {{ event.chemist.name }}</span>{% endif %}
+                    </div>
+                    {% endif %}
                 </div>
 
                 <!-- Horizontal Scrollable Image Gallery -->

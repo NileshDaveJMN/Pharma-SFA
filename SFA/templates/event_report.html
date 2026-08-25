@@ -8,9 +8,15 @@
         <div class="card-body">
             <div class="d-flex justify-content-between">
                 <h6 class="font-weight-bold text-primary mb-1">{{ event.subject }}</h6>
-                <span class="badge badge-light border">{{ event.event_date|date:"d M Y" }}</span>
+                <span class="badge border text-dark bg-white" style="font-weight: 600;">{{ event.event_date|date:"d M Y" }}</span>
             </div>
             <p class="small text-muted mb-2">By: {{ event.employee.name }} | Category: {{ event.category }}</p>
+            {% if event.doctor or event.chemist %}
+            <p class="small mb-2">
+                {% if event.doctor %}<span class="badge bg-info text-dark border">👨‍⚕️ Dr. {{ event.doctor.name }}</span>{% endif %}
+                {% if event.chemist %}<span class="badge bg-warning text-dark border">💊 {{ event.chemist.name }}</span>{% endif %}
+            </p>
+            {% endif %}
             
             {% if event.is_shared_in_community %}
                 <span class="badge badge-success"><i class="fa fa-globe"></i> Shared in Community</span>
