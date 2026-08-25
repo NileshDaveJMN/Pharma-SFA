@@ -28,6 +28,18 @@
             <hr class="mt-2 mb-2">
             <p class="small mb-1">{{ event.description|truncatechars:100 }}</p>
             <span class="small font-weight-bold text-info">{{ event.photos.count }} Photos Uploaded</span>
+            
+            <!-- Photos Grid Added Here -->
+            {% if event.photos.all %}
+            <div class="row mt-2">
+                {% for photo in event.photos.all %}
+                <div class="col-4 pr-1 mb-2">
+                    <img src="{{ photo.photo.url }}" class="img-fluid rounded border shadow-sm" alt="Event Photo" style="max-height: 80px; object-fit: cover; width: 100%;">
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
         </div>
     </div>
     {% empty %}
