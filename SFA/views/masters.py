@@ -885,7 +885,7 @@ def bulk_network_upload_view(request):
 
         try:
             # ==========================================
-            # 🌟 MULTI-SHEET READER (EXCEL + CSV)
+            # 🌟 MULTI-SHEET READER (EXCEL + CSV) [OOM FIXED]
             # ==========================================
             if file_name.endswith('.csv'):
                 file_data = uploaded_file.read().decode('utf-8-sig')
@@ -899,17 +899,28 @@ def bulk_network_upload_view(request):
                 rows = all_rows[1:]
             
             elif file_name.endswith(('.xlsx', '.xls')):
-                wb = openpyxl.load_workbook(uploaded_file, data_only=True)
+                # 🚀 SPEED & MEMORY HACK: read_only=True se server crash nahi hoga
+                wb = openpyxl.load_workbook(uploaded_file, data_only=True, read_only=True)
                 
                 # Sabhi sheets ko ek sath scan karega
                 for sheet_name in wb.sheetnames:
                     sheet = wb[sheet_name]
-                    sheet_rows = list(sheet.iter_rows(values_only=True))
+                    is_first_row = True
                     
-                    if len(sheet_rows) > 1:
-                        if not headers:
-                            headers = [str(h).strip().lower().replace(' ', '_') for h in sheet_rows[0] if h]
-                        rows.extend(sheet_rows[1:])
+                    # iter_rows loop se hum memory mein sab ek sath save nahi karte
+                    for row in sheet.iter_rows(values_only=True):
+                        # Agar poori row khali (None) hai (Ghost Rows), toh skip karo
+                        if not any(row):
+                            continue
+                            
+                        if is_first_row:
+                            if not headers:
+                                headers = [str(h).strip().lower().replace(' ', '_') for h in row if h]
+                            is_first_row = False
+                        else:
+                            rows.append(row)
+                
+                wb.close() # 🧹 Memory ko free kar do
                         
                 if not rows:
                     messages.error(request, "❌ The Excel file is empty across all sheets.")
@@ -936,7 +947,7 @@ def bulk_network_upload_view(request):
                     continue  # Blank row ignore karein
 
                 # ==========================================
-                # 🌟 CASE-INSENSITIVE MATCHING LOGIC (Magic Here)
+                # 🌟 CASE-INSENSITIVE MATCHING LOGIC
                 # ==========================================
                 terr_name = clean_row.get('territory_name', '')
                 if not terr_name:
@@ -971,7 +982,7 @@ def bulk_network_upload_view(request):
                             name=name,
                             specialty=clean_row.get('specialty') or 'General',
                             mobile=clean_row.get('mobile', '').split('.')[0], # .0 hata dega
-                            category=(clean_row.get('category') or 'C')[:1].upper(), # A+ ko A karega
+                            category=(clean_row.get('category') or 'C')[:1].upper(), # A+ ko A karega aur limit 1 rakhega
                             degree=clean_row.get('degree', ''),
                             address=clean_row.get('address', ''),
                             territory=terr_obj,
