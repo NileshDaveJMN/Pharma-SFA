@@ -5,7 +5,7 @@ from rest_framework.authtoken.views import obtain_auth_token
 # Agar request.py mein add kiya hai:
 from SFA.views.requests import weekly_secondary_sale_view, weekly_sale_history_view
 from SFA.views import community as community_views
-
+from SFA.views.mr_sales import mr_primary_sale_entry
 from . import views
 from .views import reports, masters, superadmin
 from SFA.views import auth as auth_views
@@ -139,5 +139,6 @@ urlpatterns = [
     path('community/comment/<int:event_id>/', community_views.add_comment, name='add_comment'),    
     path('reports/events/<int:event_id>/share/', community_views.share_event_from_report, name='share_event_from_report'),
     path('reports/events/', community_views.event_report, name='event_report'),
+    path('mr-primary-sale/', mr_primary_sale_entry, name='mr_primary_sale_entry'),
 
 ]

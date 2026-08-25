@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-4 mb-5 pb-5">
+    <h5 class="mb-3 font-weight-bold text-dark">📦 Add Primary Sale</h5>
+    
+    <div class="card shadow-sm border-0" style="border-radius: 12px;">
+        <div class="card-body">
+            <form method="POST">
+                {% csrf_token %}
+                
+                <div class="form-group">
+                    <label class="font-weight-bold text-secondary small">Date *</label>
+                    <input type="date" name="date" class="form-control shadow-sm" value="{{ today|date:'Y-m-d' }}" required style="border-radius: 8px;">
+                </div>
+
+                <div class="form-group">
+                    <label class="font-weight-bold text-secondary small">Select Stockist *</label>
+                    <select name="stockist" class="form-control shadow-sm" required style="border-radius: 8px;">
+                        <option value="">-- Choose Stockist --</option>
+                        {% for st in stockists %}
+                            <option value="{{ st.id }}">{{ st.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="font-weight-bold text-secondary small">Select Product *</label>
+                    <select name="product" class="form-control shadow-sm" required style="border-radius: 8px;">
+                        <option value="">-- Choose Product --</option>
+                        {% for pr in products %}
+                            <option value="{{ pr.id }}">{{ pr.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="row">
+                    <div class="col-6 form-group">
+                        <label class="font-weight-bold text-secondary small">Billed Qty *</label>
+                        <input type="number" name="quantity" class="form-control shadow-sm" min="1" required style="border-radius: 8px;">
+                    </div>
+                    <div class="col-6 form-group">
+                        <label class="font-weight-bold text-secondary small">Free Qty</label>
+                        <input type="number" name="free_quantity" class="form-control shadow-sm" value="0" min="0" style="border-radius: 8px;">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="font-weight-bold text-secondary small">Batch Number</label>
+                    <input type="text" name="batch_number" class="form-control shadow-sm" placeholder="Optional" style="border-radius: 8px;">
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block shadow-sm mt-3" style="border-radius: 8px; font-weight: bold;">
+                    + Add to Invoice
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

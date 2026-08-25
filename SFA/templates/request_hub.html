@@ -154,6 +154,18 @@
         </div>
         {% endif %}
         
+        {% if request.user.employee.company.settings.allow_mr_primary_sale %}
+        <!-- 🌟 NEW CARD: MR PRIMARY SALE (Controlled by Admin) 🌟 -->
+        <div class="col-3 mt-1">
+            <div class="card h-100 text-center border-0 shadow-sm bg-white p-1 d-flex flex-column justify-content-center align-items-center" 
+                 style="cursor: pointer; border-bottom: 3px solid #0056b3 !important; min-height: 62px; border-radius: 8px;" 
+                 onclick="location.href='{% url 'mr_primary_sale_entry' %}';">
+                <span class="mb-1" style="font-size: 1.1rem">📦</span>
+                <span class="fw-bold text-dark" style="font-size: 0.55rem; line-height: 1.1;">Add<br>Primary</span>
+            </div>
+        </div>
+        {% endif %}
+        
     </div>
     {% endif %}
 

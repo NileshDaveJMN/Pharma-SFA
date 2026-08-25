@@ -840,7 +840,10 @@ class SystemSetting(models.Model):
         default=True, 
         help_text="Isko ON rakhne par MRs location update kar payenge. OFF karne par button gayab ho jayega."
     )
-    
+    allow_mr_primary_sale = models.BooleanField(
+        default=False,
+        help_text="ON (True): MRs apne Request Hub se Primary Sale (Stockist Order) add kar payenge."
+    )
     # ==========================================
     # 🕒 COMPLIANCE & DEADLINE SETTINGS
     # ==========================================
