@@ -1254,6 +1254,18 @@ from django.dispatch import receiver
 # 🔔 NOTIFICATION SIGNALS FOR LIKES & COMMENTS
 # ==============================================================================
 
+# ==============================================================================
+# 🗑️ CLEANUP SIGNAL: Event delete hone par (ya photo direct delete hone par)
+# Cloudinary/storage se actual file bhi delete ho jaye — DB CASCADE sirf row
+# delete karta hai, storage file nahi. Ye signal wahi gap fill karta hai.
+# ==============================================================================
+@receiver(post_delete, sender=EventPhoto)
+def delete_photo_file_from_storage(sender, instance, **kwargs):
+    if instance.photo:
+        # save=False zaroori hai warna Django is deleted instance ko phir se save karne ki koshish karega
+        instance.photo.delete(save=False)
+
+
 @receiver(post_save, sender=EventLike)
 def notify_on_like(sender, instance, created, **kwargs):
     if created and instance.employee != instance.event.employee:

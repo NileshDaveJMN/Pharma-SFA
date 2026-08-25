@@ -458,6 +458,35 @@ class FieldEventAdmin(admin.ModelAdmin):
     inlines = [EventPhotoInline] # Event ke page par hi uski photos dikhengi
     list_editable = ('is_shared_in_community',) # Admin direct bahar se hi post ko hide/show kar payega
 
+    # 🌟 NAYA: Event delete karte waqt uske saare related records
+    # (photos + Cloudinary files, likes, comments) automatically CASCADE se
+    # delete ho jaate hain (models.py me on_delete=CASCADE already set hai,
+    # aur EventPhoto ke liye ek post_delete signal Cloudinary file bhi
+    # delete karta hai). Ye overrides sirf ek confirmation message dikhate
+    # hain ki kitna data saath me delete hua — safety/visibility ke liye.
+    def delete_model(self, request, obj):
+        photos, likes, comments = obj.photos.count(), obj.likes.count(), obj.comments.count()
+        super().delete_model(request, obj)
+        self.message_user(
+            request,
+            f"✅ Event delete ho gaya, saath me {photos} photo(s) [Cloudinary se bhi], "
+            f"{likes} like(s), {comments} comment(s) bhi delete ho gaye.",
+            messages.SUCCESS
+        )
+
+    def delete_queryset(self, request, queryset):
+        total_photos = sum(obj.photos.count() for obj in queryset)
+        total_likes = sum(obj.likes.count() for obj in queryset)
+        total_comments = sum(obj.comments.count() for obj in queryset)
+        count = queryset.count()
+        super().delete_queryset(request, queryset)
+        self.message_user(
+            request,
+            f"✅ {count} event(s) delete ho gaye, saath me {total_photos} photo(s) [Cloudinary se bhi], "
+            f"{total_likes} like(s), {total_comments} comment(s) bhi delete ho gaye.",
+            messages.SUCCESS
+        )
+
 @admin.register(EventPhoto)
 class EventPhotoAdmin(admin.ModelAdmin):
     # 🌟 DEBUG FIX: Standalone list jisme har photo ka raw saved path/URL
