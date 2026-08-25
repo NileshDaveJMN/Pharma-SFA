@@ -1221,35 +1221,6 @@ class EventPhoto(models.Model):
     photo = models.ImageField(upload_to='event_photos/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
-    def save(self, *args, **kwargs):
-        if self.photo:
-            try:
-                from PIL import Image
-                from io import BytesIO
-                from django.core.files.uploadedfile import InMemoryUploadedFile
-                import sys
-
-                im = Image.open(self.photo)
-                if im.mode != 'RGB':
-                    im = im.convert('RGB')
-                
-                output = BytesIO()
-                im.save(output, format='JPEG', quality=60)
-                output.seek(0)
-                
-                self.photo = InMemoryUploadedFile(
-                    output, 'ImageField', 
-                    f"{self.photo.name.split('.')[0]}.jpg", 
-                    'image/jpeg', sys.getsizeof(output), None
-                )
-            except Exception as e:
-                # 🌟 FIX: Agar Pillow fail ho jaye, toh file pointer ko wapas 0 par lana zaroori hai
-                if hasattr(self.photo, 'seek'):
-                    self.photo.seek(0)
-
-        super().save(*args, **kwargs)
-
-
 
     def __str__(self):
         return f"Photo for {self.event.subject}"
