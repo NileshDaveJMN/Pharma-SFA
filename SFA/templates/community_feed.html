@@ -58,7 +58,7 @@
                     <div class="comments-list mb-3" style="max-height: 150px; overflow-y: auto;">
                         {% for comment in event.comments.all %}
                         <div class="mb-2 bg-white p-2 shadow-sm" style="border-radius: 8px; border-left: 3px solid #17a2b8;">
-                            <strong>{{ comment.employee.name }}</strong> <span class="text-muted small ml-2">{{ comment.created_at|date:"d M, h:i A" }}</span><br>
+                            <strong>{{ comment.comment }}</strong> <span class="text-muted small ml-2">{{ comment.created_at|date:"d M, h:i A" }}</span><br>
                             <span class="small">{{ comment.comment }}</span>
                         </div>
                         {% empty %}
@@ -79,6 +79,31 @@
                 No events have been shared in the community yet. Be the first one!
             </div>
             {% endfor %}
+
+            <!-- 🌟 PAGINATION CONTROLS ADDED HERE 🌟 -->
+            {% if events.has_other_pages %}
+            <nav aria-label="Page navigation" class="mt-4 mb-4">
+                <ul class="pagination justify-content-center">
+                    {% if events.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link shadow-sm" href="?page={{ events.previous_page_number }}" style="border-radius: 20px 0 0 20px;">&laquo; Previous</a>
+                        </li>
+                    {% endif %}
+                    
+                    <li class="page-item disabled">
+                        <span class="page-link text-dark font-weight-bold">Page {{ events.number }} of {{ events.paginator.num_pages }}</span>
+                    </li>
+                    
+                    {% if events.has_next %}
+                        <li class="page-item">
+                            <a class="page-link shadow-sm" href="?page={{ events.next_page_number }}" style="border-radius: 0 20px 20px 0;">Next &raquo;</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+            <!-- PAGINATION END -->
+
         </div>
 
         <!-- RIGHT COLUMN: LEADERBOARD (4 Columns) -->

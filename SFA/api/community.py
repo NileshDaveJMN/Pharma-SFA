@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db.models import Count
 from SFA.models import FieldEvent, EventPhoto, EventLike, EventComment, Employee
+from django.core.paginator import Paginator
 from SFA.services.team import get_full_team_employees
 from SFA.models import FieldEvent, EventPhoto, EventLike, EventComment, Employee, Doctor, Chemist, Territory
 
@@ -14,7 +15,12 @@ from SFA.models import FieldEvent, EventPhoto, EventLike, EventComment, Employee
 @permission_classes([IsAuthenticated])
 def api_community_feed(request):
     emp = request.user.employee
-    events = FieldEvent.objects.filter(is_shared_in_community=True).order_by('-created_at')
+    event_list = FieldEvent.objects.filter(is_shared_in_community=True).order_by('-created_at')
+    
+    # 🌟 PAGINATION FOR FLUTTER: 15 events per API call
+    paginator = Paginator(event_list, 15)
+    page_number = request.GET.get('page', 1) # Default page 1
+    events = paginator.get_page(page_number)
     
     feed_data = []
     for ev in events:
@@ -36,7 +42,6 @@ def api_community_feed(request):
             } for c in ev.comments.all().order_by('-created_at')]
         })
         
-    # 🏆 Leaderboard Data for Flutter
     leaderboard_qs = Employee.objects.annotate(
         total_events=Count('field_events')
     ).filter(total_events__gt=0).order_by('-total_events')[:5]
@@ -45,9 +50,12 @@ def api_community_feed(request):
         
     return Response({
         'feed': feed_data,
-        'leaderboard': leaderboard_data
+        'leaderboard': leaderboard_data,
+        # Flutter developer ko batane ke liye ki aur events baaki hain ya nahi
+        'has_next_page': events.has_next(), 
+        'current_page': events.number,
+        'total_pages': paginator.num_pages
     })
-
 # ==============================================================================
 # 📸 2. GET EVENT REPORT (Private + Public for Team)
 # ==============================================================================
