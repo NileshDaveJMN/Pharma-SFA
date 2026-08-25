@@ -1,59 +1,201 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="container mt-4 mb-5 pb-5">
-    <h5 class="mb-3 font-weight-bold text-dark">📦 Add Primary Sale</h5>
+    <h5 class="mb-3 font-weight-bold text-dark">📦 Primary Sale Invoice</h5>
     
-    <div class="card shadow-sm border-0" style="border-radius: 12px;">
-        <div class="card-body">
-            <form method="POST">
-                {% csrf_token %}
-                
-                <div class="form-group">
-                    <label class="font-weight-bold text-secondary small">Date *</label>
-                    <input type="date" name="date" class="form-control shadow-sm" value="{{ today|date:'Y-m-d' }}" required style="border-radius: 8px;">
+    <!-- INVOICE HEADER (Stockist & Date) -->
+    <div class="card shadow-sm border-0 mb-3" style="border-radius: 12px;">
+        <div class="card-body pb-2">
+            <div class="row">
+                <div class="col-6 form-group mb-2">
+                    <label class="font-weight-bold text-secondary small mb-1">Date *</label>
+                    <input type="date" id="invoiceDate" class="form-control form-control-sm shadow-sm" value="{{ today|date:'Y-m-d' }}" style="border-radius: 6px;">
                 </div>
-
-                <div class="form-group">
-                    <label class="font-weight-bold text-secondary small">Select Stockist *</label>
-                    <select name="stockist" class="form-control shadow-sm" required style="border-radius: 8px;">
+                <div class="col-6 form-group mb-2">
+                    <label class="font-weight-bold text-secondary small mb-1">Batch Number</label>
+                    <input type="text" id="batchNo" class="form-control form-control-sm shadow-sm" placeholder="Optional" style="border-radius: 6px;">
+                </div>
+                <div class="col-12 form-group mb-2">
+                    <label class="font-weight-bold text-secondary small mb-1">Select Stockist *</label>
+                    <select id="stockistId" class="form-control form-control-sm shadow-sm" style="border-radius: 6px;">
                         <option value="">-- Choose Stockist --</option>
                         {% for st in stockists %}
                             <option value="{{ st.id }}">{{ st.name }}</option>
                         {% endfor %}
                     </select>
                 </div>
-
-                <div class="form-group">
-                    <label class="font-weight-bold text-secondary small">Select Product *</label>
-                    <select name="product" class="form-control shadow-sm" required style="border-radius: 8px;">
-                        <option value="">-- Choose Product --</option>
-                        {% for pr in products %}
-                            <option value="{{ pr.id }}">{{ pr.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="row">
-                    <div class="col-6 form-group">
-                        <label class="font-weight-bold text-secondary small">Billed Qty *</label>
-                        <input type="number" name="quantity" class="form-control shadow-sm" min="1" required style="border-radius: 8px;">
-                    </div>
-                    <div class="col-6 form-group">
-                        <label class="font-weight-bold text-secondary small">Free Qty</label>
-                        <input type="number" name="free_quantity" class="form-control shadow-sm" value="0" min="0" style="border-radius: 8px;">
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label class="font-weight-bold text-secondary small">Batch Number</label>
-                    <input type="text" name="batch_number" class="form-control shadow-sm" placeholder="Optional" style="border-radius: 8px;">
-                </div>
-
-                <button type="submit" class="btn btn-primary btn-block shadow-sm mt-3" style="border-radius: 8px; font-weight: bold;">
-                    + Add to Invoice
-                </button>
-            </form>
+            </div>
         </div>
     </div>
+
+    <!-- PRODUCT ENTRY SECTION -->
+    <div class="card shadow-sm border-0 mb-3" style="border-radius: 12px; background-color: #f8f9fa;">
+        <div class="card-body">
+            <h6 class="font-weight-bold text-primary mb-3" style="font-size: 0.9rem;">+ Add Product to Bill</h6>
+            
+            <div class="form-group mb-2">
+                <select id="productId" class="form-control form-control-sm shadow-sm" style="border-radius: 6px;">
+                    <option value="">-- Choose Product --</option>
+                    {% for pr in products %}
+                        <option value="{{ pr.id }}" data-name="{{ pr.name }}">{{ pr.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="row">
+                <div class="col-6 form-group mb-2">
+                    <label class="font-weight-bold text-secondary small mb-1">Billed Qty *</label>
+                    <input type="number" id="billedQty" class="form-control form-control-sm shadow-sm" min="1" placeholder="0" style="border-radius: 6px;">
+                </div>
+                <div class="col-6 form-group mb-2">
+                    <label class="font-weight-bold text-secondary small mb-1">Free Qty</label>
+                    <input type="number" id="freeQty" class="form-control form-control-sm shadow-sm" value="0" min="0" style="border-radius: 6px;">
+                </div>
+            </div>
+
+            <button type="button" onclick="addToCart()" class="btn btn-sm btn-outline-primary btn-block mt-2 font-weight-bold" style="border-radius: 6px;">
+                ➕ Add to Local List
+            </button>
+        </div>
+    </div>
+
+    <!-- LOCAL CART TABLE -->
+    <h6 class="font-weight-bold text-dark mt-4 mb-2">🛒 Invoice Items (<span id="itemCount">0</span>)</h6>
+    <div class="table-responsive bg-white shadow-sm mb-3" style="border-radius: 12px;">
+        <table class="table table-sm table-borderless mb-0">
+            <thead class="bg-light text-secondary" style="font-size: 0.75rem;">
+                <tr>
+                    <th class="py-2 pl-3">Product</th>
+                    <th class="py-2 text-center">Billed</th>
+                    <th class="py-2 text-center">Free</th>
+                    <th class="py-2 text-center pr-3">Act</th>
+                </tr>
+            </thead>
+            <tbody id="cartBody" style="font-size: 0.8rem;">
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-3">No products added yet.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- FINAL SUBMIT BUTTON -->
+    <button type="button" id="submitInvoiceBtn" onclick="submitInvoice()" class="btn btn-success btn-lg btn-block shadow-sm mt-3" style="border-radius: 8px; font-weight: bold; display: none;">
+        📤 Upload Full Invoice
+    </button>
 </div>
+
+<!-- 🌟 JAVASCRIPT FOR CART LOGIC -->
+<script>
+    let invoiceCart = [];
+
+    function addToCart() {
+        const prodSelect = document.getElementById('productId');
+        const prodId = prodSelect.value;
+        const prodName = prodSelect.options[prodSelect.selectedIndex].getAttribute('data-name');
+        const billedQty = document.getElementById('billedQty').value;
+        const freeQty = document.getElementById('freeQty').value || 0;
+
+        if(!prodId || !billedQty || billedQty <= 0) {
+            alert("Please select a product and enter a valid Billed Quantity!");
+            return;
+        }
+
+        // Add to array
+        invoiceCart.push({
+            id: Date.now(), // unique ID for row
+            product_id: prodId,
+            product_name: prodName,
+            quantity: billedQty,
+            free_qty: freeQty
+        });
+
+        // Clear inputs for next product
+        prodSelect.value = '';
+        document.getElementById('billedQty').value = '';
+        document.getElementById('freeQty').value = '0';
+
+        renderCart();
+    }
+
+    function removeFromCart(id) {
+        invoiceCart = invoiceCart.filter(item => item.id !== id);
+        renderCart();
+    }
+
+    function renderCart() {
+        const tbody = document.getElementById('cartBody');
+        document.getElementById('itemCount').innerText = invoiceCart.length;
+        const submitBtn = document.getElementById('submitInvoiceBtn');
+
+        if (invoiceCart.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">No products added yet.</td></tr>';
+            submitBtn.style.display = 'none';
+            return;
+        }
+
+        submitBtn.style.display = 'block';
+        tbody.innerHTML = '';
+        invoiceCart.forEach(item => {
+            tbody.innerHTML += `
+                <tr class="border-bottom">
+                    <td class="py-2 pl-3 font-weight-bold text-dark">${item.product_name}</td>
+                    <td class="py-2 text-center text-primary font-weight-bold">${item.quantity}</td>
+                    <td class="py-2 text-center text-success">${item.free_qty}</td>
+                    <td class="py-2 text-center pr-3">
+                        <button onclick="removeFromCart(${item.id})" class="btn btn-sm btn-danger py-0 px-2" style="border-radius: 4px;">X</button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    function submitInvoice() {
+        const stockistId = document.getElementById('stockistId').value;
+        const invoiceDate = document.getElementById('invoiceDate').value;
+        const batchNo = document.getElementById('batchNo').value;
+
+        if(!stockistId) {
+            alert("Please select a Stockist before uploading the invoice!");
+            return;
+        }
+
+        // Disable button to prevent double click
+        const btn = document.getElementById('submitInvoiceBtn');
+        btn.innerHTML = '⏳ Uploading... Please wait';
+        btn.disabled = true;
+
+        const payload = {
+            date: invoiceDate,
+            stockist: stockistId,
+            batch_number: batchNo,
+            items: invoiceCart
+        };
+
+        fetch("{% url 'mr_primary_sale_entry' %}", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": "{{ csrf_token }}"
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if(data.status === 'success') {
+                window.location.reload(); // Refresh to show success message
+            } else {
+                alert("Error: " + data.message);
+                btn.innerHTML = '📤 Upload Full Invoice';
+                btn.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error("Error:", error);
+            alert("Network Error! Please try again.");
+            btn.innerHTML = '📤 Upload Full Invoice';
+            btn.disabled = false;
+        });
+    }
+</script>
 {% endblock %}
