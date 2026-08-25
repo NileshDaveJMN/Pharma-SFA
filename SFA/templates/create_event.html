@@ -15,12 +15,12 @@
                         {% csrf_token %}
                         
                         <div class="form-group">
-                            <label class="font-weight-bold">Event Subject *</label>
+                            <label class="fw-bold">Event Subject *</label>
                             <input type="text" name="subject" class="form-control shadow-sm" required placeholder="e.g., Free OPD Camp at City Hospital" style="border-radius: 8px; border: 1px solid #ced4da;">
                         </div>
 
                         <div class="form-group">
-                            <label class="font-weight-bold">Category</label>
+                            <label class="fw-bold">Category</label>
                             <select name="category" class="form-control shadow-sm" style="border-radius: 8px; border: 1px solid #ced4da;">
                                 <option value="Inauguration">Inauguration</option>
                                 <option value="Medical Store">Medical Store</option>
@@ -35,7 +35,7 @@
                         <!-- Optional Doctor / Chemist Links -->
                         <div class="row">
                             <div class="col-md-6 form-group">
-                                <label class="font-weight-bold text-secondary">Link Doctor (Optional)</label>
+                                <label class="fw-bold text-secondary">Link Doctor (Optional)</label>
                                 <select name="doctor" class="form-control shadow-sm" style="border-radius: 8px; border: 1px solid #ced4da;">
                                     <option value="">-- Select Doctor --</option>
                                     {% for doc in doctors %}
@@ -44,7 +44,7 @@
                                 </select>
                             </div>
                             <div class="col-md-6 form-group">
-                                <label class="font-weight-bold text-secondary">Link Chemist (Optional)</label>
+                                <label class="fw-bold text-secondary">Link Chemist (Optional)</label>
                                 <select name="chemist" class="form-control shadow-sm" style="border-radius: 8px; border: 1px solid #ced4da;">
                                     <option value="">-- Select Chemist --</option>
                                     {% for chem in chemists %}
@@ -55,28 +55,28 @@
                         </div>
 
                         <div class="form-group">
-                            <label class="font-weight-bold">Description</label>
+                            <label class="fw-bold">Description</label>
                             <textarea name="description" class="form-control shadow-sm" rows="4" placeholder="Share details about the event..." style="border-radius: 8px; border: 1px solid #ced4da;"></textarea>
                         </div>
 
                         <div class="form-group bg-light p-3 border shadow-sm" style="border-radius: 8px;">
-                            <label class="font-weight-bold">Upload Event Photos</label><br>
-                            <input type="file" name="photos" class="form-control-file" multiple accept="image/*">
+                            <label class="fw-bold">Upload Event Photos</label><br>
+                            <input type="file" name="photos" class="form-control" multiple accept="image/*">
                             <small class="form-text text-muted mt-1">You can select and upload multiple photos at once.</small>
                         </div>
 
-                        <!-- Toggle Switch for Community Sharing -->
+                        <!-- Toggle Switch for Community Sharing (Bootstrap 5 syntax: form-check / form-switch) -->
                         <div class="form-group mt-4 p-3 border shadow-sm bg-white" style="border-radius: 8px;">
-                            <div class="custom-control custom-switch">
-                                <input type="checkbox" class="custom-control-input" id="shareCommunity" name="is_shared_in_community" checked>
-                                <label class="custom-control-label font-weight-bold text-primary" for="shareCommunity">
+                            <div class="form-check form-switch">
+                                <input type="checkbox" class="form-check-input" id="shareCommunity" name="is_shared_in_community" checked>
+                                <label class="form-check-label fw-bold text-primary" for="shareCommunity">
                                     📢 Share on Community Wall
                                 </label>
                             </div>
                             <small class="text-muted d-block mt-1">If enabled, this event will be visible to all employees on the feed.</small>
                         </div>
 
-                        <button type="submit" class="btn btn-success btn-lg btn-block mt-4 shadow-sm" style="border-radius: 8px; font-weight: bold;">Post Event</button>
+                        <button type="submit" class="btn btn-success btn-lg w-100 mt-4 shadow-sm" style="border-radius: 8px; font-weight: bold;">Post Event</button>
                     </form>
                 </div>
             </div>
