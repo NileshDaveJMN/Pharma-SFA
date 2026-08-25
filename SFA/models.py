@@ -1217,11 +1217,11 @@ class FieldEvent(models.Model):
 
 
 class EventPhoto(models.Model):
-    event = models.ForeignKey(FieldEvent, related_name='photos', on_delete=models.CASCADE)
-    photo = models.ImageField(upload_to='events/photos/')
+    event = models.ForeignKey(FieldEvent, on_delete=models.CASCADE, related_name='photos')
+    photo = models.ImageField(upload_to='event_photos/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
-        def save(self, *args, **kwargs):
+    def save(self, *args, **kwargs):
         if self.photo:
             try:
                 from PIL import Image
@@ -1244,11 +1244,11 @@ class EventPhoto(models.Model):
                 )
             except Exception as e:
                 # 🌟 FIX: Agar Pillow fail ho jaye, toh file pointer ko wapas 0 par lana zaroori hai
-                # Warna Cloudinary ko 0 bytes ki khali file milti hai
                 if hasattr(self.photo, 'seek'):
                     self.photo.seek(0)
 
         super().save(*args, **kwargs)
+
 
 
     def __str__(self):
