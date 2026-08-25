@@ -883,7 +883,9 @@ def bulk_network_upload_view(request):
         headers = []
 
         try:
-            # 1. READ FILE
+            # ==========================================
+            # 1. FILE READING (ACTIVE SHEET + MEMORY SAFE)
+            # ==========================================
             if file_name.endswith('.csv'):
                 file_data = uploaded_file.read().decode('utf-8-sig')
                 io_string = io.StringIO(file_data)
@@ -896,21 +898,25 @@ def bulk_network_upload_view(request):
                 rows = all_rows[1:]
             
             elif file_name.endswith(('.xlsx', '.xls')):
+                # 🚀 SPEED & MEMORY HACK with ACTIVE SHEET ONLY
                 wb = openpyxl.load_workbook(uploaded_file, data_only=True, read_only=True)
-                for sheet_name in wb.sheetnames:
-                    sheet = wb[sheet_name]
-                    is_first_row = True
-                    for row in sheet.iter_rows(values_only=True):
-                        if not any(row): continue
-                        if is_first_row:
-                            if not headers:
-                                headers = [str(h).strip().lower().replace(' ', '_') for h in row if h]
-                            is_first_row = False
-                        else:
-                            rows.append(row)
-                wb.close()
+                sheet = wb.active  # 🌟 Sirf pehli sheet load karega
+                
+                is_first_row = True
+                for row in sheet.iter_rows(values_only=True):
+                    if not any(row): continue # 🌟 Blank Ghost Rows Ignore
+                    
+                    if is_first_row:
+                        if not headers:
+                            headers = [str(h).strip().lower().replace(' ', '_') for h in row if h]
+                        is_first_row = False
+                    else:
+                        rows.append(row)
+                
+                wb.close() # 🧹 Memory clean
+                        
                 if not rows:
-                    messages.error(request, "❌ The Excel file is empty across all sheets.")
+                    messages.error(request, "❌ The Excel file is empty.")
                     return redirect('bulk_network_upload')
             else:
                 messages.error(request, "❌ Please upload only a .csv or .xlsx file.")
@@ -920,17 +926,21 @@ def bulk_network_upload_view(request):
             error_messages = []
             
             # ==========================================
-            # 🚀 SUPER FAST CACHING (0 DB Queries in Loop)
+            # 2. FAST CACHING (0 DB Queries Inside Loop)
             # ==========================================
             terr_cache = {t.name.strip().lower(): t for t in Territory.objects.filter(company=emp_obj.company)}
             route_cache = {f"{r.territory_id}_{r.name.strip().lower()}": r for r in Route.objects.filter(territory__company=emp_obj.company)}
 
             objects_to_create = []
 
+            # ==========================================
+            # 3. DATA CLEANING & MATCHING
+            # ==========================================
             for row_number, row_data in enumerate(rows, start=2):
                 row_data = list(row_data) + [''] * (len(headers) - len(row_data))
                 clean_row = dict(zip(headers, row_data))
                 
+                # Extreme Cleanup (Spaces & nan)
                 for k, v in clean_row.items():
                     val = str(v).strip() if v is not None else ''
                     clean_row[k] = '' if val.lower() == 'nan' else val
@@ -967,8 +977,8 @@ def bulk_network_upload_view(request):
                             company=emp_obj.company,
                             name=name,
                             specialty=(clean_row.get('specialty') or 'General')[:50],
-                            mobile=clean_row.get('mobile', '').split('.')[0][:15], # Removes .0 & limit to 15
-                            category=(clean_row.get('category') or 'C')[:1].upper(), 
+                            mobile=clean_row.get('mobile', '').split('.')[0][:15], # Decimal removal
+                            category=(clean_row.get('category') or 'C')[:1].upper(), # A+ to A
                             degree=clean_row.get('degree', '')[:50],
                             address=clean_row.get('address', ''),
                             territory=terr_obj,
@@ -993,7 +1003,7 @@ def bulk_network_upload_view(request):
                     error_messages.append(f"Row {row_number}: Data Format Error - {str(e)}")
 
             # ==========================================
-            # 🚀 BULK CREATE (Saves 700+ rows in 1 query)
+            # 4. BULK CREATE (Fastest Insert)
             # ==========================================
             if objects_to_create:
                 if upload_type == 'doctor':
@@ -1020,6 +1030,7 @@ def bulk_network_upload_view(request):
             return redirect('bulk_network_upload')
 
     return render(request, 'bulk_upload_network.html', {'employees': employees})
+
 @employee_required
 def promo_dispatch_view(request, employee):
     if employee.designation not in ['Admin', 'System Administrator']:

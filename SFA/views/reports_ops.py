@@ -206,6 +206,9 @@ def expense_report_view(request, employee):
 # ==============================================================================
 # 3. 🌐 NETWORK REPORT VIEW
 # ==============================================================================
+# ==============================================================================
+# 3. 🌐 NETWORK REPORT VIEW (Speed Optimized)
+# ==============================================================================
 @employee_required
 def network_report_view(request, employee):
     team_employees = get_dropdown_team(employee)
@@ -226,8 +229,9 @@ def network_report_view(request, employee):
     specialty = request.GET.get('specialty', '')
     category = request.GET.get('category', '')
     
-    doctors = Doctor.objects.filter(allocated_to__in=sub_team, status='Approved')
-    chemists = Chemist.objects.filter(allocated_to__in=sub_team, status='Approved')
+    # 🚀 N+1 QUERY FIX: select_related added to prevent database freezing
+    doctors = Doctor.objects.filter(allocated_to__in=sub_team, status='Approved').select_related('territory', 'route', 'allocated_to')
+    chemists = Chemist.objects.filter(allocated_to__in=sub_team, status='Approved').select_related('territory', 'route', 'allocated_to')
     
     if active_tab == 'doctor':
         if route_id: doctors = doctors.filter(route_id=route_id)
@@ -260,10 +264,8 @@ def network_report_view(request, employee):
                 ws.column_dimensions[openpyxl.utils.get_column_letter(col_num)].width = 20
 
             for doc in doctors:
-                terr_name = getattr(doc.territory, 'name', None)
-                if not terr_name and doc.route and getattr(doc.route, 'territory', None):
-                    terr_name = doc.route.territory.name
-                ws.append([f"Dr. {doc.name}", doc.specialty or '-', doc.category or '-', doc.route.name if doc.route else '-', terr_name or '-', doc.allocated_to.name if doc.allocated_to else '-', doc.status or 'Approved'])
+                terr_name = doc.territory.name if doc.territory else (doc.route.territory.name if doc.route and doc.route.territory else '-')
+                ws.append([f"Dr. {doc.name}", doc.specialty or '-', doc.category or '-', doc.route.name if doc.route else '-', terr_name, doc.allocated_to.name if doc.allocated_to else '-', doc.status or 'Approved'])
 
         elif active_tab == 'chemist':
             filename = f"Chemist_Network_{selected_emp.name}.xlsx"
@@ -280,9 +282,8 @@ def network_report_view(request, employee):
                 ws.column_dimensions[openpyxl.utils.get_column_letter(col_num)].width = 25
 
             for chem in chemists:
-                terr_name = getattr(chem.territory, 'name', None) if hasattr(chem, 'territory') else None
-                if not terr_name and chem.route and getattr(chem.route, 'territory', None): terr_name = chem.route.territory.name
-                ws.append([chem.name, chem.route.name if chem.route else '-', terr_name or '-', chem.allocated_to.name if chem.allocated_to else '-', getattr(chem, 'status', 'Approved')])
+                terr_name = chem.territory.name if chem.territory else (chem.route.territory.name if chem.route and chem.route.territory else '-')
+                ws.append([chem.name, chem.route.name if chem.route else '-', terr_name, chem.allocated_to.name if chem.allocated_to else '-', chem.status or 'Approved'])
 
         output = io.BytesIO()
         wb.save(output)
