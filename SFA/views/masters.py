@@ -540,8 +540,10 @@ import csv
 import io
 import calendar
 from datetime import datetime, date
+from collections import defaultdict
 from django.shortcuts import render, redirect
 from django.contrib import messages
+from django.utils import timezone
 from SFA.models import Employee, Stockist, Product, PrimarySale, StockistProductStatement
 from .auth import get_full_team_employees
 from SFA.decorators import employee_required
@@ -552,7 +554,6 @@ def upload_primary_sales_view(request, employee):
         messages.error(request, "🚫 Access Denied.")
         return redirect('view_hub')
 
-    # 🌟 NAYA: 'upload_file' name se hum Excel aur CSV dono lenge
     uploaded_file = request.FILES.get('upload_file') or request.FILES.get('excel_file') or request.FILES.get('csv_file')
 
     if request.method == 'POST' and uploaded_file:
@@ -575,132 +576,157 @@ def upload_primary_sales_view(request, employee):
             headers = []
 
             # ==========================================
-            # 🌟 HYBRID READER LOGIC (SMART HEADERS FIX)
+            # 1. READ FILE (MEMORY SAFE & OOM FIXED)
             # ==========================================
             if file_name.endswith('.csv'):
-                # CSV File Reading
                 file_data = uploaded_file.read().decode('utf-8-sig')
                 io_string = io.StringIO(file_data)
                 reader = csv.reader(io_string)
                 all_rows = list(reader)
                 if len(all_rows) < 2:
-                    messages.error(request, "❌ The CSV file is empty or data is missing.")
+                    messages.error(request, "❌ The CSV file is empty or missing headers.")
                     return redirect('upload_primary_sales')
-                # 🌟 FIX: Replace spaces with underscores automatically in Headers
-                headers = [str(h).strip().lower().replace(' ', '_') if h else '' for h in all_rows[0]]
+                headers = [str(h).strip().lower().replace(' ', '_') for h in all_rows[0] if h]
                 rows = all_rows[1:]
             
             elif file_name.endswith(('.xlsx', '.xls')):
-                # EXCEL File Reading
-                wb = openpyxl.load_workbook(uploaded_file, data_only=True)
+                # read_only=True ensures no RAM leak for large files
+                wb = openpyxl.load_workbook(uploaded_file, data_only=True, read_only=True)
                 sheet = wb.active
-                all_rows = list(sheet.iter_rows(values_only=True))
-                if len(all_rows) < 2:
-                    messages.error(request, "❌ The Excel file is empty or data is missing.")
+                is_first_row = True
+                for row in sheet.iter_rows(values_only=True):
+                    if not any(row): continue  # Skip blank ghost rows
+                    if is_first_row:
+                        if not headers: headers = [str(h).strip().lower().replace(' ', '_') for h in row if h]
+                        is_first_row = False
+                    else:
+                        rows.append(row)
+                wb.close()
+                if not rows:
+                    messages.error(request, "❌ The Excel file is empty.")
                     return redirect('upload_primary_sales')
-                # 🌟 FIX: Replace spaces with underscores automatically in Headers
-                headers = [str(h).strip().lower().replace(' ', '_') if h else '' for h in all_rows[0]]
-                rows = all_rows[1:]
             else:
                 messages.error(request, "❌ Please upload only a .csv or .xlsx file.")
                 return redirect('upload_primary_sales')
 
-            # SAFE DELETE PURANA DATA
+            # ==========================================
+            # 2. DELETE OLD DATA (FOR THE SELECTED MONTH)
+            # ==========================================
             PrimarySale.objects.filter(date__month=selected_month, date__year=selected_year, stockist__in=state_stockists).delete()
             StockistProductStatement.objects.filter(month=selected_month, year=selected_year, stockist__in=state_stockists).delete()
             
             count = 0
             errors = []
             
-            # DATA LOOP SHURU
+            # ==========================================
+            # 3. FAST CACHING (To stop server freeze)
+            # ==========================================
+            stockist_cache = {s.name.strip().lower(): s for s in state_stockists}
+            product_cache = {p.name.strip().lower(): p for p in Product.objects.filter(company=employee.company)}
+            emp_cache = {e.headquarter_id: e for e in state_team if e.headquarter_id}
+
+            sales_to_create = []
+            statement_agg = defaultdict(int) # This will sum up quantities automatically in python memory
+
+            # ==========================================
+            # 4. DATA PROCESSING LOOP
+            # ==========================================
             for row_num, row_data in enumerate(rows, start=2):
-                # Error prevention: Agar row data chhota ho toh pad kar do
                 row_data = list(row_data) + [''] * (len(headers) - len(row_data))
                 clean_row = dict(zip(headers, row_data))
                 
+                # Cleanup spaces and nan
+                for k, v in clean_row.items():
+                    val = str(v).strip() if v is not None else ''
+                    clean_row[k] = '' if val.lower() == 'nan' else val
+                
                 raw_date = clean_row.get('date')
-                st_name = str(clean_row.get('stockist_name') or '').strip()
-                pr_name = str(clean_row.get('product_name') or '').strip()
-                qty_str = str(clean_row.get('qty') or '0').strip()
-                batch = str(clean_row.get('batch_no') or 'NA').strip()
-                free_qty_str = str(clean_row.get('free_qty') or '0').strip()
+                st_name = clean_row.get('stockist_name', '').strip().lower()
+                pr_name = clean_row.get('product_name', '').strip().lower()
+                qty_str = clean_row.get('qty', '0').strip()
+                batch = clean_row.get('batch_no', 'NA').strip()
+                free_qty_str = clean_row.get('free_qty', '0').strip()
                 
                 if raw_date and st_name and pr_name and qty_str != '0':
-                    # 🌟 DATE HANDLER (All Formats Supported)
-                    if isinstance(raw_date, datetime):
-                        sale_date = raw_date.date()
-                    elif isinstance(raw_date, date):
-                        sale_date = raw_date
+                    # DATE PARSER
+                    if isinstance(raw_date, datetime): sale_date = raw_date.date()
+                    elif isinstance(raw_date, date): sale_date = raw_date
                     else:
                         raw_date_str = str(raw_date).strip().split()[0]
                         try:
-                            if '/' in raw_date_str:
-                                sale_date = datetime.strptime(raw_date_str, '%d/%m/%Y').date()
+                            if '/' in raw_date_str: sale_date = datetime.strptime(raw_date_str, '%d/%m/%Y').date()
                             elif '-' in raw_date_str:
-                                parts = raw_date_str.split('-')
-                                if len(parts[0]) == 4:
-                                    sale_date = datetime.strptime(raw_date_str, '%Y-%m-%d').date()
-                                else:
-                                    sale_date = datetime.strptime(raw_date_str, '%d-%m-%Y').date()
-                            else:
-                                raise ValueError
+                                if len(raw_date_str.split('-')[0]) == 4: sale_date = datetime.strptime(raw_date_str, '%Y-%m-%d').date()
+                                else: sale_date = datetime.strptime(raw_date_str, '%d-%m-%Y').date()
+                            else: raise ValueError
                         except ValueError:
-                            errors.append(f"Row {row_num}: Date '{raw_date}' is invalid. Please use 'dd/mm/yyyy' format.")
+                            errors.append(f"Row {row_num}: Invalid date format '{raw_date}'.")
                             continue
                     
-                    # 🌟 FIX: Date mahine/saal se match na kare toh warn karega, silent skip nahi
                     if sale_date.month != selected_month or sale_date.year != selected_year:
-                        errors.append(f"Row {row_num}: Date {sale_date.strftime('%d-%b-%Y')} does not belong to the month you selected ({selected_month}/{selected_year}).")
+                        errors.append(f"Row {row_num}: Date {sale_date.strftime('%d-%b-%Y')} does not belong to the selected month ({selected_month}/{selected_year}).")
                         continue
 
-                    # FIX: Company specific fetch
-                    stockist = Stockist.objects.filter(company=employee.company, name__iexact=st_name).first()
-                    prod = Product.objects.filter(company=employee.company, name__iexact=pr_name).first()
+                    # Instant O(1) dictionary lookups instead of Database hits
+                    stockist = stockist_cache.get(st_name)
+                    prod = product_cache.get(pr_name)
                     
                     if not stockist:
-                        errors.append(f"Row {row_num}: Stockist '{st_name}' not found.")
-                        continue
-                    if stockist not in state_stockists:
-                        errors.append(f"Row {row_num}: Stockist '{st_name}' is not in RBM ({rbm_emp.name})'s list.")
+                        errors.append(f"Row {row_num}: Stockist '{clean_row.get('stockist_name')}' not found in {rbm_emp.name}'s territory.")
                         continue
                     if not prod:
-                        errors.append(f"Row {row_num}: Product '{pr_name}' not found.")
+                        errors.append(f"Row {row_num}: Product '{clean_row.get('product_name')}' not found.")
                         continue
                         
-                    emp = Employee.objects.filter(headquarter=stockist.territory).first()
+                    emp = emp_cache.get(stockist.territory_id)
                     if emp:
-                        PrimarySale.objects.create(
+                        q = int(qty_str) if qty_str.replace('-','').isdigit() else 0
+                        fq = int(free_qty_str) if free_qty_str.replace('-','').isdigit() else 0
+                        
+                        sales_to_create.append(PrimarySale(
                             date=sale_date, stockist=stockist, product=prod,
-                            quantity=int(qty_str), free_quantity=int(free_qty_str) if free_qty_str.isdigit() else 0, batch_number=batch
-                        )
-                        stat, _ = StockistProductStatement.objects.get_or_create(
-                            employee=emp, stockist=stockist, product=prod, month=sale_date.month, year=sale_date.year
-                        )
-                        stat.received_qty += int(qty_str) + (int(free_qty_str) if free_qty_str.isdigit() else 0)
-                        stat.save()
+                            quantity=q, free_quantity=fq, batch_number=batch
+                        ))
+                        
+                        # In-memory aggregation for StockistProductStatement
+                        agg_key = (emp.id, stockist.id, prod.id, sale_date.month, sale_date.year)
+                        statement_agg[agg_key] += (q + fq)
                         count += 1
                     else:
-                        errors.append(f"Row {row_num}: No MR is assigned to Stockist '{st_name}'.")
+                        errors.append(f"Row {row_num}: No MR is mapped to Stockist '{clean_row.get('stockist_name')}'.")
                 else:
-                    # 🌟 FIX: Missing data ka reason bhi screen par print hoga
-                    errors.append(f"Row {row_num}: Data Missing (Date, Stockist Name, or Product Name is empty, or Qty is 0).")
+                    errors.append(f"Row {row_num}: Data Missing (Date, Stockist, Product or Qty=0).")
+
+            # ==========================================
+            # 5. BULK CREATE DATABASE INSERTS (SUPER FAST)
+            # ==========================================
+            if sales_to_create:
+                PrimarySale.objects.bulk_create(sales_to_create, batch_size=1000)
+            
+            statements_to_create = []
+            for (emp_id, stockist_id, prod_id, m, y), total_qty in statement_agg.items():
+                statements_to_create.append(StockistProductStatement(
+                    employee_id=emp_id, stockist_id=stockist_id, product_id=prod_id,
+                    month=m, year=y, received_qty=total_qty, opening_qty=0
+                ))
+            
+            if statements_to_create:
+                StockistProductStatement.objects.bulk_create(statements_to_create, batch_size=1000)
                         
-            messages.success(request, f"🚀 {count} records uploaded successfully for State: {rbm_emp.name}!")
+            messages.success(request, f"🚀 {count} Primary Sales records uploaded instantly for {rbm_emp.name}!")
             if errors:
                 for err in errors[:5]: messages.warning(request, err)
-                if len(errors) > 5: messages.warning(request, f"...and {len(errors) - 5} more errors.")
+                if len(errors) > 5: messages.warning(request, f"...and {len(errors) - 5} more similar errors.")
                     
         except Exception as e:
-            # 🌟 Custom error catch if corrupt excel uploaded
             if "list index out of range" in str(e):
-                messages.error(request, "❌ File Formatting Error! Your Excel file is internally a bit corrupt (a styling issue). Please save this file as CSV, or paste it into a new Excel sheet using 'Paste as Values'.")
+                messages.error(request, "❌ File Formatting Error! Corrupt Excel file. Please use CSV.")
             else:
                 messages.error(request, f"❌ File processing error: {str(e)}")
             
         return redirect('upload_primary_sales')
         
     today = timezone.localdate()
-    # FIX: Company specific fetch
     rbms = Employee.objects.filter(company=employee.company, designation__in=['RBM', 'ZBM', 'NSM'], is_active=True).order_by('name')
     
     return render(request, 'upload_primary_sales.html', {
