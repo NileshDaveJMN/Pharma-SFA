@@ -1274,7 +1274,7 @@ class EventComment(models.Model):
         return f"Comment by {self.employee.name} on {self.event.subject}"
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from SFA.fcm_sender import send_push_notification # Aapki file se direct import
+from fcm_sender import send_push_notification
 
 # ==============================================================================
 # 🔔 NOTIFICATION SIGNALS FOR LIKES & COMMENTS
