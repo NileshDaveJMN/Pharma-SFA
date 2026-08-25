@@ -375,7 +375,7 @@ class SystemSettingAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAd
     list_display = ('__str__', 'company', 'enable_offline_mode', 'dcr_lock_days', 'without_tourplan_dcr_block')
     list_filter = ('company',)
     fieldsets = (
-        ('General & App Settings', {'fields': ('company', 'allow_location_capture', 'enable_offline_mode', 'strict_geofence_for_backdate')}),
+        ('General & App Settings', {'fields': ('company', 'allow_location_capture', 'enable_offline_mode', 'strict_geofence_for_backdate', 'allow_mr_primary_sale')}),
         ('Deadlines (Numeric Rules)', {'fields': ('dcr_lock_days', 'mtp_approval_deadline_day', 'expense_submit_deadline_day', 'sale_upload_deadline_day', 'free_claim_deadline_day', 'target_approval_deadline_day')}),
         ('Strict Blocker Switches', {'fields': ('without_tourplan_dcr_block', 'manager_pending_approval_block')}),
         ('Exception / Testing Switches', {'fields': ('allow_current_month_mtp',), 'description': 'Testing exception switches.'}),
