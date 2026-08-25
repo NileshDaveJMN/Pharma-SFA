@@ -1222,29 +1222,33 @@ class EventPhoto(models.Model):
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
-        # 🌟 IMAGE COMPRESSION LOGIC
-        if self.photo and not self.id: # Sirf naye upload par compress kare
-            im = Image.open(self.photo)
-            
-            # Agar image PNG (transparent) hai toh usko JPG format ke liye RGB mein convert karein
-            if im.mode != 'RGB':
-                im = im.convert('RGB')
+        if self.photo:
+            try:
+                # Photo open aur compress karne ka try karega
+                from PIL import Image
+                from io import BytesIO
+                from django.core.files.uploadedfile import InMemoryUploadedFile
+                import sys
+
+                im = Image.open(self.photo)
+                if im.mode != 'RGB':
+                    im = im.convert('RGB')
                 
-            # Image ko resize karein (Max 1024x1024)
-            im.thumbnail((1024, 1024))
-            
-            output = BytesIO()
-            # 70% quality par JPG save karein (5MB ki photo ~200KB ho jayegi)
-            im.save(output, format='JPEG', quality=70)
-            output.seek(0)
-            
-            # Original file ko compressed file se replace karein
-            file_name = self.photo.name.split('.')[0] + '.jpg'
-            self.photo = InMemoryUploadedFile(
-                output, 'ImageField', file_name, 
-                'image/jpeg', sys.getsizeof(output), None
-            )
-            
+                output = BytesIO()
+                im.save(output, format='JPEG', quality=60)
+                output.seek(0)
+                
+                self.photo = InMemoryUploadedFile(
+                    output, 'ImageField', 
+                    f"{self.photo.name.split('.')[0]}.jpg", 
+                    'image/jpeg', sys.getsizeof(output), None
+                )
+            except Exception as e:
+                # Agar photo .heic (iPhone) ya kisi unsupported format mein hai,
+                # toh crash hone ke bajaye use bina compress kiye direct save kar dega
+                # (Cloudinary automatically usko handle kar lega)
+                pass 
+
         super().save(*args, **kwargs)
 
     def __str__(self):
