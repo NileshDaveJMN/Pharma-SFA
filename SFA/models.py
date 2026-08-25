@@ -1218,9 +1218,9 @@ class FieldEvent(models.Model):
 
 class EventPhoto(models.Model):
     event = models.ForeignKey(FieldEvent, on_delete=models.CASCADE, related_name='photos')
-    photo = models.ImageField(upload_to='event_photos/')
+    # 🌟 FIX: ImageField ko FileField kar diya hai taaki Django .heic ko reject na kare!
+    photo = models.FileField(upload_to='event_photos/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
-
 
     def __str__(self):
         return f"Photo for {self.event.subject}"

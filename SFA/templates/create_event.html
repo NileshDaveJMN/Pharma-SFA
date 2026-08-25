@@ -1,12 +1,13 @@
 {% extends 'base.html' %}
 {% block content %}
-<!-- 🌟 FIX: Added mb-5 and pb-5 to create space for the bottom navigation bar -->
-<div class="container mt-4 mb-5 pb-5">
+<!-- 🌟 FIX: margin-top: 60px se upar ka header nahi katega. pb-5 mb-5 se nav bar nahi chhupega -->
+<div class="container-fluid pb-5 mb-5" style="margin-top: 70px;">
     <div class="row justify-content-center">
-        <div class="col-md-8">
+        <!-- 🌟 FIX: Mobile view (col-12) aur PC view (col-md-8) dono ke liye perfect fit -->
+        <div class="col-12 col-md-8">
             <div class="card shadow border-0" style="border-radius: 12px;">
                 <div class="card-header bg-primary text-white" style="border-radius: 12px 12px 0 0;">
-                    <h4 class="mb-0">📝 Create Activity / Event</h4>
+                    <h5 class="mb-0">📝 Create Activity / Event</h5>
                 </div>
                 <div class="card-body">
                     <!-- enctype="multipart/form-data" bahut zaroori hai photo upload ke liye! -->
@@ -80,9 +81,8 @@
                 </div>
             </div>
         </div>
-        
-        <!-- 🌟 FIX: Safe space for bottom navigation bar so nothing gets hidden -->
-        <div style="height: 80px;"></div>
     </div>
 </div>
+<!-- 🌟 FIX: Absolute bottom clearance for mobile nav bar -->
+<br><br><br><br>
 {% endblock %}
