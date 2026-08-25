@@ -853,6 +853,10 @@ def edit_chemist_list_view(request, employee):
 import openpyxl
 import csv
 import io
+from django.contrib import messages
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from SFA.models import Employee, Territory, Route, Doctor, Chemist
 
 @login_required
 def bulk_network_upload_view(request):
@@ -861,33 +865,26 @@ def bulk_network_upload_view(request):
         messages.error(request, "You do not have permission to access this page.")
         return redirect('view_hub')
 
-    employees = Employee.objects.filter(company=request.user.employee.company, is_active=True).order_by('name')  # 🌟 FIX: Resigned exclude
+    employees = Employee.objects.filter(company=request.user.employee.company, is_active=True).order_by('name')
 
     if request.method == 'POST':
         upload_type = request.POST.get('upload_type')
         selected_emp_id = request.POST.get('employee_id')
         
-        # 🌟 NAYA: 'upload_file' name se hum dono lenge (CSV ya Excel)
-        uploaded_file = request.FILES.get('upload_file') or request.FILES.get('csv_file')
+        uploaded_file = request.FILES.get('upload_file')
 
-        if not uploaded_file:
-            messages.error(request, "❌ Please upload a file!")
-            return redirect('bulk_network_upload')
-            
-        if not selected_emp_id:
-            messages.error(request, "❌ Please select an Employee!")
+        if not uploaded_file or not selected_emp_id:
+            messages.error(request, "❌ File or Employee missing!")
             return redirect('bulk_network_upload')
 
-        # FIX: Company specific fetch
         emp_obj = Employee.objects.filter(company=request.user.employee.company, id=selected_emp_id).first()
-        
         file_name = uploaded_file.name.lower()
         rows = []
         headers = []
 
         try:
             # ==========================================
-            # 🌟 HYBRID READER LOGIC (CSV + EXCEL)
+            # 🌟 SINGLE SHEET READER (As per HTML UI)
             # ==========================================
             if file_name.endswith('.csv'):
                 file_data = uploaded_file.read().decode('utf-8-sig')
@@ -897,17 +894,17 @@ def bulk_network_upload_view(request):
                 if len(all_rows) < 2:
                     messages.error(request, "❌ The CSV file is empty or headers are missing.")
                     return redirect('bulk_network_upload')
-                headers = [str(h).strip().lower() if h else '' for h in all_rows[0]]
+                headers = [str(h).strip().lower().replace(' ', '_') for h in all_rows[0] if h]
                 rows = all_rows[1:]
             
             elif file_name.endswith(('.xlsx', '.xls')):
                 wb = openpyxl.load_workbook(uploaded_file, data_only=True)
-                sheet = wb.active
+                sheet = wb.active  # 🌟 Sirf current sheet padhenge
                 all_rows = list(sheet.iter_rows(values_only=True))
                 if len(all_rows) < 2:
                     messages.error(request, "❌ The Excel file is empty or headers are missing.")
                     return redirect('bulk_network_upload')
-                headers = [str(h).strip().lower() if h else '' for h in all_rows[0]]
+                headers = [str(h).strip().lower().replace(' ', '_') for h in all_rows[0] if h]
                 rows = all_rows[1:]
             else:
                 messages.error(request, "❌ Please upload only a .csv or .xlsx file.")
@@ -915,44 +912,50 @@ def bulk_network_upload_view(request):
 
             success_count = 0
             error_count = 0
+            error_messages = []  # 🌟 Track exact reason for failure
 
-            # Row data check & assign loop
             for row_number, row_data in enumerate(rows, start=2):
-                # Error prevention: Pad short rows
                 row_data = list(row_data) + [''] * (len(headers) - len(row_data))
                 clean_row = dict(zip(headers, row_data))
                 
-                # Clean up values (None to Empty string)
+                # Cleanup spaces and pandas 'nan'
                 for k, v in clean_row.items():
-                    clean_row[k] = str(v).strip() if v is not None else ''
+                    val = str(v).strip() if v is not None else ''
+                    clean_row[k] = '' if val.lower() == 'nan' else val
 
-                if not clean_row.get('name'):
-                    print(f"Row {row_number} Skipped: 'name' column is empty. Data: {clean_row}")
+                name = clean_row.get('name')
+                if not name:
+                    continue  # Skip blank rows safely
+
+                terr_name = clean_row.get('territory_name')
+                if not terr_name:
+                    error_count += 1
+                    error_messages.append(f"Row {row_number}: 'territory_name' is blank.")
                     continue
 
-                try:
-                    terr_name = clean_row.get('territory_name')
-                    # FIX: Company specific fetch
-                    terr_obj = Territory.objects.filter(company=request.user.employee.company, name__iexact=terr_name).first() if terr_name else None
-                    
-                    if not terr_obj:
-                        print(f"Row {row_number} Error: Territory '{terr_name}' database mein nahi mili.")
+                terr_obj = Territory.objects.filter(company=emp_obj.company, name__iexact=terr_name).first()
+                if not terr_obj:
+                    error_count += 1
+                    error_messages.append(f"Row {row_number}: Territory '{terr_name}' not found in system.")
+                    continue
+
+                route_name = clean_row.get('route_name')
+                route_obj = None
+                if route_name:
+                    route_obj = Route.objects.filter(name__iexact=route_name, territory=terr_obj).first()
+                    if not route_obj:
                         error_count += 1
+                        error_messages.append(f"Row {row_number}: Route '{route_name}' not found under Territory '{terr_name}'.")
                         continue
 
-                    route_name = clean_row.get('route_name')
-                    # 🌟 FIX: Route ko sirf naam se nahi, terr_obj ke andar hi dhoondo —
-                    # warna 2 territories me same naam ka route hone par galat territory
-                    # ka route silently link ho sakta tha (bina crash/error ke).
-                    route_obj = Route.objects.filter(name__iexact=route_name, territory=terr_obj).first() if route_name else None
-
+                try:
                     if upload_type == 'doctor':
                         Doctor.objects.create(
                             company=emp_obj.company,
-                            name=clean_row.get('name', ''),
-                            specialty=clean_row.get('specialty', 'General') or 'General',
+                            name=name,
+                            specialty=clean_row.get('specialty') or 'General',
                             mobile=clean_row.get('mobile', ''),
-                            category=clean_row.get('category', 'Core') or 'Core',
+                            category=clean_row.get('category') or 'Core',
                             degree=clean_row.get('degree', ''),
                             address=clean_row.get('address', ''),
                             territory=terr_obj,
@@ -962,7 +965,7 @@ def bulk_network_upload_view(request):
                     elif upload_type == 'chemist':
                         Chemist.objects.create(
                             company=emp_obj.company,
-                            name=clean_row.get('name', ''),
+                            name=name,
                             phone=clean_row.get('phone', ''),
                             territory=terr_obj,
                             route=route_obj,
@@ -970,20 +973,29 @@ def bulk_network_upload_view(request):
                         )
                     success_count += 1
                 except Exception as e:
-                    print(f"Row {row_number} Exception: {e} | Data: {clean_row}")
                     error_count += 1
+                    error_messages.append(f"Row {row_number}: Database Error - {str(e)}")
 
-            messages.success(request, f"✅ Upload Complete! {success_count} records assigned to {emp_obj.name}. ({error_count} errors)")
+            # Final Success/Error Messages
+            if success_count > 0:
+                messages.success(request, f"✅ Upload Complete! {success_count} records assigned to {emp_obj.name}.")
+            
+            if error_count > 0:
+                messages.error(request, f"❌ {error_count} records failed to upload.")
+                # Show top 5 errors so user knows what to fix in excel/database
+                for err in error_messages[:5]:
+                    messages.warning(request, err)
+                if len(error_messages) > 5:
+                    messages.warning(request, f"...and {len(error_messages) - 5} more similar errors.")
+
             return redirect('bulk_network_upload')
 
         except Exception as e:
-            if "list index out of range" in str(e):
-                messages.error(request, "❌ File Formatting Error! Your Excel file is internally corrupt. Please use a CSV file or paste into a new sheet.")
-            else:
-                messages.error(request, f"❌ File processing error: {e}")
+            messages.error(request, f"❌ File processing error: {e}")
             return redirect('bulk_network_upload')
 
     return render(request, 'bulk_upload_network.html', {'employees': employees})
+
 
 @employee_required
 def promo_dispatch_view(request, employee):
