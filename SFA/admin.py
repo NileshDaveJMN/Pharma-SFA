@@ -185,17 +185,21 @@ class StockistAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
 
 @admin.register(Chemist)
 class ChemistAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
-    list_display = ('name', 'territory', 'route', 'allocated_to', 'status')
-    list_filter = ('territory', 'route', 'status')
+    # 🌟 DEBUG FIX: 'company' column + filter add kiya taaki blank-company
+    # records shell ke bina hi list view me pakde ja sakein
+    list_display = ('name', 'company', 'territory', 'route', 'allocated_to', 'status')
+    list_filter = ('company', 'territory', 'route', 'status')
     search_fields = ('name', 'phone')
-    def get_queryset(self, request): return super().get_queryset(request).select_related('territory', 'route', 'allocated_to')
+    def get_queryset(self, request): return super().get_queryset(request).select_related('company', 'territory', 'route', 'allocated_to')
 
 @admin.register(Doctor)
 class DoctorAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
-    list_display = ('name', 'specialty', 'territory', 'route', 'allocated_to', 'status')
-    list_filter = ('territory', 'route', 'specialty', 'status')
+    # 🌟 DEBUG FIX: 'company' column + filter add kiya taaki blank-company
+    # records shell ke bina hi list view me pakde ja sakein
+    list_display = ('name', 'company', 'specialty', 'territory', 'route', 'allocated_to', 'status')
+    list_filter = ('company', 'territory', 'route', 'specialty', 'status')
     search_fields = ('name', 'specialty')
-    def get_queryset(self, request): return super().get_queryset(request).select_related('territory', 'route', 'allocated_to')
+    def get_queryset(self, request): return super().get_queryset(request).select_related('company', 'territory', 'route', 'allocated_to')
 
 @admin.register(Product)
 class ProductAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
@@ -435,6 +439,16 @@ from .models import FieldEvent, EventPhoto, EventLike, EventComment
 class EventPhotoInline(admin.TabularInline):
     model = EventPhoto
     extra = 1  # Event ke andar hi photo upload/dekhne ka option mil jayega
+    readonly_fields = ('photo_preview',)
+
+    # 🌟 DEBUG FIX: Actual saved image yahan dikhegi (agar Cloudinary URL
+    # broken hai toh ye <img> bhi broken dikhega — turant pata chal jayega)
+    def photo_preview(self, obj):
+        from django.utils.html import format_html
+        if obj.photo:
+            return format_html('<img src="{}" style="max-height:80px;" />', obj.photo.url)
+        return "(no file)"
+    photo_preview.short_description = "Preview"
 
 @admin.register(FieldEvent)
 class FieldEventAdmin(admin.ModelAdmin):
@@ -443,6 +457,14 @@ class FieldEventAdmin(admin.ModelAdmin):
     search_fields = ('subject', 'employee__name', 'description')
     inlines = [EventPhotoInline] # Event ke page par hi uski photos dikhengi
     list_editable = ('is_shared_in_community',) # Admin direct bahar se hi post ko hide/show kar payega
+
+@admin.register(EventPhoto)
+class EventPhotoAdmin(admin.ModelAdmin):
+    # 🌟 DEBUG FIX: Standalone list jisme har photo ka raw saved path/URL
+    # text me dikhega — bina shell ke confirm ho jayega Cloudinary pe gayi ya nahi
+    list_display = ('event', 'photo', 'uploaded_at')
+    search_fields = ('event__subject',)
+    list_filter = ('uploaded_at',)
 
 @admin.register(EventLike)
 class EventLikeAdmin(admin.ModelAdmin):
