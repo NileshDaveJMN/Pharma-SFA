@@ -871,7 +871,6 @@ def bulk_network_upload_view(request):
         upload_type = request.POST.get('upload_type')
         selected_emp_id = request.POST.get('employee_id')
         
-        # CSV ya Excel file receive karein
         uploaded_file = request.FILES.get('upload_file') or request.FILES.get('csv_file')
 
         if not uploaded_file or not selected_emp_id:
@@ -884,9 +883,7 @@ def bulk_network_upload_view(request):
         headers = []
 
         try:
-            # ==========================================
-            # 🌟 MULTI-SHEET READER (EXCEL + CSV) [OOM FIXED]
-            # ==========================================
+            # 1. READ FILE
             if file_name.endswith('.csv'):
                 file_data = uploaded_file.read().decode('utf-8-sig')
                 io_string = io.StringIO(file_data)
@@ -899,29 +896,19 @@ def bulk_network_upload_view(request):
                 rows = all_rows[1:]
             
             elif file_name.endswith(('.xlsx', '.xls')):
-                # 🚀 SPEED & MEMORY HACK: read_only=True se server crash nahi hoga
                 wb = openpyxl.load_workbook(uploaded_file, data_only=True, read_only=True)
-                
-                # Sabhi sheets ko ek sath scan karega
                 for sheet_name in wb.sheetnames:
                     sheet = wb[sheet_name]
                     is_first_row = True
-                    
-                    # iter_rows loop se hum memory mein sab ek sath save nahi karte
                     for row in sheet.iter_rows(values_only=True):
-                        # Agar poori row khali (None) hai (Ghost Rows), toh skip karo
-                        if not any(row):
-                            continue
-                            
+                        if not any(row): continue
                         if is_first_row:
                             if not headers:
                                 headers = [str(h).strip().lower().replace(' ', '_') for h in row if h]
                             is_first_row = False
                         else:
                             rows.append(row)
-                
-                wb.close() # 🧹 Memory ko free kar do
-                        
+                wb.close()
                 if not rows:
                     messages.error(request, "❌ The Excel file is empty across all sheets.")
                     return redirect('bulk_network_upload')
@@ -929,86 +916,98 @@ def bulk_network_upload_view(request):
                 messages.error(request, "❌ Please upload only a .csv or .xlsx file.")
                 return redirect('bulk_network_upload')
 
-            success_count = 0
             error_count = 0
             error_messages = []
+            
+            # ==========================================
+            # 🚀 SUPER FAST CACHING (0 DB Queries in Loop)
+            # ==========================================
+            terr_cache = {t.name.strip().lower(): t for t in Territory.objects.filter(company=emp_obj.company)}
+            route_cache = {f"{r.territory_id}_{r.name.strip().lower()}": r for r in Route.objects.filter(territory__company=emp_obj.company)}
+
+            objects_to_create = []
 
             for row_number, row_data in enumerate(rows, start=2):
                 row_data = list(row_data) + [''] * (len(headers) - len(row_data))
                 clean_row = dict(zip(headers, row_data))
                 
-                # 🌟 EXTREME CLEANUP (Spaces and 'nan' removal)
                 for k, v in clean_row.items():
                     val = str(v).strip() if v is not None else ''
                     clean_row[k] = '' if val.lower() == 'nan' else val
 
                 name = clean_row.get('name')
                 if not name:
-                    continue  # Blank row ignore karein
+                    continue 
 
-                # ==========================================
-                # 🌟 CASE-INSENSITIVE MATCHING LOGIC
-                # ==========================================
-                terr_name = clean_row.get('territory_name', '')
+                terr_name = clean_row.get('territory_name', '').strip().lower()
                 if not terr_name:
                     error_count += 1
                     error_messages.append(f"Row {row_number}: 'territory_name' is blank.")
                     continue
 
-                # 'iexact' capital ya small letters ka farq khatam kar deta hai
-                terr_obj = Territory.objects.filter(company=emp_obj.company, name__iexact=terr_name).first()
+                terr_obj = terr_cache.get(terr_name)
                 if not terr_obj:
                     error_count += 1
-                    error_messages.append(f"Row {row_number}: Territory '{terr_name}' not found in system.")
+                    error_messages.append(f"Row {row_number}: Territory '{clean_row.get('territory_name')}' not found.")
                     continue
 
-                route_name = clean_row.get('route_name', '')
+                route_name = clean_row.get('route_name', '').strip().lower()
                 route_obj = None
                 if route_name:
-                    # Yahan bhi 'iexact' use hua hai Route name ke liye
-                    route_obj = Route.objects.filter(name__iexact=route_name, territory=terr_obj).first()
+                    cache_key = f"{terr_obj.id}_{route_name}"
+                    route_obj = route_cache.get(cache_key)
                     if not route_obj:
                         error_count += 1
-                        error_messages.append(f"Row {row_number}: Route '{route_name}' not found under Territory '{terr_obj.name}'.")
+                        error_messages.append(f"Row {row_number}: Route '{clean_row.get('route_name')}' not found under Territory '{terr_obj.name}'.")
                         continue
 
-                # ==========================================
-                # 🌟 DATABASE SAVE LOGIC (With Safety Fixes)
-                # ==========================================
                 try:
                     if upload_type == 'doctor':
-                        Doctor.objects.create(
+                        doc = Doctor(
                             company=emp_obj.company,
                             name=name,
-                            specialty=clean_row.get('specialty') or 'General',
-                            mobile=clean_row.get('mobile', '').split('.')[0], # .0 hata dega
-                            category=(clean_row.get('category') or 'C')[:1].upper(), # A+ ko A karega aur limit 1 rakhega
-                            degree=clean_row.get('degree', ''),
+                            specialty=(clean_row.get('specialty') or 'General')[:50],
+                            mobile=clean_row.get('mobile', '').split('.')[0][:15], # Removes .0 & limit to 15
+                            category=(clean_row.get('category') or 'C')[:1].upper(), 
+                            degree=clean_row.get('degree', '')[:50],
                             address=clean_row.get('address', ''),
                             territory=terr_obj,
                             route=route_obj,
-                            allocated_to=emp_obj
+                            allocated_to=emp_obj,
+                            status='Approved'
                         )
+                        objects_to_create.append(doc)
                     elif upload_type == 'chemist':
-                        Chemist.objects.create(
+                        chem = Chemist(
                             company=emp_obj.company,
                             name=name,
-                            phone=clean_row.get('phone', '').split('.')[0], # .0 hata dega
+                            phone=clean_row.get('phone', '').split('.')[0][:15],
                             territory=terr_obj,
                             route=route_obj,
-                            allocated_to=emp_obj
+                            allocated_to=emp_obj,
+                            status='Approved'
                         )
-                    success_count += 1
+                        objects_to_create.append(chem)
                 except Exception as e:
                     error_count += 1
-                    error_messages.append(f"Row {row_number}: Database Error - {str(e)}")
+                    error_messages.append(f"Row {row_number}: Data Format Error - {str(e)}")
+
+            # ==========================================
+            # 🚀 BULK CREATE (Saves 700+ rows in 1 query)
+            # ==========================================
+            if objects_to_create:
+                if upload_type == 'doctor':
+                    Doctor.objects.bulk_create(objects_to_create, batch_size=500)
+                elif upload_type == 'chemist':
+                    Chemist.objects.bulk_create(objects_to_create, batch_size=500)
+            
+            success_count = len(objects_to_create)
 
             if success_count > 0:
-                messages.success(request, f"✅ Upload Complete! {success_count} records assigned to {emp_obj.name}.")
+                messages.success(request, f"✅ Upload Complete! {success_count} records saved instantly for {emp_obj.name}.")
             
             if error_count > 0:
-                messages.error(request, f"❌ {error_count} records failed to upload.")
-                # Show top 5 errors with exact reasons
+                messages.error(request, f"❌ {error_count} records skipped due to errors.")
                 for err in error_messages[:5]:
                     messages.warning(request, err)
                 if len(error_messages) > 5:
@@ -1021,7 +1020,6 @@ def bulk_network_upload_view(request):
             return redirect('bulk_network_upload')
 
     return render(request, 'bulk_upload_network.html', {'employees': employees})
-
 @employee_required
 def promo_dispatch_view(request, employee):
     if employee.designation not in ['Admin', 'System Administrator']:
