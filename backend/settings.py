@@ -9,6 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-bp2j)=s!f#fa+o87vwk5)moam%bl5dp_n)j53ewoo+&+8-@1-h'
 
+# 🌟 FIX: Local (Pydroid) par True, Render par False (Environment variable se)
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = ['*']
@@ -20,9 +21,9 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'cloudinary_storage', # Cloudinary storage yahan aayega
+    'cloudinary_storage',  # Cloudinary storage yahan aayega (staticfiles se upar)
     'django.contrib.staticfiles',
-    'cloudinary',
+    'cloudinary',          # Cloudinary app yahan aayegi
     'rest_framework',
     'rest_framework.authtoken',
     'SFA',
@@ -101,7 +102,11 @@ CLOUDINARY_STORAGE = {
     'API_SECRET': os.environ.get('CLOUDINARY_API_SECRET', ''),
 }
 
-# 🌟 FIX: Django 4.2+ uses STORAGES dictionary to handle Cloudinary
+# 🌟 FIX: Cloudinary package crash rokne ke liye purane variables define karna zaroori hai
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+
+# Django 4.2+ Storage System
 STORAGES = {
     "default": {
         "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
