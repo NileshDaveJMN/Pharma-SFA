@@ -2,7 +2,43 @@
 {% block content %}
 <div class="container mt-3 mb-5 pb-5">
     <h4 class="mb-3">📸 All Events Report</h4>
-    
+
+    <!-- 🎛️ FILTERS: Employee (managers only) + Month/Year (auto-submit) -->
+    <div class="card border-0 shadow-sm mb-3 bg-white" style="border-radius: 8px;">
+        <div class="card-body p-2">
+            <form method="GET" class="row g-2 align-items-end">
+                {% if is_manager_view %}
+                <div class="col-12">
+                    <label class="small fw-bold text-secondary mb-1">Employee</label>
+                    <select name="employee_id" class="form-select form-select-sm fw-bold" onchange="this.form.submit()">
+                        <option value="">👤 Select Employee...</option>
+                        {% for temp in team_employees %}
+                            <option value="{{ temp.id }}" {% if selected_emp_id == temp.id %}selected{% endif %}>{{ temp.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                <div class="col-6">
+                    <label class="small fw-bold text-secondary mb-1">Month</label>
+                    <select name="month" class="form-select form-select-sm fw-bold" onchange="this.form.submit()">
+                        {% for m_num, m_name in months_choices %}
+                            <option value="{{ m_num }}" {% if selected_month == m_num %}selected{% endif %}>{{ m_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-6">
+                    <label class="small fw-bold text-secondary mb-1">Year</label>
+                    <input type="number" name="year" value="{{ selected_year }}" class="form-control form-control-sm fw-bold text-center" onchange="this.form.submit()">
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if is_manager_view and not selected_emp_id %}
+    <div class="alert alert-info text-center shadow-sm" style="border-radius: 12px;">
+        👆 Events dekhne ke liye upar se employee select karo.
+    </div>
+    {% else %}
     {% for event in events %}
     <div class="card shadow-sm mb-3 border-0" style="border-radius: 12px;">
         <div class="card-body">
@@ -19,9 +55,9 @@
             {% endif %}
             
             {% if event.is_shared_in_community %}
-                <span class="badge badge-success"><i class="fa fa-globe"></i> Shared in Community</span>
+                <span class="badge bg-success text-white"><i class="fa fa-globe"></i> Shared in Community</span>
             {% else %}
-                <span class="badge badge-secondary"><i class="fa fa-lock"></i> Private (Not Shared)</span>
+                <span class="badge bg-secondary text-white"><i class="fa fa-lock"></i> Private (Not Shared)</span>
             {% endif %}
              {% if not event.is_shared_in_community and event.employee == request.user.employee %}
             <div class="mt-2">
@@ -50,8 +86,9 @@
     </div>
     {% empty %}
     <div class="alert alert-info text-center shadow-sm" style="border-radius: 12px;">
-        No events found for your team.
+        Is mahine me koi event nahi mila.
     </div>
     {% endfor %}
+    {% endif %}
 </div>
 {% endblock %}

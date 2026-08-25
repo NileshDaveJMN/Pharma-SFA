@@ -127,6 +127,10 @@ def share_event_from_report(request, event_id):
     messages.success(request, "Event shared to Community Wall successfully! 🎉")
     return redirect('event_report')
 from SFA.services.team import get_full_team_employees
+import calendar
+from django.utils import timezone
+
+MONTHS_CHOICES = [(i, calendar.month_name[i]) for i in range(1, 13)]
 
 # ==============================================================================
 # 📸 5. EVENT REPORT (Reports Hub)
@@ -134,13 +138,58 @@ from SFA.services.team import get_full_team_employees
 @login_required
 def event_report(request):
     emp = request.user.employee
-    # Manager hai toh uski poori team, MR hai toh sirf uski events
+    # Manager hai toh uski poori team (khud + subordinates), MR hai toh sirf khud
     team_emps = get_full_team_employees(emp)
-    
-    # Isme shared aur unshared dono aayengi
-    events = FieldEvent.objects.filter(employee__in=team_emps).select_related('employee', 'territory', 'doctor', 'chemist').order_by('-event_date', '-created_at')
-    
-    return render(request, 'event_report.html', {'events': events})
+    is_manager_view = team_emps.count() > 1
+
+    # 🌟 Month/Year filter — DEFAULT current month.
+    # Ye zaroori hai: bina filter ke saara history load hoga, aur 1-2 saal
+    # baad events/photos badhne par ye page bahut heavy ho jayega / server
+    # crash kara sakta hai. Month-wise filter se hamesha ek bounded query rahegi.
+    today = timezone.now().date()
+    try:
+        selected_month = int(request.GET.get('month', today.month))
+    except (TypeError, ValueError):
+        selected_month = today.month
+    try:
+        selected_year = int(request.GET.get('year', today.year))
+    except (TypeError, ValueError):
+        selected_year = today.year
+
+    if is_manager_view:
+        # Manager ko pehle apna MR select karna hoga — tabhi query chalegi.
+        raw_emp_id = request.GET.get('employee_id')
+        selected_emp_id = int(raw_emp_id) if raw_emp_id else None
+        if selected_emp_id:
+            events = FieldEvent.objects.filter(
+                employee_id=selected_emp_id,
+                event_date__year=selected_year,
+                event_date__month=selected_month,
+            )
+        else:
+            events = FieldEvent.objects.none()
+    else:
+        # MR khud — apna hi data, employee select karne ki zarurat nahi.
+        selected_emp_id = emp.id
+        events = FieldEvent.objects.filter(
+            employee_id=emp.id,
+            event_date__year=selected_year,
+            event_date__month=selected_month,
+        )
+
+    events = events.select_related('employee', 'territory', 'doctor', 'chemist') \
+                    .prefetch_related('photos') \
+                    .order_by('-event_date', '-created_at')
+
+    return render(request, 'event_report.html', {
+        'events': events,
+        'is_manager_view': is_manager_view,
+        'team_employees': team_emps,
+        'selected_emp_id': selected_emp_id,
+        'selected_month': selected_month,
+        'selected_year': selected_year,
+        'months_choices': MONTHS_CHOICES,
+    })
 
 # ==============================================================================
 # 🚀 6. SHARE EVENT FROM REPORT
