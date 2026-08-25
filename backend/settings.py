@@ -9,7 +9,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-bp2j)=s!f#fa+o87vwk5)moam%bl5dp_n)j53ewoo+&+8-@1-h'
 
-# 🌟 FIX: Local (Pydroid) par True, Render par False (Environment variable se)
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = ['*']
@@ -21,8 +20,8 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'cloudinary_storage', # Cloudinary storage yahan aayega
     'django.contrib.staticfiles',
-    'cloudinary_storage',
     'cloudinary',
     'rest_framework',
     'rest_framework.authtoken',
@@ -93,9 +92,19 @@ REST_FRAMEWORK = {
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
+# ==============================================================================
+# ☁️ CLOUDINARY CLOUD STORAGE SETUP
+# ==============================================================================
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': os.environ.get('CLOUDINARY_CLOUD_NAME', ''),
+    'API_KEY': os.environ.get('CLOUDINARY_API_KEY', ''),
+    'API_SECRET': os.environ.get('CLOUDINARY_API_SECRET', ''),
+}
+
+# 🌟 FIX: Django 4.2+ uses STORAGES dictionary to handle Cloudinary
 STORAGES = {
     "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
     },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
@@ -123,17 +132,3 @@ SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 1209600
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-
-import os # Agar file ke upar os import nahi hai toh isko rehne dein
-
-# ==============================================================================
-# ☁️ CLOUDINARY CLOUD STORAGE SETUP
-# ==============================================================================
-CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': os.getenv('CLOUDINARY_CLOUD_NAME'),
-    'API_KEY': os.getenv('CLOUDINARY_API_KEY'),
-    'API_SECRET': os.getenv('CLOUDINARY_API_SECRET'),
-}
-
-# Django ko batana ki saari photos ab yahan save hongi
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
