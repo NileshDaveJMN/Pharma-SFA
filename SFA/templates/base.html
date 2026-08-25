@@ -151,9 +151,8 @@
             </span>Inbox
         </a>
 <!-- Community Icon (Inbox ke paas) -->
-<a href="{% url 'community_feed' %}" class="text-decoration-none text-center text-secondary flex-fill" style="min-width: 16%;">
-    <h5 class="mb-0" style="font-size: 1.4rem; line-height: 1;">🌐</h5>
-    <span class="font-weight-bold" style="font-size: 10px;">Feed</span>
+<a href="{% url 'community_feed' %}" class="nav-item {% if request.resolver_match.url_name == 'community_feed' %}active{% endif %}">
+    <span class="nav-icon">🌐</span>Feed
 </a>
 
         <a href="{% url 'profile' %}" class="nav-item {% if request.resolver_match.url_name == 'profile' %}active{% endif %}">
