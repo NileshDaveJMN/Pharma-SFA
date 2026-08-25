@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from SFA.models import FieldEvent, EventPhoto, EventLike, EventComment, Territory
 from django.core.paginator import Paginator
 from SFA.models import FieldEvent, EventPhoto, EventLike, EventComment, Territory, Doctor, Chemist, Employee
-from django.db.models import Count
+from django.db.models import Count, Q
 from SFA.models import Employee # Agar Employee import nahi hai toh kar lijiye
 
 # ==============================================================================
@@ -18,16 +18,26 @@ def community_feed(request):
     event_list = FieldEvent.objects.filter(is_shared_in_community=True).select_related('employee', 'territory', 'doctor', 'chemist').order_by('-created_at')
     
     # 🌟 PAGINATION LOGIC: Ek baar mein sirf 15 events
-    paginator = Paginator(event_list, 15) 
+    paginator = Paginator(event_list, 10)  # 🌟 10 latest posts per page — bade data (lakhs events) pe bhi query bounded rahegi
     page_number = request.GET.get('page')
     events = paginator.get_page(page_number)
     
     for ev in events:
         ev.is_liked_by_me = ev.likes.filter(employee=emp).exists()
         
-    # Leaderboard (Top 5)
+    # 🌟 Leaderboard (Top 5) — MONTHLY, current month tak hi scoped.
+    # Har naye mahine ye apne aap current month ke data pe shift ho jayega —
+    # total events history kitni bhi badh jaaye, ye query hamesha
+    # ek mahine tak bounded rahegi.
+    today = timezone.now().date()
     leaderboard = Employee.objects.annotate(
-        total_events=Count('field_events')
+        total_events=Count(
+            'field_events',
+            filter=Q(
+                field_events__created_at__year=today.year,
+                field_events__created_at__month=today.month,
+            )
+        )
     ).filter(total_events__gt=0).order_by('-total_events')[:5]
         
     return render(request, 'community_feed.html', {
