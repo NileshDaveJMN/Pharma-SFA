@@ -107,46 +107,69 @@ def compress_photo(uploaded_file):
         return uploaded_file
 
 def sync_dcr_calendar(employee):
-    """Bina Cron Job ke har baar Calendar Sync aur Auto-Block karega"""
+    """🚀 SPEED OPTIMIZED: Bina loop me database hit kiye Calendar Sync"""
     today = timezone.localdate()
     setting = SystemSetting.objects.filter(company=employee.company).first()
     lock_days = setting.dcr_lock_days if setting else 3
 
-    # 1. Calendar auto-fill — joining_date se pehle ka kabhi nahi banega (max 15 din peeche)
     start_date = max(employee.joining_date, today - timedelta(days=60))
+    
+    # 1. Sirf ek query se pichle 60 din ke status fetch kar lo
+    existing_dates = set(DailyDCRStatus.objects.filter(
+        employee=employee, date__gte=start_date, date__lte=today
+    ).values_list('date', flat=True))
+
+    # Missing dates pata karo (Jinki status entry nahi bani)
+    missing_dates = []
     d = start_date
     while d <= today:
-        status_obj, created = DailyDCRStatus.objects.get_or_create(employee=employee, date=d)
-
-        if created:
-            # Agar Sunday hai ya Holiday hai toh default band (False) rakho
-            if d.weekday() == 6:  # 6 means Sunday
-                status_obj.day_type = 'Sunday'
-                status_obj.is_open = False
-            elif Holiday.objects.filter(company=employee.company, date=d, status='Approved').exists():  # 🌟 FIX: company-scoped
-                status_obj.day_type = 'Holiday'
-                status_obj.is_open = False
-            elif LeaveApplication.objects.filter(employee=employee, status='Approved', start_date__lte=d, end_date__gte=d).exists():
-                status_obj.day_type = 'Leave'
-                status_obj.is_open = False
-            status_obj.save()
+        if d not in existing_dates:
+            missing_dates.append(d)
         d += timedelta(days=1)
 
-    # 2. EXPIRED ADMIN-UNLOCK ko wapas reset karo (1-din ki validity khatam ho gayi)
-    #    (unlocked_until__isnull=True bhi pakdega — purane migration-se-pehle ke unlock records)
+    # 2. Agar koi nayi date banani hai, tabhi aage ka kaam karo (Warna skip)
+    if missing_dates:
+        # Pre-fetch Holidays & Leaves (Loop ke bahar!)
+        holidays = set(Holiday.objects.filter(company=employee.company, date__in=missing_dates, status='Approved').values_list('date', flat=True))
+        
+        leaves = LeaveApplication.objects.filter(employee=employee, status='Approved', start_date__lte=today, end_date__gte=start_date)
+        leave_dates = set()
+        for l in leaves:
+            curr = max(l.start_date, start_date)
+            end = min(l.end_date, today)
+            while curr <= end:
+                leave_dates.add(curr)
+                curr += timedelta(days=1)
+
+        new_statuses = []
+        for d in missing_dates:
+            day_type, is_open = 'Working', True
+            if d.weekday() == 6:
+                day_type, is_open = 'Sunday', False
+            elif d in holidays:
+                day_type, is_open = 'Holiday', False
+            elif d in leave_dates:
+                day_type, is_open = 'Leave', False
+                
+            new_statuses.append(DailyDCRStatus(
+                employee=employee, date=d, day_type=day_type, is_open=is_open
+            ))
+        
+        # Ek sath database mein dal do (1 Query)
+        if new_statuses:
+            DailyDCRStatus.objects.bulk_create(new_statuses)
+
+    # 3. EXPIRED ADMIN-UNLOCK ko wapas reset karo
     DailyDCRStatus.objects.filter(
         employee=employee, is_admin_unlocked=True
     ).filter(
         Q(unlocked_until__lt=today) | Q(unlocked_until__isnull=True)
     ).update(is_admin_unlocked=False, unlocked_until=None)
 
-    # 3. THE AUTO-BLOCKER (lock_days se purani khuli dates ko band karna)
+    # 4. THE AUTO-BLOCKER
     cutoff_date = today - timedelta(days=lock_days)
     DailyDCRStatus.objects.filter(
-        employee=employee, 
-        date__lt=cutoff_date, 
-        is_open=True, 
-        is_admin_unlocked=False # Admin override ko nahi chhuiga
+        employee=employee, date__lt=cutoff_date, is_open=True, is_admin_unlocked=False
     ).update(is_open=False)
 
 
