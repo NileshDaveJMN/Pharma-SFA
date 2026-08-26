@@ -1,10 +1,11 @@
 import json
+from datetime import datetime
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
-from SFA.models import Stockist, Product, PrimarySale
+from SFA.models import Stockist, Product, PrimarySale, StockistProductStatement
 
 # ==============================================================================
 # 📦 MR PRIMARY SALE ENTRY (Cart / Bulk Upload Mode)
@@ -19,9 +20,8 @@ def mr_primary_sale_entry(request):
 
     if request.method == 'POST':
         try:
-            # 🌟 NAYA: JavaScript se aane wale JSON data ko read karna
             data = json.loads(request.body)
-            date = data.get('date')
+            date_str = data.get('date')
             stockist_id = data.get('stockist')
             batch_number = data.get('batch_number', 'N/A')
             items = data.get('items', [])
@@ -30,20 +30,34 @@ def mr_primary_sale_entry(request):
                 return JsonResponse({'status': 'error', 'message': 'No products added to the invoice!'})
 
             stockist = get_object_or_404(Stockist, id=stockist_id, company=emp.company)
+            
+            # String date ko datetime object mein convert karein
+            sale_date = datetime.strptime(date_str, '%Y-%m-%d').date()
 
-            # 🌟 BULK SAVE: Ek loop chala kar saare products save karna
+            # 🌟 BULK SAVE: Products save karein aur Statement Update karein
             for item in items:
                 product = get_object_or_404(Product, id=item['product_id'], company=emp.company)
+                billed_qty = int(item['quantity'])
+                free_qty = int(item['free_qty'])
+                
+                # 1. Primary Sale Record banayein
                 PrimarySale.objects.create(
-                    date=date,
+                    date=sale_date,
                     stockist=stockist,
                     product=product,
-                    quantity=int(item['quantity']),
-                    free_quantity=int(item['free_qty']),
+                    quantity=billed_qty,
+                    free_quantity=free_qty,
                     batch_number=batch_number
                 )
+                
+                # 2. 🌟 FIX: Monthly Statement (Inventory) update karein
+                stat, _ = StockistProductStatement.objects.get_or_create(
+                    employee=emp, stockist=stockist, product=product, 
+                    month=sale_date.month, year=sale_date.year
+                )
+                stat.received_qty += (billed_qty + free_qty)
+                stat.save()
             
-            # Message session mein daal kar success response bhejna
             messages.success(request, f"✅ Invoice with {len(items)} products uploaded successfully for {stockist.name}!")
             return JsonResponse({'status': 'success'})
 
