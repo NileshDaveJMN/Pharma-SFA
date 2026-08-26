@@ -2,11 +2,11 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from django.db.models import Count
-from SFA.models import FieldEvent, EventPhoto, EventLike, EventComment, Employee
+from django.db.models import Count, Q
+from django.utils import timezone
 from django.core.paginator import Paginator
-from SFA.services.team import get_full_team_employees
 from SFA.models import FieldEvent, EventPhoto, EventLike, EventComment, Employee, Doctor, Chemist, Territory
+from SFA.services.team import get_full_team_employees
 
 # ==============================================================================
 # 📢 1. GET COMMUNITY FEED & LEADERBOARD (Flutter)
@@ -42,8 +42,16 @@ def api_community_feed(request):
             } for c in ev.comments.all().order_by('-created_at')]
         })
         
+    # 🌟 LEADERBOARD LOGIC (CURRENT MONTH ONLY)
+    today = timezone.now().date()
     leaderboard_qs = Employee.objects.annotate(
-        total_events=Count('field_events')
+        total_events=Count(
+            'field_events',
+            filter=Q(
+                field_events__created_at__year=today.year,
+                field_events__created_at__month=today.month,
+            )
+        )
     ).filter(total_events__gt=0).order_by('-total_events')[:5]
     
     leaderboard_data = [{'name': e.name, 'events_count': e.total_events} for e in leaderboard_qs]
@@ -56,6 +64,7 @@ def api_community_feed(request):
         'current_page': events.number,
         'total_pages': paginator.num_pages
     })
+
 # ==============================================================================
 # 📸 2. GET EVENT REPORT (Private + Public for Team)
 # ==============================================================================
@@ -99,9 +108,6 @@ def api_share_event(request):
     
     return Response({'message': 'Event successfully shared to Community Wall!'})
 
-# ==============================================================================
-# 📝 4. CREATE NEW EVENT (MR field se event aur photos banayega)
-# ==============================================================================
 # ==============================================================================
 # 📝 4. CREATE NEW EVENT (MR field se event aur photos banayega)
 # ==============================================================================

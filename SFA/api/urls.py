@@ -12,6 +12,7 @@ from SFA.api import sales as sales_api
 from SFA.api import expenses as expenses_api
 from SFA.api import reports as reports_api
 from SFA.api import messaging # 🌟 Naya Messaging Import
+from SFA.api import mr_sale as mr_sale_api # 🌟 Naya MR Primary Sale Import
 
 # ── Specific Endpoint Imports ─────────────────────────────────────────────────
 from SFA.api.masters import api_add_route
@@ -88,6 +89,10 @@ urlpatterns = [
     path('sales/targets/',                   sales_api.api_target_setting,       name='api_target_setting'),
     path('gift-campaign/',                   sales_api.api_gift_campaign,        name='api_gift_campaign'),
 
+    # ── 🌟 Primary Sales (MR Cart System) ─────────────────────────────────────
+    path('primary_sale/init_data/', mr_sale_api.api_get_primary_sale_data, name='api_get_primary_sale_data'),
+    path('primary_sale_entry/',     mr_sale_api.api_submit_primary_sale,   name='api_submit_primary_sale'),
+
     # ── Expenses ──────────────────────────────────────────────────────────────
     path('expenses/',                          expenses_api.api_expense_list,   name='api_expense_list'),
     path('expenses/<int:report_id>/',          expenses_api.api_expense_detail, name='api_expense_detail'),
@@ -138,6 +143,7 @@ urlpatterns = [
     path('stock/detail/',                get_weekly_sale_detail, name='api_weekly_sale_detail'),
     path('stock/history/',               weekly_sale_history,   name='api_weekly_sale_history'),
     path('stock/manage-focus-products/', api_rsm_manage_focus_products, name='api_manage_focus_products'),
+    
     # ── Community & Events ────────────────────────────────────────────────────
     path('community/feed/',    community_api.api_community_feed, name='api_community_feed'),
     path('community/create/',  community_api.api_create_event,   name='api_create_event'),
