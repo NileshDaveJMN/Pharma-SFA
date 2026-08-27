@@ -72,7 +72,7 @@ def api_community_feed(request):
     })
 
 # ==============================================================================
-# 📸 2. GET EVENT REPORT (Webapp Logic Matched)
+# 📸 2. GET EVENT REPORT (Webapp Logic + Dropdown Team Matched)
 # ==============================================================================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -81,7 +81,11 @@ def api_event_report(request):
     team_emps = get_full_team_employees(emp)
     is_manager_view = team_emps.count() > 1
 
-    # Webapp: Month/Year filter logic
+    # 🌟 DROPDOWN TEAM (Full hierarchy for ZBM/RBM - Dusre reports jaisa)
+    dropdown_qs = get_dropdown_team(emp, ordered=False)
+    dropdown_data = [{'id': e.id, 'name': e.name} for e in dropdown_qs]
+
+    # Month/Year filter logic
     today = timezone.now().date()
     try:
         selected_month = int(request.GET.get('month', today.month))
@@ -92,7 +96,6 @@ def api_event_report(request):
     except (TypeError, ValueError):
         selected_year = today.year
 
-    # Webapp: Manager vs MR filtering
     if is_manager_view:
         raw_emp_id = request.GET.get('employee_id')
         selected_emp_id = int(raw_emp_id) if raw_emp_id else None
@@ -112,14 +115,12 @@ def api_event_report(request):
             event_date__month=selected_month,
         )
 
-    # Webapp: select_related & prefetch_related('photos')
     events = events.select_related('employee', 'territory', 'doctor', 'chemist') \
                     .prefetch_related('photos') \
                     .order_by('-event_date', '-created_at')
     
     report_data = []
     for ev in events:
-        # 🌟 PHOTOS: Webapp ke 'ev.photos.all()' ke equal - Saari photos ki URLs
         photos_list = [p.photo.url for p in ev.photos.all()]
 
         report_data.append({
@@ -130,12 +131,15 @@ def api_event_report(request):
             'date': ev.event_date.strftime('%d %b %Y'),
             'is_shared': ev.is_shared_in_community,
             'description': ev.description or "",
-            'photos': photos_list, # 🌟 SAARI PHOTOS (Count nahi, Actual URLs)
+            'photos': photos_list,
             'can_share': not ev.is_shared_in_community and ev.employee == emp
         })
         
-    return Response(report_data)
-
+    # 🌟 AB EVENTS KE SATH SATH TEAM DROPDOWN BHI BHEJ RAHE HAIN
+    return Response({
+        'team_dropdown': dropdown_data,
+        'events': report_data
+    })
 # ==============================================================================
 # 🚀 3. SHARE PRIVATE EVENT TO COMMUNITY
 # ==============================================================================
