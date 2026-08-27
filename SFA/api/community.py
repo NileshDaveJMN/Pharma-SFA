@@ -72,7 +72,7 @@ def api_community_feed(request):
     })
 
 # ==============================================================================
-# 📸 2. GET EVENT REPORT (Webapp Logic + Dropdown Team Matched)
+# 📸 2. GET EVENT REPORT (Safe Version with Fallback)
 # ==============================================================================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -81,9 +81,15 @@ def api_event_report(request):
     team_emps = get_full_team_employees(emp)
     is_manager_view = team_emps.count() > 1
 
-    # 🌟 DROPDOWN TEAM (Full hierarchy for ZBM/RBM - Dusre reports jaisa)
-    dropdown_qs = get_dropdown_team(emp, ordered=False)
-    dropdown_data = [{'id': e.id, 'name': e.name} for e in dropdown_qs]
+    # 🌟 SAFE DROPDOWN LOGIC: Try-Except me wrap kiya taaki events load hona na ruke
+    dropdown_data = []
+    if is_manager_view:
+        try:
+            dropdown_qs = get_dropdown_team(emp, ordered=False)
+            dropdown_data = [{'id': e.id, 'name': e.name} for e in dropdown_qs]
+        except Exception as e:
+            # Agar dropdown me error aaye toh server crash nahi hoga, bas print karega
+            print(f"Team Dropdown Error: {e}") 
 
     # Month/Year filter logic
     today = timezone.now().date()
@@ -135,7 +141,7 @@ def api_event_report(request):
             'can_share': not ev.is_shared_in_community and ev.employee == emp
         })
         
-    # 🌟 AB EVENTS KE SATH SATH TEAM DROPDOWN BHI BHEJ RAHE HAIN
+    # Dropdown empty bhi ho sakti hai ab, lekin events aayenge
     return Response({
         'team_dropdown': dropdown_data,
         'events': report_data
