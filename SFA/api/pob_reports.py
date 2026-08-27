@@ -15,6 +15,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.http import HttpResponse
 
+# 🚀 NAYA: ExtractMonth aur Sum import kiya aggregation ke liye
+from django.db.models import Sum
+from django.db.models.functions import ExtractMonth
+
 from SFA.models import Employee, DCRProductDetail
 from SFA.services.team import get_dropdown_team, get_full_team_employees
 from .reports_helpers import _resolve_selected_employee, _employee_brief
@@ -43,39 +47,52 @@ def api_pob_report(request):
     target_team = get_full_team_employees(selected_emp)
     emp_ids = target_team.values_list('id', flat=True)
 
-    # Fetch DCR Details
+    # 🚀 OPTIMIZATION: Python mein sum karne ki jagah Database (SQL) se group aur sum karwaya
+    # Isse 1,00,000 raw rows ki jagah sirf kuch sau summarized rows aayengi
     details = DCRProductDetail.objects.filter(
         visit__daily_dcr__employee_id__in=emp_ids,
         visit__daily_dcr__date__year=selected_year,
         visit__daily_dcr__date__month__in=months_range
-    ).select_related('visit__daily_dcr__employee', 'product', 'visit__daily_dcr__employee__headquarter')
+    ).annotate(
+        month=ExtractMonth('visit__daily_dcr__date')
+    ).values(
+        'visit__daily_dcr__employee_id',
+        'visit__daily_dcr__employee__name',
+        'visit__daily_dcr__employee__headquarter__name',
+        'product_id',
+        'product__name',
+        'product__price',
+        'month'
+    ).annotate(
+        total_samples=Sum('sample_qty'),
+        total_orders=Sum('order_qty')
+    )
 
     data_dict = {}
 
     for d in details:
-        eid = d.visit.daily_dcr.employee_id
-        pid = d.product_id
-        m = d.visit.daily_dcr.date.month
+        eid = d['visit__daily_dcr__employee_id']
+        pid = d['product_id']
+        m = d['month']
 
         if eid not in data_dict:
-            emp_obj = d.visit.daily_dcr.employee
             data_dict[eid] = {
-                'emp_name': emp_obj.name,
-                'hq': emp_obj.headquarter.name if emp_obj.headquarter else 'N/A',
+                'emp_name': d['visit__daily_dcr__employee__name'],
+                'hq': d['visit__daily_dcr__employee__headquarter__name'] or 'N/A',
                 'products': {}
             }
 
         if pid not in data_dict[eid]['products']:
-            price = float(d.product.price) if getattr(d.product, 'price', None) else 0.0
+            price = float(d['product__price']) if d['product__price'] else 0.0
             data_dict[eid]['products'][pid] = {
-                'name': d.product.name,
+                'name': d['product__name'],
                 'price': price,
                 'monthly': {month: {'samples': 0, 'orders': 0} for month in months_range},
                 'total_samples': 0, 'total_orders': 0, 'total_val': 0.0
             }
 
-        sq = d.sample_qty or 0
-        oq = d.order_qty or 0
+        sq = d['total_samples'] or 0
+        oq = d['total_orders'] or 0
         val = oq * data_dict[eid]['products'][pid]['price']
 
         data_dict[eid]['products'][pid]['monthly'][m]['samples'] += sq

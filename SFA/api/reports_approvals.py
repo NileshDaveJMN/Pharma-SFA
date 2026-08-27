@@ -115,14 +115,34 @@ def api_approval_hub(request):
         ).select_related('employee', 'doctor', 'item')
         pending_holidays = []
 
-    pending_mtps = MonthlyTourProgram.objects.filter(employee__in=team_members, status='Pending').select_related('employee').order_by('-year', '-month')
-    pending_doctors = Doctor.objects.filter(allocated_to__in=team_members, status='Pending').select_related('allocated_to', 'territory', 'route')
-    pending_chemists = Chemist.objects.filter(allocated_to__in=team_members, status='Pending').select_related('allocated_to', 'territory', 'route')
-    pending_expenses = MonthlyExpenseReport.objects.filter(employee__in=team_members, status='Pending').select_related('employee')
-    pending_routes = Route.objects.filter(requested_by__in=team_members, status='Pending').select_related('territory', 'requested_by')
-    pending_leaves = LeaveApplication.objects.filter(employee__in=team_members, status='Pending').select_related('employee').order_by('start_date')
-    pending_chemist_edits = ChemistEditRequest.objects.filter(employee__in=team_members, status='Pending').select_related('employee', 'chemist')
-    pending_doctor_edits = DoctorEditRequest.objects.filter(employee__in=team_members, status='Pending').select_related('employee', 'doctor')
+    # 🚀 OPTIMIZATION 1: prefetch_related & select_related lagaya saare pending items par
+    pending_mtps = MonthlyTourProgram.objects.filter(employee__in=team_members, status='Pending')\
+        .select_related('employee')\
+        .prefetch_related('dailytourplan_set__route')\
+        .order_by('-year', '-month')
+        
+    pending_doctors = Doctor.objects.filter(allocated_to__in=team_members, status='Pending')\
+        .select_related('allocated_to', 'territory', 'route')
+        
+    pending_chemists = Chemist.objects.filter(allocated_to__in=team_members, status='Pending')\
+        .select_related('allocated_to', 'territory', 'route')
+        
+    pending_expenses = MonthlyExpenseReport.objects.filter(employee__in=team_members, status='Pending')\
+        .select_related('employee')\
+        .prefetch_related('daily_lines') # 🚀 DANGER ZONE FIXED
+        
+    pending_routes = Route.objects.filter(requested_by__in=team_members, status='Pending')\
+        .select_related('territory', 'requested_by')
+        
+    pending_leaves = LeaveApplication.objects.filter(employee__in=team_members, status='Pending')\
+        .select_related('employee').order_by('start_date')
+        
+    pending_chemist_edits = ChemistEditRequest.objects.filter(employee__in=team_members, status='Pending')\
+        .select_related('employee', 'chemist__territory', 'chemist__route')
+        
+    pending_doctor_edits = DoctorEditRequest.objects.filter(employee__in=team_members, status='Pending')\
+        .select_related('employee', 'doctor__territory', 'doctor__route')
+
 
     return Response({
         'manager_name': manager.name,
@@ -198,10 +218,10 @@ def api_approval_hub(request):
                     'month': t.month, 'year': t.year, 'status': t.status,
                     'lines': [
                         {
-                            'id': tt.id, # 🌟 NAYA
+                            'id': tt.id, 
                             'product': tt.product.name,
                             'target_qty': tt.target_qty
-                        } for tt in TerritoryTarget.objects.filter(territory_id=t.territory_id, month=t.month, year=t.year).select_related('product')
+                        } for tt in t.territorytarget_set.all() # 🚀 OPTIMIZATION 2: Reverse relation query
                     ]
                 } for t in pending_targets
             ],
