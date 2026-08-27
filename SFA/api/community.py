@@ -9,21 +9,32 @@ from SFA.models import FieldEvent, EventPhoto, EventLike, EventComment, Employee
 from SFA.services.team import get_full_team_employees
 
 # ==============================================================================
-# 📢 1. GET COMMUNITY FEED & LEADERBOARD (Flutter)
+# 📢 1. GET COMMUNITY FEED & LEADERBOARD (Webapp Logic Matched)
 # ==============================================================================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_community_feed(request):
     emp = request.user.employee
-    event_list = FieldEvent.objects.filter(is_shared_in_community=True).order_by('-created_at')
+    # Webapp: FieldEvent.objects.filter(is_shared_in_community=True).select_related(...)
+    event_list = FieldEvent.objects.filter(is_shared_in_community=True).select_related('employee', 'territory', 'doctor', 'chemist').order_by('-created_at')
     
-    # 🌟 PAGINATION FOR FLUTTER: 15 events per API call
-    paginator = Paginator(event_list, 15)
-    page_number = request.GET.get('page', 1) # Default page 1
+    # Webapp: Paginator(event_list, 10)
+    paginator = Paginator(event_list, 10)
+    page_number = request.GET.get('page', 1)
     events = paginator.get_page(page_number)
     
     feed_data = []
     for ev in events:
+        # 🌟 PHOTOS: Webapp ke 'ev.photos.all()' ke equal - Saari photos ki URLs bhej rahe hain
+        photos_list = [p.photo.url for p in ev.photos.all()]
+        
+        # 🌟 COMMENTS: Webapp jaisa nested comments
+        comments_list = [{
+            'employee_name': c.employee.name,
+            'comment': c.comment,
+            'time': c.created_at.strftime('%d %b %Y %I:%M %p')
+        } for c in ev.comments.all().order_by('-created_at')]
+
         feed_data.append({
             'id': ev.id,
             'subject': ev.subject,
@@ -32,17 +43,13 @@ def api_community_feed(request):
             'creator_name': ev.employee.name,
             'territory': ev.territory.name if ev.territory else "N/A",
             'time': ev.created_at.strftime('%d %b %Y %I:%M %p'),
-            'photos': [p.photo.url for p in ev.photos.all() if p.photo],
+            'photos': photos_list, # 🌟 SAARI PHOTOS
             'likes_count': ev.likes.count(),
             'is_liked_by_me': ev.likes.filter(employee=emp).exists(),
-            'comments': [{
-                'employee_name': c.employee.name,
-                'comment': c.comment,
-                'time': c.created_at.strftime('%d %b %Y %I:%M %p')
-            } for c in ev.comments.all().order_by('-created_at')]
+            'comments': comments_list
         })
         
-    # 🌟 LEADERBOARD LOGIC (CURRENT MONTH ONLY)
+    # 🌟 LEADERBOARD: Webapp jaisa monthly leaderboard
     today = timezone.now().date()
     leaderboard_qs = Employee.objects.annotate(
         total_events=Count(
@@ -59,14 +66,13 @@ def api_community_feed(request):
     return Response({
         'feed': feed_data,
         'leaderboard': leaderboard_data,
-        # Flutter developer ko batane ke liye ki aur events baaki hain ya nahi
         'has_next_page': events.has_next(), 
         'current_page': events.number,
         'total_pages': paginator.num_pages
     })
 
 # ==============================================================================
-# 📸 2. GET EVENT REPORT (Private + Public for Team) - 🌟 OPTIMIZED
+# 📸 2. GET EVENT REPORT (Webapp Logic Matched)
 # ==============================================================================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -75,7 +81,7 @@ def api_event_report(request):
     team_emps = get_full_team_employees(emp)
     is_manager_view = team_emps.count() > 1
 
-    # 🌟 Month/Year filter — DEFAULT current month (Webapp jaisa)
+    # Webapp: Month/Year filter logic
     today = timezone.now().date()
     try:
         selected_month = int(request.GET.get('month', today.month))
@@ -86,11 +92,10 @@ def api_event_report(request):
     except (TypeError, ValueError):
         selected_year = today.year
 
+    # Webapp: Manager vs MR filtering
     if is_manager_view:
-        # 🌟 Manager ko pehle apna MR select karna hoga — tabhi query chalegi.
         raw_emp_id = request.GET.get('employee_id')
         selected_emp_id = int(raw_emp_id) if raw_emp_id else None
-        
         if selected_emp_id:
             events = FieldEvent.objects.filter(
                 employee_id=selected_emp_id,
@@ -98,9 +103,8 @@ def api_event_report(request):
                 event_date__month=selected_month,
             )
         else:
-            events = FieldEvent.objects.none() # Jab tak MR select na kare, khaali list bhejo
+            events = FieldEvent.objects.none()
     else:
-        # MR khud — apna hi data, employee select karne ki zarurat nahi.
         selected_emp_id = emp.id
         events = FieldEvent.objects.filter(
             employee_id=emp.id,
@@ -108,16 +112,15 @@ def api_event_report(request):
             event_date__month=selected_month,
         )
 
-    # 🌟 Database query optimize karni hai (Webapp me thi, API me miss ho gayi thi)
+    # Webapp: select_related & prefetch_related('photos')
     events = events.select_related('employee', 'territory', 'doctor', 'chemist') \
                     .prefetch_related('photos') \
                     .order_by('-event_date', '-created_at')
     
     report_data = []
     for ev in events:
-        first_photo_url = None
-        if ev.photos.exists():
-            first_photo_url = ev.photos.first().photo.url
+        # 🌟 PHOTOS: Webapp ke 'ev.photos.all()' ke equal - Saari photos ki URLs
+        photos_list = [p.photo.url for p in ev.photos.all()]
 
         report_data.append({
             'id': ev.id,
@@ -127,12 +130,12 @@ def api_event_report(request):
             'date': ev.event_date.strftime('%d %b %Y'),
             'is_shared': ev.is_shared_in_community,
             'description': ev.description or "",
-            'photos_count': ev.photos.count(),
-            'first_photo_url': first_photo_url, # 🌟 NAYA FIELD
+            'photos': photos_list, # 🌟 SAARI PHOTOS (Count nahi, Actual URLs)
             'can_share': not ev.is_shared_in_community and ev.employee == emp
         })
         
     return Response(report_data)
+
 # ==============================================================================
 # 🚀 3. SHARE PRIVATE EVENT TO COMMUNITY
 # ==============================================================================
@@ -141,16 +144,13 @@ def api_event_report(request):
 def api_share_event(request):
     emp = request.user.employee
     event_id = request.data.get('event_id')
-    
-    # Sirf wahi share kar payega jisne banaya hai
     event = get_object_or_404(FieldEvent, id=event_id, employee=emp)
     event.is_shared_in_community = True
     event.save()
-    
     return Response({'message': 'Event successfully shared to Community Wall!'})
 
 # ==============================================================================
-# 📝 4. CREATE NEW EVENT (MR field se event aur photos banayega)
+# 📝 4. CREATE NEW EVENT (Webapp Logic Matched)
 # ==============================================================================
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -169,7 +169,7 @@ def api_create_event(request):
         description=description, is_shared_in_community=is_shared
     )
     
-    # Safely parse IDs (Agar Flutter galti se empty string ya 'null' bhej de)
+    # Webapp: doc_id & chem_id save
     doc_id = request.data.get('doctor_id')
     if doc_id and str(doc_id).isdigit(): 
         event.doctor_id = int(doc_id)
@@ -178,12 +178,9 @@ def api_create_event(request):
     if chem_id and str(chem_id).isdigit(): 
         event.chemist_id = int(chem_id)
         
-    terr_id = request.data.get('territory_id')
-    if terr_id and str(terr_id).isdigit(): 
-        event.territory_id = int(terr_id)
-        
     event.save()
     
+    # Webapp: request.FILES.getlist('photos')
     photos = request.FILES.getlist('photos')
     for photo in photos:
         EventPhoto.objects.create(event=event, photo=photo)
