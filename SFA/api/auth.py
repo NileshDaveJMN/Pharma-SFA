@@ -14,14 +14,16 @@ from datetime import datetime # 🌟 NAYA: Date parse karne ke liye
 from SFA.services.team import get_team_tree, get_full_team_employees
 from SFA.models import SystemSetting, DeviceToken, Employee
 
+from django.contrib.auth.models import User
+from django.db.models import Q
+
 # ==============================================================================
-# 🔐 LOGIN — Token return karta hai
+# 🔐 LOGIN — Token return karta hai (🚀 OPTIMIZED FOR SPEED)
 # ==============================================================================
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def api_login(request):
-    # 🌟 UPPERCASE fix
     company_code = request.data.get('company_code', '').strip().upper()
     entered_username = request.data.get('username', '').strip()
     password = request.data.get('password', '').strip()
@@ -32,18 +34,23 @@ def api_login(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # 🎯 SMART LOGIC 1: Exact match try karo (purane users ya admins ke liye)
-    user = authenticate(username=entered_username, password=password)
+    # 🚀 OPTIMIZATION 1: Teen bar authenticate karne ke bajaye, teeno usernames ki list banalo
+    possible_usernames = [
+        entered_username,
+        f"{company_code}_{entered_username}",
+        f"{company_code.lower()}_{entered_username}"
+    ]
 
-    # 🎯 SMART LOGIC 2: Agar nahi mila, toh CompanyCode_Number karke check karo (Naye Excel users ke liye)
-    if not user:
-        user = authenticate(username=f"{company_code}_{entered_username}", password=password)
+    # 🚀 OPTIMIZATION 2: N+1 hatane ke liye 'select_related' ka use karein 
+    # Taaki User, Employee, Company aur Headquarter sirf 1 hi Database Query mein fetch ho jayein
+    user = User.objects.select_related(
+        'employee', 
+        'employee__company', 
+        'employee__headquarter'
+    ).filter(username__in=possible_usernames).first()
 
-    # 🎯 SMART LOGIC 3: Fallback agar company code chote letters mein save hua ho
-    if not user:
-        user = authenticate(username=f"{company_code.lower()}_{entered_username}", password=password)
-
-    if user is None:
+    # 🚀 OPTIMIZATION 3: Password hash ab sirf ek hi baar check hoga (Saves ~1 second)
+    if not user or not user.check_password(password):
         return Response(
             {'error': 'Invalid credentials'},
             status=status.HTTP_401_UNAUTHORIZED
@@ -69,10 +76,14 @@ def api_login(request):
             status=status.HTTP_403_FORBIDDEN
         )
 
-    token, _ = Token.objects.get_or_create(user=user)
+    # Django login function ko backend assign karna zaroori hota hai manual auth ke baad
+    user.backend = 'django.contrib.auth.backends.ModelBackend'
     django_login(request._request, user)
 
-    setting = SystemSetting.objects.filter(company=emp.company).first()
+    token, _ = Token.objects.get_or_create(user=user)
+
+    # 🚀 OPTIMIZATION 4: company_id direct use kiya taaki ek aur DB query na baje
+    setting = SystemSetting.objects.filter(company_id=emp.company_id).first()
     is_offline_mode = setting.enable_offline_mode if setting else True
 
     return Response({
