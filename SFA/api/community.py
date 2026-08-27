@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.core.paginator import Paginator
 from SFA.models import FieldEvent, EventPhoto, EventLike, EventComment, Employee, Doctor, Chemist, Territory
 from SFA.services.team import get_full_team_employees
-
+from .reports_helpers import _resolve_selected_employee, _employee_brief
 # ==============================================================================
 # 📢 1. GET COMMUNITY FEED & LEADERBOARD (Webapp Logic Matched)
 # ==============================================================================
@@ -72,26 +72,19 @@ def api_community_feed(request):
     })
 
 # ==============================================================================
-# 📸 2. GET EVENT REPORT (Safe Version with Fallback)
+# 📸 2. GET EVENT REPORT (Exact Match with Expense/Stockist Report Logic)
 # ==============================================================================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_event_report(request):
-    emp = request.user.employee
-    team_emps = get_full_team_employees(emp)
-    is_manager_view = team_emps.count() > 1
+    try:
+        employee = request.user.employee
+    except AttributeError:
+        return Response({'error': 'Employee profile missing'}, status=400)
 
-    # 🌟 SAFE DROPDOWN LOGIC: Try-Except me wrap kiya taaki events load hona na ruke
-    dropdown_data = []
-    if is_manager_view:
-        try:
-            dropdown_qs = get_dropdown_team(emp, ordered=False)
-            dropdown_data = [{'id': e.id, 'name': e.name} for e in dropdown_qs]
-        except Exception as e:
-            # Agar dropdown me error aaye toh server crash nahi hoga, bas print karega
-            print(f"Team Dropdown Error: {e}") 
+    # 🌟 EXPENSE REPORT JESA LOGIC: Automatically team & selected employee resolve karega
+    selected_emp, team_employees = _resolve_selected_employee(request, employee)
 
-    # Month/Year filter logic
     today = timezone.now().date()
     try:
         selected_month = int(request.GET.get('month', today.month))
@@ -102,28 +95,14 @@ def api_event_report(request):
     except (TypeError, ValueError):
         selected_year = today.year
 
-    if is_manager_view:
-        raw_emp_id = request.GET.get('employee_id')
-        selected_emp_id = int(raw_emp_id) if raw_emp_id else None
-        if selected_emp_id:
-            events = FieldEvent.objects.filter(
-                employee_id=selected_emp_id,
-                event_date__year=selected_year,
-                event_date__month=selected_month,
-            )
-        else:
-            events = FieldEvent.objects.none()
-    else:
-        selected_emp_id = emp.id
-        events = FieldEvent.objects.filter(
-            employee_id=emp.id,
-            event_date__year=selected_year,
-            event_date__month=selected_month,
-        )
-
-    events = events.select_related('employee', 'territory', 'doctor', 'chemist') \
-                    .prefetch_related('photos') \
-                    .order_by('-event_date', '-created_at')
+    # Ab selected_emp ke hisaab se data aayega (Manager ne dropdown se choose kiya hoga)
+    events = FieldEvent.objects.filter(
+        employee_id=selected_emp.id,
+        event_date__year=selected_year,
+        event_date__month=selected_month,
+    ).select_related('employee', 'territory', 'doctor', 'chemist') \
+     .prefetch_related('photos') \
+     .order_by('-event_date', '-created_at')
     
     report_data = []
     for ev in events:
@@ -138,12 +117,14 @@ def api_event_report(request):
             'is_shared': ev.is_shared_in_community,
             'description': ev.description or "",
             'photos': photos_list,
-            'can_share': not ev.is_shared_in_community and ev.employee == emp
+            # Sirf khud ka event share kar sakta hai
+            'can_share': not ev.is_shared_in_community and ev.employee == employee 
         })
         
-    # Dropdown empty bhi ho sakti hai ab, lekin events aayenge
+    # 🌟 EXPENSE REPORT JESA RESPONSE STRUCTURE
     return Response({
-        'team_dropdown': dropdown_data,
+        'selected_employee': _employee_brief(selected_emp),
+        'team_employees': [_employee_brief(e) for e in team_employees] if employee.designation != 'MR' else [],
         'events': report_data
     })
 # ==============================================================================
