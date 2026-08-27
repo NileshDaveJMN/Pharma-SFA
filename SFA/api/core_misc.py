@@ -182,9 +182,6 @@ def api_unread_notifications_count(request):
         'unread_alerts': unread_alerts,
         'unread_notices': unread_notices
     })
-# ==============================================================================
-# 💬 "MESSAGES"
-# ==============================================================================
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def api_messages(request):
@@ -197,18 +194,18 @@ def api_messages(request):
         if not receiver_id or not body:
             return Response({'success': False, 'error': 'Receiver ya message missing hai.'}, status=400)
             
-        # 🌟 FIX: Cross-company message block
         receiver_emp = get_object_or_404(Employee, id=receiver_id, company=employee.company)        
         DirectMessage.objects.create(sender=employee, receiver=receiver_emp, message=body)
         return Response({'success': True, 'message': f'Message sent to {receiver_emp.name}!'})
 
-    received = DirectMessage.objects.filter(receiver=employee).order_by('-created_at')
-    sent = DirectMessage.objects.filter(sender=employee).order_by('-created_at')
+    # 🚀 OPTIMIZATION: select_related lagaya taaki N+1 queries fire na hon
+    received = DirectMessage.objects.filter(receiver=employee).select_related('sender').order_by('-created_at')
+    sent = DirectMessage.objects.filter(sender=employee).select_related('receiver').order_by('-created_at')
+    
     received.filter(is_read=False).update(is_read=True)
     
     allowed_ids = []
     if employee.designation in ['Admin', 'System Administrator']:
-        # 🌟 FIX: Sirf apni company ke employees dikhao
         contacts = Employee.objects.filter(company=employee.company).exclude(id=employee.id).order_by('-designation', 'name')
     else:
         allowed_ids = list(get_full_team_employees(employee).values_list('id', flat=True))
@@ -216,7 +213,6 @@ def api_messages(request):
         while curr:
             if curr.is_active: allowed_ids.append(curr.id)
             curr = curr.manager
-        # 🌟 FIX: Sirf apni company ke admins dikhao
         admin_ids = list(Employee.objects.filter(company=employee.company, designation__in=['Admin', 'System Administrator']).values_list('id', flat=True))
         allowed_ids.extend(admin_ids)
         contacts = Employee.objects.filter(id__in=set(allowed_ids)).exclude(id=employee.id).order_by('-designation', 'name')
@@ -567,29 +563,30 @@ def api_calendar_events(request):
                 events_map[dt_str].append(f"💍 {emp.name} Anniversary")
             except ValueError: pass
 
+    # 🚀 OPTIMIZATION: Python RAM loop ki jagah Database (SQL) level par __month filtering lagayi
+    
     # 5. Doctor Birthdays & Anniversaries Scan
-    doctors = Doctor.objects.filter(allocated_to_id__in=team_ids)
-    for doc in doctors:
-        if doc.dob and doc.dob.month == month:
-            try:
-                dt_str = date(year, month, doc.dob.day).isoformat()
-                events_map[dt_str].append(f"🎂 Dr. {doc.name} Birthday")
-            except ValueError: pass
-                
-        if doc.dom and doc.dom.month == month:
-            try:
-                dt_str = date(year, month, doc.dom.day).isoformat()
-                events_map[dt_str].append(f"💍 Dr. {doc.name} Anniversary")
-            except ValueError: pass
+    doctors_bday = Doctor.objects.filter(allocated_to_id__in=team_ids, dob__month=month)
+    for doc in doctors_bday:
+        try:
+            dt_str = date(year, month, doc.dob.day).isoformat()
+            events_map[dt_str].append(f"🎂 Dr. {doc.name} Birthday")
+        except ValueError: pass
+            
+    doctors_anniv = Doctor.objects.filter(allocated_to_id__in=team_ids, dom__month=month)
+    for doc in doctors_anniv:
+        try:
+            dt_str = date(year, month, doc.dom.day).isoformat()
+            events_map[dt_str].append(f"💍 Dr. {doc.name} Anniversary")
+        except ValueError: pass
 
     # 6. Chemist Owner Birthdays Scan
-    chemists = Chemist.objects.filter(allocated_to_id__in=team_ids)
-    for chem in chemists:
-        if chem.owner_dob and chem.owner_dob.month == month:
-            try:
-                dt_str = date(year, month, chem.owner_dob.day).isoformat()
-                events_map[dt_str].append(f"🎂 {chem.name} (Owner) Birthday")
-            except ValueError: pass
+    chemists_bday = Chemist.objects.filter(allocated_to_id__in=team_ids, owner_dob__month=month)
+    for chem in chemists_bday:
+        try:
+            dt_str = date(year, month, chem.owner_dob.day).isoformat()
+            events_map[dt_str].append(f"🎂 {chem.name} (Owner) Birthday")
+        except ValueError: pass
 
-    # defaultdict ko normal dict mein convert karke return karo
-    return Response(dict(events_map))    
+    return Response(dict(events_map))
+    
