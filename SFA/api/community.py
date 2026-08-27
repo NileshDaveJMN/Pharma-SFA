@@ -66,15 +66,52 @@ def api_community_feed(request):
     })
 
 # ==============================================================================
-# 📸 2. GET EVENT REPORT (Private + Public for Team)
+# 📸 2. GET EVENT REPORT (Private + Public for Team) - 🌟 OPTIMIZED
 # ==============================================================================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_event_report(request):
     emp = request.user.employee
     team_emps = get_full_team_employees(emp)
-    
-    events = FieldEvent.objects.filter(employee__in=team_emps).order_by('-event_date', '-created_at')
+    is_manager_view = team_emps.count() > 1
+
+    # 🌟 Month/Year filter — DEFAULT current month (Webapp jaisa)
+    today = timezone.now().date()
+    try:
+        selected_month = int(request.GET.get('month', today.month))
+    except (TypeError, ValueError):
+        selected_month = today.month
+    try:
+        selected_year = int(request.GET.get('year', today.year))
+    except (TypeError, ValueError):
+        selected_year = today.year
+
+    if is_manager_view:
+        # 🌟 Manager ko pehle apna MR select karna hoga — tabhi query chalegi.
+        raw_emp_id = request.GET.get('employee_id')
+        selected_emp_id = int(raw_emp_id) if raw_emp_id else None
+        
+        if selected_emp_id:
+            events = FieldEvent.objects.filter(
+                employee_id=selected_emp_id,
+                event_date__year=selected_year,
+                event_date__month=selected_month,
+            )
+        else:
+            events = FieldEvent.objects.none() # Jab tak MR select na kare, khaali list bhejo
+    else:
+        # MR khud — apna hi data, employee select karne ki zarurat nahi.
+        selected_emp_id = emp.id
+        events = FieldEvent.objects.filter(
+            employee_id=emp.id,
+            event_date__year=selected_year,
+            event_date__month=selected_month,
+        )
+
+    # 🌟 Database query optimize karni hai (Webapp me thi, API me miss ho gayi thi)
+    events = events.select_related('employee', 'territory', 'doctor', 'chemist') \
+                    .prefetch_related('photos') \
+                    .order_by('-event_date', '-created_at')
     
     report_data = []
     for ev in events:
@@ -91,7 +128,6 @@ def api_event_report(request):
         })
         
     return Response(report_data)
-
 # ==============================================================================
 # 🚀 3. SHARE PRIVATE EVENT TO COMMUNITY
 # ==============================================================================
