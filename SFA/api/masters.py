@@ -521,6 +521,7 @@ def _doctor_dict(doc, today=None, full=False):
                 # 🚀 SAFETY CHECK: Agar 'allocated_to' memory me hai tabhi name nikalo
                 'name': doc.allocated_to.name if hasattr(doc, '_allocated_to_cache') else '', 
             } if doc.allocated_to_id else None,
+        })
 
 
 def _chemist_dict(chem, full=False):
