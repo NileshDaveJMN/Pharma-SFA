@@ -115,6 +115,10 @@ def api_event_report(request):
     
     report_data = []
     for ev in events:
+        first_photo_url = None
+        if ev.photos.exists():
+            first_photo_url = ev.photos.first().photo.url
+
         report_data.append({
             'id': ev.id,
             'subject': ev.subject,
@@ -124,6 +128,7 @@ def api_event_report(request):
             'is_shared': ev.is_shared_in_community,
             'description': ev.description or "",
             'photos_count': ev.photos.count(),
+            'first_photo_url': first_photo_url, # 🌟 NAYA FIELD
             'can_share': not ev.is_shared_in_community and ev.employee == emp
         })
         
