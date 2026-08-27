@@ -95,7 +95,8 @@ def api_dashboard(request):
         if open_day.work_type == 'Field Work':
             daily_dcr = DailyDCR.objects.prefetch_related('visits__doctor', 'visits__chemist').filter(employee=employee, date=working_date).first()
             visited_doc_ids, visited_chem_ids = set(), set()
-            
+
+                        
             if daily_dcr:
                 all_visits = list(daily_dcr.visits.all())
                 dr_visits = [v for v in all_visits if v.doctor]
@@ -105,21 +106,24 @@ def api_dashboard(request):
                 today_stats['dr_visits'] = len(dr_visits)
                 today_stats['chem_visits'] = len(ch_visits)
 
-                agg = DCRProductDetail.objects.filter(visit__daily_dcr=daily_dcr).aggregate(s=Sum('sample_qty'))
-                today_stats['samples'] = agg['s'] or 0
-
-                for d in DCRProductDetail.objects.filter(visit__daily_dcr=daily_dcr).select_related('product'):
+                # 🚀 OPTIMIZATION 1: Sirf 1 baar DB query lagayenge, samples aur POB dono RAM mein add karenge
+                product_details = DCRProductDetail.objects.filter(visit__daily_dcr=daily_dcr).select_related('product')
+                samples_total = 0
+                pob_total = 0.0
+                
+                for d in product_details:
+                    samples_total += (d.sample_qty or 0)
                     price = float(d.product.price) if getattr(d.product, 'price', None) else 0.0
-                    today_stats['pob'] += (d.order_qty or 0) * price
-                today_stats['pob'] = round(today_stats['pob'], 2)
+                    pob_total += (d.order_qty or 0) * price
+                    
+                today_stats['samples'] = samples_total
+                today_stats['pob'] = round(pob_total, 2)
 
             team_employees = get_full_team_employees(employee)
             route_objs = open_day.routes.all()
 
-            # 🌟 SMART FIX: Doctors ke saath unki aakhiri visit ki date bhi nikali ja rahi hai
-            from django.db.models import Max, Q # (Agar top par na ho toh add kar lena)
+            from django.db.models import Max, Q 
             
-            # 1. Pehle pending doctors ki queryset nikalenge aur usme 'last_visit_date' annotate karenge
             doctors_query = Doctor.objects.select_related('route').filter(
                 allocated_to__in=team_employees, route__in=route_objs, status='Approved'
             ).exclude(id__in=visited_doc_ids).annotate(
@@ -129,28 +133,27 @@ def api_dashboard(request):
                 )
             )
             
-            # 2. Phir JSON mein name aur date ko ek sath mix karke bhej denge (The Jugaad)
             pending_doctors = []
             for d in doctors_query:
-                # Date ko thoda chota rakhte hain (e.g., "02 Aug") taaki screen se bahar na jaye
                 last_v = d.last_visit_date.strftime('%d %b') if d.last_visit_date else 'Never'
-                
-                # 🌟 ASLI JUGAD: '\n' laga diya taaki app mein date automatically agli line me chali jaye!
                 hacky_name = f"{d.name}\n[L.V: {last_v}]"
-                
                 pending_doctors.append({
                     'id': d.id, 
-                    'name': hacky_name,  # App sochegi ye poora naam hai
+                    'name': hacky_name,
                     'route': d.route.name if d.route else None,
-                    'last_visit': last_v # Future ke liye bacha kar rakha hai
+                    'last_visit': last_v 
                 })
+
+            # 🚀 OPTIMIZATION 2: Python (RAM) filtering ki jagah Database (SQL) level par .exclude() use kiya
+            pending_chemists_query = Chemist.objects.select_related('route').filter(
+                allocated_to__in=team_employees, route__in=route_objs, status='Approved'
+            ).exclude(id__in=visited_chem_ids)
 
             pending_chemists = [
                 {'id': c.id, 'name': c.name, 'route': c.route.name if c.route else None}
-                for c in Chemist.objects.select_related('route').filter(
-                    allocated_to__in=team_employees, route__in=route_objs, status='Approved'
-                ) if c.id not in visited_chem_ids
+                for c in pending_chemists_query
             ]
+            
 
     notices = [{'title': n.title, 'body': n.body, 'date': str(n.created_at.date()) if n.created_at else None} for n in CompanyNotice.objects.filter(company=employee.company, is_active=True).order_by('-created_at')[:5]]  # 🌟 FIX: company-scoped
 
@@ -450,13 +453,14 @@ def api_day_end(request):
             ch_visits = visits.filter(chemist__isnull=False).select_related('chemist')
             dr_count = dr_visits.count()
             ch_count = ch_visits.count()
-            agg = DCRProductDetail.objects.filter(visit__daily_dcr=daily_dcr).aggregate(s=Sum('sample_qty'))
-            samples = agg['s'] or 0
-            for d in DCRProductDetail.objects.filter(visit__daily_dcr=daily_dcr).select_related('product'):
+            
+            # 🚀 OPTIMIZATION 3: Wapas 2 Queries ko 1 mein merge kiya
+            product_details = DCRProductDetail.objects.filter(visit__daily_dcr=daily_dcr).select_related('product')
+            for d in product_details:
+                samples += (d.sample_qty or 0)
                 price = float(d.product.price) if getattr(d.product, 'price', None) else 0.0
                 pob += (d.order_qty or 0) * price
 
-            # 🌟 Visits with IST timestamps for Flutter
             dr_visits_data = [
                 {'id': v.id, 'doctor': {'name': v.doctor.name}, 'created_at': v.created_at.isoformat() if v.created_at else None}
                 for v in dr_visits
@@ -465,6 +469,7 @@ def api_day_end(request):
                 {'id': v.id, 'chemist': {'name': v.chemist.name}, 'created_at': v.created_at.isoformat() if v.created_at else None}
                 for v in ch_visits
             ]
+        
 
         expense_preview = None
         if not day_closed:
