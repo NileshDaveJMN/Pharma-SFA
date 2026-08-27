@@ -56,9 +56,11 @@ def api_doctors(request):
             return Response({'error': 'Access denied'}, status=403)
 
         doc_status = request.GET.get('status', 'Approved')
+        # 🚀 OPTIMIZATION: 'allocated_to' ko select_related mein add kiya
         qs = get_doctors(
             employee.company, allocated_to=selected_emp, status=doc_status
-        ).select_related('route', 'territory')
+        ).select_related('route', 'territory', 'allocated_to')
+        
 
         route_id = request.GET.get('route_id')
         if route_id:
@@ -229,9 +231,10 @@ def api_chemists(request):
             return Response({'error': 'Access denied'}, status=403)
 
         chem_status = request.GET.get('status', 'Approved')
+        # 🚀 OPTIMIZATION: 'allocated_to' ko select_related mein add kiya
         qs = get_chemists(
             employee.company, allocated_to=selected_emp, status=chem_status
-        ).select_related('route', 'territory')
+        ).select_related('route', 'territory', 'allocated_to')
 
         route_id = request.GET.get('route_id')
         if route_id:
@@ -514,11 +517,10 @@ def _doctor_dict(doc, today=None, full=False):
             'longitude': str(doc.longitude) if doc.longitude else None,
             'vcard_url': doc.vcard_photo.url if doc.vcard_photo else None,
             'allocated_to': {
-                'id': doc.allocated_to.id,
-                'name': doc.allocated_to.name,
-            } if doc.allocated_to else None,
-        })
-    return data
+                'id': doc.allocated_to_id,  # 🚀 OPTIMIZATION: Direct ID fetch karo (No Join needed)
+                # 🚀 SAFETY CHECK: Agar 'allocated_to' memory me hai tabhi name nikalo
+                'name': doc.allocated_to.name if hasattr(doc, '_allocated_to_cache') else '', 
+            } if doc.allocated_to_id else None,
 
 
 def _chemist_dict(chem, full=False):

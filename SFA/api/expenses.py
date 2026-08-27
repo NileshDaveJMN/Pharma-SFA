@@ -20,10 +20,6 @@ from SFA.models import MonthlyExpenseReport, DailyExpense
 from SFA.views.expenses import _fill_missing_dates
 
 
-# ==============================================================================
-# 📋 EXPENSE REPORTS LIST
-# ==============================================================================
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_expense_list(request):
@@ -32,7 +28,8 @@ def api_expense_list(request):
     except AttributeError:
         return Response({'error': 'Employee profile missing'}, status=400)
 
-    reports = MonthlyExpenseReport.objects.filter(
+    # 🚀 OPTIMIZATION: prefetch_related lagaya taaki N+1 loop na bane
+    reports = MonthlyExpenseReport.objects.prefetch_related('daily_lines').filter(
         employee=employee
     ).order_by('-year', '-month')
 
@@ -68,7 +65,6 @@ def api_expense_list(request):
         })
 
     return Response(result)
-
 
 # ==============================================================================
 # 📄 EXPENSE REPORT DETAIL
@@ -135,10 +131,6 @@ def api_expense_detail(request, report_id):
     })
 
 
-# ==============================================================================
-# 💾 SAVE MISC (DRAFT)
-# ==============================================================================
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_expense_save(request, report_id):
@@ -155,37 +147,36 @@ def api_expense_save(request, report_id):
             status=400
         )
 
-    # 🌟 FIX: Multipart request handle karna
-    lines_str = request.POST.get('lines')
-    if not lines_str:
-        lines_str = request.data.get('lines') # Fallback for standard JSON
-        
+    lines_str = request.POST.get('lines') or request.data.get('lines')
     if not lines_str:
         return Response({'error': 'lines array required hai'}, status=400)
 
     try:
-        # 🌟 FIX: json module ka use
         lines_data = json.loads(lines_str) if isinstance(lines_str, str) else lines_str
     except Exception:
         return Response({'error': 'Invalid lines JSON format'}, status=400)
 
     try:
+        # 🚀 OPTIMIZATION: Loop se pehle us mahine ke saare expenses memory me nikal liye (30 DB Calls saved)
+        existing_expenses = {e.id: e for e in mr.daily_lines.all()}
+
         for item in lines_data:
-            line_id = item.get('line_id')
+            line_id = int(item.get('line_id'))
             misc = float(item.get('misc_amount') or 0)
             remark = item.get('remark', '')
 
-            expense = DailyExpense.objects.filter(id=line_id, monthly_report=mr).first()
+            # RAM se dictionary fetch
+            expense = existing_expenses.get(line_id)
+            
             if expense:
                 expense.misc_amount = misc
                 expense.remark = remark
                 
-                # 🌟 Bill Photo Save karna
                 bill_file = request.FILES.get(f'bill_{line_id}')
                 if bill_file:
                     expense.misc_bill = bill_file
                 
-                expense.save()
+                expense.save() # FileField ki wajah se bulk_update use nahi kar sakte, par 30 SELECT queries bach gayi
 
         return Response({
             'message': '📝 Draft save ho gaya! Manager ko dikhane ke liye Submit karna mat bhoolo.'

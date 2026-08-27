@@ -37,51 +37,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-@api_view(['GET', 'PUT', 'DELETE'])
-@permission_classes([IsAuthenticated])
-def api_doctor_visit_detail(request, visit_id):
-    # 🌟 FIX: employee direct field nahi hai, daily_dcr ke through aata hai
-    try:
-        visit = DCRVisit.objects.get(id=visit_id, daily_dcr__employee=request.user.employee)
-    except DCRVisit.DoesNotExist:
-        return Response({'error': 'Visit not found.'}, status=404)    
 
-    # 🗑️ DELETE VISIT
-    if request.method == 'DELETE':
-        visit.delete()
-        return Response({'message': 'Visit deleted successfully.'}, status=200)
-
-    # 📥 GET VISIT (For Pre-filling Edit Form)
-    if request.method == 'GET':
-        # Yahan aapko products aur gifts ka waisa hi JSON bhejna hai jaisa normal visit form mein bhejte hain,
-        # Bas isme 'selected_sample_qty', 'selected_order_qty' pre-filled bhejni hogi.
-        data = {
-            'doctor_name': visit.doctor.name,
-            'remark': visit.remark,
-            'products': [
-                {
-                    'id': p.product.id,
-                    'name': p.product.name,
-                    'sample_stock': p.product.current_stock, 
-                    'selected_sample_qty': p.sample_qty,  # Pre-fill value
-                    'selected_order_qty': p.order_qty,    # Pre-fill value
-                    'is_detailed': p.is_detailed
-                } for p in visit.visit_products.all()
-            ],
-            # Same logic for gifts...
-        }
-        return Response(data, status=200)
-
-    # 📤 UPDATE VISIT (PUT)
-    if request.method == 'PUT':
-        data = request.data
-        visit.remark = data.get('remark', visit.remark)
-        visit.save()
-        
-        # Yahan existing products delete karke naye add karne ka logic ya update karne ka logic likhein
-        # ...
-        
-        return Response({'message': 'Visit updated successfully.'}, status=200)
 
 # ==============================================================================
 # 📊 DASHBOARD
@@ -107,17 +63,12 @@ def api_delete_visit(request, visit_id):
     
     return Response({'message': f'Visit for {customer_name} has been deleted successfully.'})
 
-# ==============================================================================
-# 📢 NOTICES
-# ==============================================================================
-
-
-
 @api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated])
 def api_edit_visit(request, visit_id):
     employee = request.user.employee
-    visit = get_object_or_404(DCRVisit, id=visit_id, daily_dcr__employee=employee)
+    # 🚀 OPTIMIZATION 1: select_related lagaya taaki doctor/chemist aur DCR 1 hi query me aa jaye
+    visit = get_object_or_404(DCRVisit.objects.select_related('doctor', 'chemist', 'daily_dcr'), id=visit_id, daily_dcr__employee=employee)
     visit_date = visit.daily_dcr.date
     
     if DayEnd.objects.filter(employee=employee, date=visit_date, is_closed=True).exists():
@@ -126,15 +77,16 @@ def api_edit_visit(request, visit_id):
     if request.method == 'GET':
         ed = {d.product_id: d for d in DCRProductDetail.objects.filter(visit=visit)}
         
-        # 🌟 NAYA: Inventory Stock Check
-        my_inv = MRInventory.objects.filter(employee=employee, item__item_type='Sample')
+        # 🚀 OPTIMIZATION 2: select_related('item') taaki N+1 loop na lage jab stock nikal rahe hon
+        my_inv = MRInventory.objects.select_related('item').filter(employee=employee, item__item_type='Sample')
         inv_map = {inv.item.linked_product_id: inv.stock_qty for inv in my_inv if inv.item.linked_product_id}
         
         products_data = []
-        for p in Product.objects.filter(company=employee.company):  # 🌟 FIX: company-scoped
+        # 🚀 OPTIMIZATION 3: only('id', 'name') se RAM memory bachegi (sirf zaroori columns fetch honge)
+        for p in Product.objects.filter(company=employee.company).only('id', 'name'): 
             old_qty = ed[p.id].sample_qty if p.id in ed else 0
             curr_stock = inv_map.get(p.id, 0)
-            max_allowed = curr_stock + old_qty # (MR ke bag ka stock + jo is visit mein pehle diya tha)
+            max_allowed = curr_stock + old_qty 
             
             products_data.append({
                 'product_id': p.id, 
@@ -142,7 +94,7 @@ def api_edit_visit(request, visit_id):
                 'is_detailed': ed[p.id].is_detailed if p.id in ed else False,
                 'sample_qty': old_qty,
                 'order_qty': ed[p.id].order_qty if p.id in ed else 0,
-                'max_sample_qty': max_allowed # 🌟 FLUTTER KO BHEJ RAHE HAIN
+                'max_sample_qty': max_allowed
             })
             
         return Response({
@@ -155,17 +107,29 @@ def api_edit_visit(request, visit_id):
         visit.save()
         
         products_payload = request.data.get('products', [])
+        
+        # 🚀 OPTIMIZATION 4: Saare products, details aur inventory ko loop ke bahar 1 hi Baar me RAM me utha lo
+        submitted_p_ids = [p['product_id'] for p in products_payload]
+        
+        products_dict = {p.id: p for p in Product.objects.filter(id__in=submitted_p_ids, company=employee.company)}
+        existing_details = {d.product_id: d for d in DCRProductDetail.objects.filter(visit=visit, product_id__in=submitted_p_ids)}
+        inventories = {inv.item.linked_product_id: inv for inv in MRInventory.objects.select_related('item').filter(
+            employee=employee, item__linked_product_id__in=submitted_p_ids, item__item_type='Sample'
+        )}
+
         for p_data in products_payload:
             p_id = p_data.get('product_id')
             is_det = p_data.get('is_detailed', False)
             new_sq = int(p_data.get('sample_qty', 0))
             oq = int(p_data.get('order_qty', 0))
             
-            # 🌟 FIX: Sirf usi company ka product allow karo
-            p = get_object_or_404(Product, id=p_id, company=employee.company)
+            p = products_dict.get(p_id)
+            if not p:
+                continue 
+
             old_sq = 0
+            d = existing_details.get(p_id)
             
-            d = DCRProductDetail.objects.filter(visit=visit, product=p).first()
             if d:
                 old_sq = d.sample_qty or 0
                 if is_det or new_sq > 0 or oq > 0:
@@ -177,10 +141,9 @@ def api_edit_visit(request, visit_id):
                 if is_det or new_sq > 0 or oq > 0:
                     DCRProductDetail.objects.create(visit=visit, product=p, is_detailed=is_det, sample_qty=new_sq, order_qty=oq)
             
-            # 🌟 NAYA: DYNAMIC INVENTORY ADJUSTMENT
             diff = new_sq - old_sq
             if diff != 0:
-                inv = MRInventory.objects.filter(employee=employee, item__linked_product=p, item__item_type='Sample').first()
+                inv = inventories.get(p_id)
                 if inv:
                     inv.stock_qty -= diff
                     inv.save()
