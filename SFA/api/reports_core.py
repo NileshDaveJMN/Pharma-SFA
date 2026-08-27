@@ -35,35 +35,11 @@ from SFA.views.reports import _get_target_chain_starter
 
 from .reports_helpers import _resolve_selected_employee, _employee_brief
 
+from django.db.models.functions import ExtractMonth
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_product_sales_report(request):
-    """
-    Product-wise Samples/POB(orders)/Value, month-range trend.
-
-    Query params:
-        employee_id   (optional) — kiska data
-        from_month, to_month, year  (optional, default current month/year)
-
-    Response:
-    {
-        "selected_employee": {"id": 7, "name": "Amit MR", ...},
-        "team_employees": [...],          // sirf Manager ke liye non-empty
-        "from_month": 5, "to_month": 6, "year": 2026,
-        "months_headers": ["May", "Jun"],
-        "products": [
-            {
-                "product_name": "PPI", "price": 109.0,
-                "monthly": [{"month": "May", "samples": 10, "orders": 20, "value": 2180.0}, ...],
-                "total_samples": 18, "total_orders": 40, "total_value": 4360.0
-            }
-        ],
-        "grand_total": {
-            "monthly": [{"month": "May", "samples": ..., "orders": ..., "value": ...}, ...],
-            "samples": 60, "orders": 130, "value": 14000.0
-        }
-    }
-    """
     try:
         employee = request.user.employee
     except AttributeError:
@@ -80,16 +56,22 @@ def api_product_sales_report(request):
 
     months_range = list(range(from_month, to_month + 1))
 
+    # 🚀 OPTIMIZATION 2: Python (RAM) sum ki jagah SQL aggregation
     product_entries = DCRProductDetail.objects.filter(
         visit__daily_dcr__employee=selected_emp,
         visit__daily_dcr__date__month__gte=from_month,
         visit__daily_dcr__date__month__lte=to_month,
         visit__daily_dcr__date__year=selected_year,
-    ).select_related('product', 'visit__daily_dcr')
+    ).annotate(
+        month=ExtractMonth('visit__daily_dcr__date')
+    ).values('product_id', 'month').annotate(
+        sq=Sum('sample_qty'),
+        oq=Sum('order_qty')
+    )
 
     products_dict = {
         p.id: {'name': p.name, 'price': float(p.price) if getattr(p, 'price', None) else 0.0}
-        for p in Product.objects.filter(company=employee.company)  # 🌟 FIX: company-scoped
+        for p in Product.objects.filter(company=employee.company)
     }
 
     agg_data = defaultdict(lambda: {
@@ -99,11 +81,13 @@ def api_product_sales_report(request):
     gt_monthly = {m: {'samples': 0, 'orders': 0, 'val': 0.0} for m in months_range}
     gt_samples, gt_orders, gt_val = 0, 0, 0.0
 
+    # 🚀 Ab memory me hazaron rows ki jagah sirf kuch sau summarized rows aayengi
     for entry in product_entries:
-        p_id, m = entry.product_id, entry.visit.daily_dcr.date.month
-        sq, oq = entry.sample_qty or 0, entry.order_qty or 0
+        p_id, m = entry['product_id'], entry['month']
+        sq, oq = entry['sq'] or 0, entry['oq'] or 0
         if p_id not in products_dict:
             continue
+            
         price = products_dict[p_id]['price']
         val = oq * price
 
@@ -161,57 +145,9 @@ def api_product_sales_report(request):
         },
     })
 
-
-# ==============================================================================
-# 📅 2. DCR REPORT — LIST (month-wise, with stats)
-# ==============================================================================
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_dcr_report(request):
-    """
-    Month-wise DCR list — Day Start ke saath actual DCR match karke,
-    work_type, route, aur HAR VISIT KA FULL DETAIL (doctor/chemist naam,
-    product-wise sample/order qty) dikhata hai — jaisa web UI me "X Visits"
-    button click karke inline expand hota hai. Stats (avg visits/day,
-    total samples/orders) bhi.
-
-    Manager/Admin ?employee_id=<id> se apni team ke kisi bhi member ka
-    DCR dekh sakta hai (web jaisa hi).
-
-    Query params: employee_id, month, year (sab optional)
-
-    Response:
-    {
-        "selected_employee": {...}, "team_employees": [...],
-        "month": 6, "year": 2026,
-        "stats": {
-            "total_days_worked": 20, "total_dr_visits": 80, "total_chem_visits": 40,
-            "dr_avg": 4.0, "chem_avg": 2.0, "total_samples": 320, "total_orders": 180
-        },
-        "dcrs": [
-            {
-                "day_start_id": 55, "dcr_id": 201, "date": "2026-06-26", "work_type": "Field Work",
-                "route": "PN marg",
-                "territory": "Ahmedabad",
-                "has_dcr": true,
-                "visit_count": 1,
-                "dr_visit_count": 1, "chem_visit_count": 0,
-                "visits": [
-                    {
-                        "id": 1001, "visit_type": "Doctor", "name": "Dr. Dharmesh mandali",
-                        "specialty": "Cardiologist (Heart Specialist)",
-                        "products": [
-                            {"product_name": "AB", "is_detailed": true, "sample_qty": 0, "order_qty": 0},
-                            {"product_name": "MV", "is_detailed": false, "sample_qty": 0, "order_qty": 0}
-                        ],
-                        "remark": "Follow-up next week"
-                    }
-                ]
-            }
-        ]
-    }
-    """
     try:
         employee = request.user.employee
     except AttributeError:
@@ -223,12 +159,15 @@ def api_dcr_report(request):
     selected_month = int(request.GET.get('month') or today.month)
     selected_year = int(request.GET.get('year') or today.year)
 
+    # 🚀 OPTIMIZATION 1: prefetch_related('routes__territory') lagaya taaki N+1 loop na bane
     day_starts = DayStart.objects.filter(
         employee=selected_emp, date__month=selected_month, date__year=selected_year
-    ).order_by('-date')
+    ).prefetch_related('routes__territory').order_by('-date')
+    
     actual_dcrs = DailyDCR.objects.filter(
         employee=selected_emp, date__month=selected_month, date__year=selected_year
     ).prefetch_related('visits__doctor', 'visits__chemist', 'visits__product_details__product')
+    
     dcr_dict = {d.date: d for d in actual_dcrs}
 
     dcrs_out = []
@@ -255,18 +194,16 @@ def api_dcr_report(request):
                     'products': [
                         {
                             'product_name': pd.product.name,
-                            'is_detailed': pd.is_detailed,  # 🌟 FIX: web jaisa 'Detailed' badge Flutter me bhi dikhega
+                            'is_detailed': pd.is_detailed,
                             'sample_qty': pd.sample_qty or 0,
                             'order_qty': pd.order_qty or 0,
                         } for pd in v.product_details.all()
                     ],
-                    'remark': v.remark,  # 🌟 FIX: web jaisa visit remark Flutter me bhi dikhega
+                    'remark': v.remark,
                 })
 
-        # 🌟 FIX: web ke dcr_report_view jaisa hi — route ke saath uski
-        # territory (duplicate-free) bhi nikal rahe hain, alag field me
-        # (Flutter 'route' aur 'territory' dono alag top-level keys chahta hai)
-        route_list = ds.routes.select_related('territory').all() if hasattr(ds, 'routes') else []
+        # 🚀 Ab yeh loop RAM se chalega (Zero DB queries)
+        route_list = ds.routes.all() 
         route_name = ", ".join([r.name for r in route_list]) if route_list else None
         territory_names = []
         for r in route_list:
@@ -280,7 +217,7 @@ def api_dcr_report(request):
             'date': str(ds.date),
             'work_type': ds.work_type,
             'route': route_name,
-            'territory': territory_name,  # 🌟 FIX: pehle missing thi
+            'territory': territory_name,
             'has_dcr': dcr_obj is not None,
             'visit_count': visit_count,
             'dr_visit_count': dr_v,
@@ -297,6 +234,7 @@ def api_dcr_report(request):
         visit__daily_dcr__date__month=selected_month,
         visit__daily_dcr__date__year=selected_year,
     ).aggregate(s=Sum('sample_qty'))['s'] or 0
+    
     total_orders = DCRProductDetail.objects.filter(
         visit__daily_dcr__employee=selected_emp,
         visit__daily_dcr__date__month=selected_month,
