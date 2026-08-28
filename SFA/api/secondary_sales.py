@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from django.db import transaction
 
 from SFA.models import (
     Stockist, 
@@ -15,32 +16,24 @@ from SFA.models import (
 from SFA.services.team import get_full_team_employees
 
 
-# ==============================================================================
-# 🌟 SHARED HELPER: Current week's Saturday + lock window
-# ==============================================================================
-# Same exact logic as views/requests.py -> weekly_secondary_sale_view, taaki
-# web aur Flutter dono jagah "current week ending Saturday" aur "kab entry
-# allowed hai" ka calculation hamesha match kare.
 def _get_week_window():
     today = date.today()
-    weekday = today.weekday()  # 0:Mon, 1:Tue, 2:Wed, 3:Thu, 4:Fri, 5:Sat, 6:Sun
+    weekday = today.weekday()
 
-    if weekday == 5:  # Saturday
+    if weekday == 5:
         last_saturday = today
-    elif weekday == 6:  # Sunday
+    elif weekday == 6:
         last_saturday = today - timedelta(days=1)
-    elif weekday == 0:  # Monday
+    elif weekday == 0:
         last_saturday = today - timedelta(days=2)
     else:
         days_since_saturday = (weekday + 2) % 7
         last_saturday = today - timedelta(days=days_since_saturday)
 
-    is_locked = weekday not in [0, 5, 6]  # Allowed sirf Mon(0), Sat(5), Sun(6)
+    is_locked = weekday not in [0, 5, 6] 
     return last_saturday, is_locked
 
-# ==============================================================================
-# 1. API to get list of Stockists and their submission status (For MR)
-# ==============================================================================
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_pending_stockists(request):
@@ -49,27 +42,22 @@ def get_pending_stockists(request):
         company = employee.company
 
         auto_saturday, is_locked = _get_week_window()
-
-        # Flutter can optionally pass its own date; agar nahi bheja to
-        # server khud current week ki Saturday calculate kar leta hai
-        # (web ke exact same rule se) — isse client aur server kabhi
-        # out-of-sync nahi honge.
         target_date = request.query_params.get('date') or str(auto_saturday)
             
         stockists = Stockist.objects.filter(territory=employee.headquarter, company=company)
         
-        # Fetch IDs of stockists whose data is already submitted for this date
-        submitted_ids = WeeklyStockistSaleMaster.objects.filter(
+        # 🚀 OPTIMIZATION 1: set() mein convert kiya taaki loop me N+1 queries fire na hon
+        submitted_ids = set(WeeklyStockistSaleMaster.objects.filter(
             employee=employee, week_ending_date=target_date
-        ).values_list('stockist_id', flat=True)
+        ).values_list('stockist_id', flat=True))
         
-        data = []
-        for s in stockists:
-            data.append({
+        data = [
+            {
                 'id': s.id,
                 'name': s.name,
                 'status': 'Submitted' if s.id in submitted_ids else 'Pending'
-            })
+            } for s in stockists
+        ]
             
         return Response({
             'status': 'success',
@@ -81,9 +69,6 @@ def get_pending_stockists(request):
         return Response({'status': 'error', 'message': str(e)}, status=500)
 
 
-# ==============================================================================
-# 2. API to get the list of active Focus Products (For MR)
-# ==============================================================================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_focus_products(request):
@@ -91,44 +76,38 @@ def get_focus_products(request):
         employee = request.user.employee
         company = employee.company
         
-        active_focus = FocusProductTracking.objects.filter(company=company, is_active=True)
-        data = []
-        for f in active_focus:
-            data.append({
+        # 🚀 OPTIMIZATION 2: select_related lagaya taaki Product query 1 baar me aaye
+        active_focus = FocusProductTracking.objects.filter(company=company, is_active=True).select_related('product')
+        data = [
+            {
                 'product_id': f.product.id,
                 'name': f.product.name,
                 'pack_size': f.product.pack_size,
-            })
+            } for f in active_focus
+        ]
             
         return Response({'status': 'success', 'data': data})
     except Exception as e:
         return Response({'status': 'error', 'message': str(e)}, status=500)
 
 
-# ==============================================================================
-# 3. API to Submit the Weekly Sales Data (For MR)
-# ==============================================================================
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def submit_weekly_sales(request):
     try:
         employee = request.user.employee
         company = employee.company
-        data = request.data  # DRF automatically parses JSON body
+        data = request.data
         
         stockist_id = data.get('stockist_id')
-        week_ending_date = data.get('week_ending_date') # Flutter will send this
+        week_ending_date = data.get('week_ending_date')
         total_sec = data.get('total_sec_sale_value', 0)
         total_close = data.get('total_closing_value', 0)
-        items = data.get('items', []) # [{'product_id': 1, 'sec_sale_qty': 10, 'closing_qty': 50}]
+        items = data.get('items', [])
         
         if not week_ending_date:
             return Response({'status': 'error', 'message': 'week_ending_date is required.'}, status=400)
 
-        # 🌟 FIX: Web jaisa hi server-side lock enforcement — pehle sirf
-        # web view (weekly_secondary_sale_view) me ye check tha, API me
-        # nahi tha, isliye Flutter se Tue-Fri ko bhi silently submit ho
-        # jaata tha. Ab dono jagah same rule.
         _, is_locked = _get_week_window()
         if is_locked:
             return Response({
@@ -136,34 +115,36 @@ def submit_weekly_sales(request):
                 'message': 'Entry locked! Data submission is only permitted on Saturdays, Sundays, and Mondays.'
             }, status=403)
         
-        # update_or_create allows MRs to edit their mistakes if they resubmit
-        master, created = WeeklyStockistSaleMaster.objects.update_or_create(
-            company=company,
-            stockist_id=stockist_id,
-            week_ending_date=week_ending_date,
-            defaults={
-                'employee': employee,
-                'total_sec_sale_value': total_sec,
-                'total_closing_value': total_close
-            }
-        )
-        
-        # Delete old details for this specific week to avoid duplicate additions on edit
-        WeeklyStockistSaleDetail.objects.filter(master=master).delete()
-        
-        # Save new focus product details
-        for item in items:
-            sec_qty = item.get('sec_sale_qty', 0)
-            closing_qty = item.get('closing_qty', 0)
+        with transaction.atomic():
+            master, _ = WeeklyStockistSaleMaster.objects.update_or_create(
+                company=company,
+                stockist_id=stockist_id,
+                week_ending_date=week_ending_date,
+                defaults={
+                    'employee': employee,
+                    'total_sec_sale_value': total_sec,
+                    'total_closing_value': total_close
+                }
+            )
             
-            # Only save if they entered qty greater than 0
-            if int(sec_qty) > 0 or int(closing_qty) > 0:
-                WeeklyStockistSaleDetail.objects.create(
-                    master=master,
-                    product_id=item['product_id'],
-                    sec_sale_qty=sec_qty,
-                    closing_qty=closing_qty
-                )
+            WeeklyStockistSaleDetail.objects.filter(master=master).delete()
+            
+            # 🚀 OPTIMIZATION 3: Loop ke andar Create ki jagah Bulk Create (N queries reduced to 1)
+            details_to_create = []
+            for item in items:
+                sec_qty = int(item.get('sec_sale_qty', 0))
+                closing_qty = int(item.get('closing_qty', 0))
+                
+                if sec_qty > 0 or closing_qty > 0:
+                    details_to_create.append(WeeklyStockistSaleDetail(
+                        master=master,
+                        product_id=item['product_id'],
+                        sec_sale_qty=sec_qty,
+                        closing_qty=closing_qty
+                    ))
+            
+            if details_to_create:
+                WeeklyStockistSaleDetail.objects.bulk_create(details_to_create)
                 
         return Response({'status': 'success', 'message': 'Weekly Sales saved successfully!'})
         
@@ -171,9 +152,6 @@ def submit_weekly_sales(request):
         return Response({'status': 'error', 'message': str(e)}, status=500)
 
 
-# ==============================================================================
-# 3B. API to fetch an already-submitted week's data (For MR — edit/prefill)
-# ==============================================================================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_weekly_sale_detail(request):
@@ -190,7 +168,6 @@ def get_weekly_sale_detail(request):
                 employee=employee, stockist_id=stockist_id, week_ending_date=week_ending_date
             )
         except WeeklyStockistSaleMaster.DoesNotExist:
-            # Nayi entry hai — koi purana data nahi, ye error nahi hai
             return Response({'status': 'success', 'found': False})
 
         details = WeeklyStockistSaleDetail.objects.filter(master=master)
@@ -210,9 +187,6 @@ def get_weekly_sale_detail(request):
         return Response({'status': 'error', 'message': str(e)}, status=500)
 
 
-# ==============================================================================
-# 3C. API for Weekly Sale History/Report (For MR — own; Manager — team)
-# ==============================================================================
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def weekly_sale_history(request):
@@ -256,7 +230,7 @@ def weekly_sale_history(request):
                 'week_ending_date': str(m.week_ending_date),
                 'total_sec_sale_value': float(m.total_sec_sale_value),
                 'total_closing_value': float(m.total_closing_value),
-                'products': products,  # 🌟 NAYA: Focus product-wise Sec/Closing qty (entry screen jaisa hi format)
+                'products': products,
             })
 
         return Response({
@@ -268,23 +242,18 @@ def weekly_sale_history(request):
         return Response({'status': 'error', 'message': str(e)}, status=500)
 
 
-# ==============================================================================
-# 4. API for RSM to Manage Focus Products & Campaign (For Manager Mobile App)
-# ==============================================================================
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def api_rsm_manage_focus_products(request):
     employee = request.user.employee
     company = employee.company
 
-    # Allowed Roles validation
     allowed_roles = ['RSM', 'RBM', 'ZBM', 'NSM', 'Admin', 'System Administrator']
     if employee.designation not in allowed_roles:
         return Response({'success': False, 'error': 'You do not have permission to access this.'}, status=403)
 
-    control, created = CampaignControl.objects.get_or_create(manager=employee)
+    control, _ = CampaignControl.objects.get_or_create(manager=employee)
 
-    # POST REQUEST: Save Products or Toggle Status
     if request.method == 'POST':
         action = request.data.get('action')
 
@@ -304,25 +273,27 @@ def api_rsm_manage_focus_products(request):
             
             product_ids = request.data.get('product_ids', [])
             
-            # Inactivate old selections
-            FocusProductTracking.objects.filter(company=company, added_by=employee).update(is_active=False)
-            
-            # Save new selections
-            for pid in product_ids:
-                FocusProductTracking.objects.update_or_create(
-                    company=company,
-                    product_id=pid,
-                    added_by=employee,
-                    defaults={'is_active': True}
-                )
+            with transaction.atomic():
+                FocusProductTracking.objects.filter(company=company, added_by=employee).update(is_active=False)
+                
+                new_trackings = [
+                    FocusProductTracking(company=company, product_id=pid, added_by=employee, is_active=True)
+                    for pid in product_ids
+                ]
+                if new_trackings:
+                    FocusProductTracking.objects.bulk_create(
+                        new_trackings, 
+                        update_conflicts=True, 
+                        unique_fields=['company', 'product', 'added_by'], 
+                        update_fields=['is_active']
+                    )
             
             return Response({'success': True, 'message': 'Focus products saved successfully!'})
         
         return Response({'success': False, 'error': 'Invalid action parameter.'}, status=400)
 
-    # GET REQUEST: Fetch Initial Screen Data
     all_products = Product.objects.filter(company=company).order_by('name')
-    active_focus_ids = list(FocusProductTracking.objects.filter(
+    active_focus_ids = set(FocusProductTracking.objects.filter(
         company=company, added_by=employee, is_active=True
     ).values_list('product_id', flat=True))
 
