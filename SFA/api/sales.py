@@ -1,9 +1,10 @@
 """
 SFA/api/sales.py
 ================
-Flutter ke liye Sales & Visit REST API endpoints.
+Sales & Visit REST API endpoints for Flutter.
 """
-from datetime import datetime
+from datetime import datetime, date
+import calendar
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Sum, Q
@@ -34,18 +35,18 @@ def api_doctor_visit_form(request, doc_id):
     try:
         employee = request.user.employee
     except AttributeError:
-        return Response({'error': 'Employee profile missing'}, status=400)
+        return Response({'error': 'Employee profile missing.'}, status=400)
 
     open_day, stuck_day = get_open_day(employee)
 
     if stuck_day:
         return Response({
-            'error': f'{stuck_day.date} ka purana Day Start lock ho gaya. Admin se sampark karein.',
+            'error': f'Previous Day Start for {stuck_day.date} is locked. Please contact the administrator.',
             'stuck_date': str(stuck_day.date),
         }, status=400)
 
     if not open_day:
-        return Response({'error': 'Pehle Day Start karein!'}, status=400)
+        return Response({'error': 'Please submit your Day Start first.'}, status=400)
 
     doctor = get_object_or_404(Doctor, id=doc_id, company=employee.company)
     today = open_day.date
@@ -108,19 +109,19 @@ def api_doctor_visit_submit(request):
     try:
         employee = request.user.employee
     except AttributeError:
-        return Response({'error': 'Employee profile missing'}, status=400)
+        return Response({'error': 'Employee profile missing.'}, status=400)
 
     open_day, stuck_day = get_open_day(employee)
 
     if stuck_day:
-        return Response({'error': 'Purana Day Start lock ho gaya. Admin se sampark karein.'}, status=400)
+        return Response({'error': 'Previous Day Start is locked. Please contact the administrator.'}, status=400)
     if not open_day:
-        return Response({'error': 'Pehle Day Start karein!'}, status=400)
+        return Response({'error': 'Please submit your Day Start first.'}, status=400)
 
     data = request.data
     doctor_id = data.get('doctor_id')
     if not doctor_id:
-        return Response({'error': 'doctor_id required hai'}, status=400)
+        return Response({'error': 'doctor_id is required.'}, status=400)
 
     doctor = get_object_or_404(Doctor, id=doctor_id, company=employee.company)
 
@@ -172,7 +173,7 @@ def api_doctor_visit_submit(request):
                 except MRInventory.DoesNotExist:
                     pass
 
-        return Response({'message': f'Dr. {doctor.name} ki visit save ho gayi!', 'visit_id': visit.id}, status=201)
+        return Response({'message': f'Visit for Dr. {doctor.name} has been saved successfully!', 'visit_id': visit.id}, status=201)
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
@@ -188,19 +189,19 @@ def api_chemist_visit_submit(request):
     try:
         employee = request.user.employee
     except AttributeError:
-        return Response({'error': 'Employee profile missing'}, status=400)
+        return Response({'error': 'Employee profile missing.'}, status=400)
 
     open_day, stuck_day = get_open_day(employee)
 
     if stuck_day:
-        return Response({'error': 'Purana Day Start lock ho gaya. Admin se sampark karein.'}, status=400)
+        return Response({'error': 'Previous Day Start is locked. Please contact the administrator.'}, status=400)
     if not open_day:
-        return Response({'error': 'Pehle Day Start karein!'}, status=400)
+        return Response({'error': 'Please submit your Day Start first.'}, status=400)
 
     data = request.data
     chemist_id = data.get('chemist_id')
     if not chemist_id:
-        return Response({'error': 'chemist_id required hai'}, status=400)
+        return Response({'error': 'chemist_id is required.'}, status=400)
 
     chemist = get_object_or_404(Chemist, id=chemist_id, company=employee.company)
 
@@ -217,7 +218,7 @@ def api_chemist_visit_submit(request):
             if oq > 0:
                 DCRProductDetail.objects.create(visit=visit, product_id=prod_data.get('product_id'), sample_qty=0, order_qty=oq)
 
-        return Response({'message': f'{chemist.name} ki visit save ho gayi!', 'visit_id': visit.id}, status=201)
+        return Response({'message': f'Visit for {chemist.name} has been saved successfully!', 'visit_id': visit.id}, status=201)
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
@@ -229,18 +230,17 @@ def api_today_visits(request):
     try:
         employee = request.user.employee
     except AttributeError:
-        return Response({'error': 'Employee profile missing'}, status=400)
+        return Response({'error': 'Employee profile missing.'}, status=400)
 
-    # 🌟 FIX: Agar 'date' query param diya hai (jaise ?date=2026-07-22),
-    # to wahi date use karo — chahe wo din band (closed) ho chuka ho.
-    # Nahi to purana behavior: abhi jo din khula hai wahi dikhao.
+    # 🌟 FIX: If 'date' query param is provided, use that specific date
+    # regardless of whether the day is already closed.
     date_param = request.query_params.get('date')
 
     if date_param:
         try:
             working_date = datetime.strptime(date_param, '%Y-%m-%d').date()
         except ValueError:
-            return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=400)
+            return Response({'error': 'Invalid date format. Expected YYYY-MM-DD.'}, status=400)
     else:
         open_day, _ = get_open_day(employee)
         if not open_day:
@@ -260,7 +260,7 @@ def api_today_visits(request):
             'summary': {'dr_count': 0, 'chem_count': 0, 'total_samples': 0, 'total_pob': 0.0}
         })
 
-    # 🌟 FIX: Latest visits sabse upar aayenge, taaki Optimistic UI se match kare
+    # 🌟 FIX: Ensure the latest visits appear at the top to match Optimistic UI updates
     all_visits = daily_dcr.visits.select_related('doctor', 'chemist', 'route').prefetch_related('product_details__product').all().order_by('-created_at')
 
     doctor_visits = []
@@ -310,6 +310,7 @@ def api_today_visits(request):
         'doctor_visits': doctor_visits, 'chemist_visits': chemist_visits,
         'summary': {'dr_count': len(doctor_visits), 'chem_count': len(chemist_visits), 'total_samples': total_samples, 'total_pob': round(total_pob, 2)}
     })
+
 # ==============================================================================
 # 🗑️ DELETE VISIT
 # ==============================================================================
@@ -320,16 +321,21 @@ def api_delete_visit(request, visit_id):
     try:
         employee = request.user.employee
     except AttributeError:
-        return Response({'error': 'Employee profile missing'}, status=400)
+        return Response({'error': 'Employee profile missing.'}, status=400)
 
     visit = get_object_or_404(DCRVisit, id=visit_id, daily_dcr__employee=employee)
     visit_date = visit.daily_dcr.date
 
     if DayEnd.objects.filter(employee=employee, date=visit_date, is_closed=True).exists():
-        return Response({'error': 'Day End ho chuka hai — visit delete nahi ho sakti'}, status=400)
+        return Response({'error': 'Day End has already been submitted. The visit cannot be deleted.'}, status=400)
 
     visit.delete()
-    return Response({'message': 'Visit delete ho gayi!'})
+    return Response({'message': 'Visit has been deleted successfully!'})
+
+
+# ==============================================================================
+# 📊 PARTY WISE SALE (Optimized for RAM & DB)
+# ==============================================================================
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -364,22 +370,40 @@ def api_party_wise_get(request):
 
     balances = []
     if selected_stockist:
-        import calendar
-        from datetime import date
-        last_day_of_target_month = date(current_year, current_month, calendar.monthrange(current_year, current_month)[1])
+        # 🚀 OPTIMIZATION 1: Utilize Database (SQL) Aggregation instead of Python Loops
+        
+        # 1. Primary Sale Aggregation (All products)
+        primary_agg = PrimarySale.objects.filter(
+            stockist=selected_stockist, date__lte=today
+        ).values('product_id').annotate(
+            t_qty=Sum('quantity'), t_free=Sum('free_quantity')
+        )
+        primary_dict = {item['product_id']: (item['t_qty'] or 0) + (item['t_free'] or 0) for item in primary_agg}
 
+        # 2. Past Secondary Sale Aggregation
+        past_party_agg = PartyWiseSaleLine.objects.filter(
+            report__stockist=selected_stockist
+        ).filter(
+            Q(report__year__lt=current_year) | Q(report__year=current_year, report__month__lt=current_month)
+        ).values('product_id').annotate(
+            tb=Sum('billed_qty'), tf=Sum('free_qty')
+        )
+        past_sec_dict = {item['product_id']: (item['tb'] or 0) + (item['tf'] or 0) for item in past_party_agg}
+
+        # 3. Current Month Secondary Sale Aggregation
+        current_party_agg = PartyWiseSaleLine.objects.filter(
+            report__stockist=selected_stockist, report__month=current_month, report__year=current_year
+        ).values('product_id').annotate(
+            tb=Sum('billed_qty'), tf=Sum('free_qty')
+        )
+        curr_sec_dict = {item['product_id']: (item['tb'] or 0) + (item['tf'] or 0) for item in current_party_agg}
+
+        # 🚀 Products are fetched via a single DB query and combined in memory (RAM)
         for prod in Product.objects.filter(company=selected_emp.company):
-            primary_agg = PrimarySale.objects.filter(stockist=selected_stockist, product=prod, date__lte=today).aggregate(tot_qty=Sum('quantity'), tot_free=Sum('free_quantity'))
-            total_lifetime_primary = (primary_agg['tot_qty'] or 0) + (primary_agg['tot_free'] or 0)
-            
-            past_party_agg = PartyWiseSaleLine.objects.filter(report__stockist=selected_stockist, product=prod).filter(Q(report__year__lt=current_year) | Q(report__year=current_year, report__month__lt=current_month)).aggregate(tb=Sum('billed_qty'), tf=Sum('free_qty'))
-            total_past_secondary = (past_party_agg['tb'] or 0) + (past_party_agg['tf'] or 0)
-            
+            total_lifetime_primary = primary_dict.get(prod.id, 0)
+            total_past_secondary = past_sec_dict.get(prod.id, 0)
             stock_available_for_this_month = total_lifetime_primary - total_past_secondary
-            
-            current_party_agg = PartyWiseSaleLine.objects.filter(report__stockist=selected_stockist, product=prod, report__month=current_month, report__year=current_year).aggregate(tb=Sum('billed_qty'), tf=Sum('free_qty'))
-            billed_this_month = (current_party_agg['tb'] or 0) + (current_party_agg['tf'] or 0)
-            
+            billed_this_month = curr_sec_dict.get(prod.id, 0)
             current_balance = stock_available_for_this_month - billed_this_month
             
             if total_lifetime_primary > 0 or billed_this_month > 0:
@@ -394,7 +418,6 @@ def api_party_wise_get(request):
     doctors = Doctor.objects.filter(allocated_to=selected_emp, status='Approved').order_by('name')
     doc_data = [{'id': d.id, 'name': f"Dr. {d.name}"} for d in doctors]
     
-    # 🌟 NAYA: Saare products bhejni hai search ke liye
     all_prods = Product.objects.filter(company=selected_emp.company).order_by('name')
     prod_data = [{'id': p.id, 'name': p.name} for p in all_prods]
     
@@ -408,7 +431,7 @@ def api_party_wise_get(request):
         'selected_emp_id': int(selected_emp_id), 'stockists': stockist_data,
         'selected_stockist_id': int(selected_stockist_id) if selected_stockist_id else None,
         'balances': balances, 'chemists': chem_data, 'doctors': doc_data,
-        'all_products': prod_data # 🌟 NAYA
+        'all_products': prod_data 
     })
 
 @api_view(['POST'])
@@ -417,14 +440,14 @@ def api_party_wise_submit(request):
     try:
         employee = request.user.employee
     except AttributeError:
-        return Response({'error': 'Employee profile missing'}, status=400)
+        return Response({'error': 'Employee profile missing.'}, status=400)
 
     today = timezone.now().date()
     setting = SystemSetting.objects.filter(company=employee.company).first()
     deadline = setting.sale_upload_deadline_day if setting else 4
 
     if today.day > deadline and employee.designation not in ['Admin', 'NSM']:
-        return Response({'error': f'Entry locked! Har mahine ki {deadline} tareekh ke baad edit nahi hoti.'}, status=400)
+        return Response({'error': f'Entry locked! Editing is not permitted after the {deadline}th of the month.'}, status=400)
 
     data = request.data
     team_employees = get_dropdown_team(employee, ordered=False)
@@ -436,7 +459,7 @@ def api_party_wise_submit(request):
         selected_emp = employee
 
     if not team_employees.filter(id=selected_emp.id).exists():
-        return Response({'error': 'Access denied'}, status=403)
+        return Response({'error': 'Access denied.'}, status=403)
 
     curr_month = 12 if today.month == 1 else today.month - 1
     curr_year = today.year - 1 if today.month == 1 else today.year
@@ -446,10 +469,9 @@ def api_party_wise_submit(request):
     doctor_id = data.get('doctor_id')
     lines = data.get('lines', [])
 
-    # 🌟 NAYA: Chemist ya Doctor dono mein se ek hona zaroori hai
-    if not stockist_id: return Response({'error': 'Stockist select karna zaroori hai.'}, status=400)
-    if not chemist_id and not doctor_id: return Response({'error': 'Chemist ya Doctor dono mein se kam se kam ek select karein.'}, status=400)
-    if not lines: return Response({'error': 'Koi product add nahi kiya.'}, status=400)
+    if not stockist_id: return Response({'error': 'Selecting a Stockist is mandatory.'}, status=400)
+    if not chemist_id and not doctor_id: return Response({'error': 'Please select at least one Chemist or Doctor.'}, status=400)
+    if not lines: return Response({'error': 'No products were added.'}, status=400)
 
     stockist = get_object_or_404(Stockist, id=stockist_id, company=employee.company)
     
@@ -465,12 +487,12 @@ def api_party_wise_submit(request):
             bq = int(line.get('billed_qty') or 0)
             fq = int(line.get('free_qty') or 0)
             if bq > 0 or fq > 0:
-                # 1. PartyWiseSaleLine create karo (Chemist agar hai to usko, warna null)
+                # 1. Create PartyWiseSaleLine (Assign Chemist if available, otherwise null)
                 new_line = PartyWiseSaleLine.objects.create(
                     report=report, chemist=chemist, product_id=line.get('product_id'), billed_qty=bq, free_qty=fq
                 )
                 
-                # 2. Agar Doctor select kiya gaya hai, toh DoctorRxMapping create karo
+                # 2. If Doctor is selected, create DoctorRxMapping
                 if doctor_id:
                     DoctorRxMapping.objects.create(
                         party_line=new_line, doctor_id=doctor_id, mapped_billed_qty=bq, mapped_free_qty=fq
@@ -478,14 +500,16 @@ def api_party_wise_submit(request):
                 saved += 1
 
         if saved == 0:
-            return Response({'error': 'Sab quantities 0 thi — kuch save nahi hua'}, status=400)
+            return Response({'error': 'All quantities were zero. No records were saved.'}, status=400)
 
-        return Response({'message': f'Sale saved! {saved} product(s) ki entry ho gayi.', 'month': curr_month, 'year': curr_year}, status=201)
+        return Response({'message': f'Sale saved successfully! {saved} product(s) recorded.', 'month': curr_month, 'year': curr_year}, status=201)
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+
 # ====================================================================
-# 2. TARGET SETTING API
+# 🎯 TARGET SETTING API (Optimized Bulk Create)
 # ====================================================================
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
@@ -493,7 +517,7 @@ def api_target_setting(request):
     employee = request.user.employee
     
     if not employee.headquarter:
-        return Response({'success': False, 'error': 'Aapke profile mein Territory/Headquarter assign nahi hai.'}, status=403)
+        return Response({'success': False, 'error': 'No Territory/Headquarter is assigned to your profile.'}, status=403)
         
     month = int(request.query_params.get('month') or request.data.get('month') or timezone.now().month)
     year = int(request.query_params.get('year') or request.data.get('year') or timezone.now().year)
@@ -512,27 +536,50 @@ def api_target_setting(request):
 
     if request.method == 'POST':
         if is_readonly:
-            return Response({'success': False, 'error': 'Ye target already submitted hai, ise edit nahi kiya ja sakta.'}, status=403)
+            return Response({'success': False, 'error': 'This target has already been submitted and cannot be edited.'}, status=403)
             
         action = request.data.get('action') 
         target_payload = request.data.get('targets', []) 
         
+        # 🚀 OPTIMIZATION 2: Replaced update_or_create within a loop with DB Bulk Update/Create
+        existing_targets = {t.product_id: t for t in TerritoryTarget.objects.filter(territory=employee.headquarter, month=month, year=year)}
+        
+        targets_to_create = []
+        targets_to_update = []
+        p_ids_to_keep = []
+
         for item in target_payload:
             p_id = item.get('product_id')
             t_qty = int(item.get('target_qty', 0))
             
             if t_qty > 0:
-                TerritoryTarget.objects.update_or_create(territory=employee.headquarter, product_id=p_id, month=month, year=year, defaults={'target_qty': t_qty})
-            else:
-                TerritoryTarget.objects.filter(territory=employee.headquarter, product_id=p_id, month=month, year=year).delete()
+                p_ids_to_keep.append(p_id)
+                if p_id in existing_targets:
+                    tgt = existing_targets[p_id]
+                    if tgt.target_qty != t_qty:
+                        tgt.target_qty = t_qty
+                        targets_to_update.append(tgt)
+                else:
+                    targets_to_create.append(TerritoryTarget(
+                        territory=employee.headquarter, product_id=p_id, month=month, year=year, target_qty=t_qty
+                    ))
+                    
+        # Update existing, create new, delete zeroes
+        if targets_to_update:
+            TerritoryTarget.objects.bulk_update(targets_to_update, ['target_qty'])
+        if targets_to_create:
+            TerritoryTarget.objects.bulk_create(targets_to_create)
+            
+        # Delete entries from the DB that were not submitted (deleted on UI)
+        TerritoryTarget.objects.filter(territory=employee.headquarter, month=month, year=year).exclude(product_id__in=p_ids_to_keep).delete()
                 
         if action == 'Submit':
             master.status = 'Pending_Manager'
             master.approved_by_managers = []
-            msg = 'Target Manager ko approval ke liye submit kar diya gaya hai!'
+            msg = 'Target has been submitted to the Manager for approval!'
         else:
             master.status = 'Draft'
-            msg = 'Target Draft successfully save ho gaya!'
+            msg = 'Target draft saved successfully!'
             
         master.save()
         return Response({'success': True, 'message': msg})
@@ -571,11 +618,11 @@ def api_gift_campaign(request):
         year = request.data.get('year')
 
         if not item_id or not doctor_ids:
-            return Response({'success': False, 'error': 'Item aur kam se kam ek Doctor select karna zaroori hai.'}, status=400)
+            return Response({'success': False, 'error': 'Selecting an Item and at least one Doctor is mandatory.'}, status=400)
 
         inventory = MRInventory.objects.filter(employee=employee, item_id=item_id, stock_qty__gt=0).first()
         if not inventory:
-            return Response({'success': False, 'error': 'Aapke paas is item ka stock nahi hai.'}, status=400)
+            return Response({'success': False, 'error': 'You do not have stock available for this item.'}, status=400)
 
         already_allocated = GiftCampaignPlan.objects.filter(employee=employee, item_id=item_id, month=month, year=year, status__in=['Pending', 'Approved']).count()
 
@@ -587,7 +634,7 @@ def api_gift_campaign(request):
 
         if already_allocated + len(new_docs_to_add) > inventory.stock_qty:
             available_to_assign = inventory.stock_qty - already_allocated
-            return Response({'success': False, 'error': f'Stock Limit Exceeded! {inventory.item.name} ka total stock {inventory.stock_qty} hai. (Jisme se {already_allocated} already assigned hain). Aap is baar sirf {available_to_assign} aur select kar sakte hain.'}, status=400)
+            return Response({'success': False, 'error': f'Stock Limit Exceeded! Total stock for {inventory.item.name} is {inventory.stock_qty} (of which {already_allocated} are already assigned). You can only select {available_to_assign} more.'}, status=400)
 
         created = 0
         for doc_id in new_docs_to_add:
@@ -596,6 +643,6 @@ def api_gift_campaign(request):
             created += 1
 
         if created > 0:
-            return Response({'success': True, 'message': f'{created} Doctor(s) ke liye Campaign Manager ko bhej diya gaya!'})
+            return Response({'success': True, 'message': f'Campaign for {created} Doctor(s) has been submitted to the Manager!'})
         else:
-            return Response({'success': False, 'error': 'Sabhi selected doctors already is month ke plan mein hain.'}, status=400)
+            return Response({'success': False, 'error': 'All selected doctors are already included in the plan for this month.'}, status=400)
