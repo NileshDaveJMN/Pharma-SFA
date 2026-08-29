@@ -279,6 +279,70 @@ def api_chemists(request):
     except Exception as e:
         return Response({'error': str(e)}, status=500)
 
+# SFA/api/masters.py
+
+def _doctor_dict(doc, today=None, full=False):
+    data = {
+        'id': doc.id,
+        'name': doc.name,
+        'specialty': doc.specialty or '',
+        'category': doc.category or '',
+        'degree': doc.degree or '',
+        'mobile': doc.mobile or '',
+        'route': {'id': doc.route.id, 'name': doc.route.name} if doc.route else None,
+        'territory': {'id': doc.territory.id, 'name': doc.territory.name} if doc.territory else None,
+        'status': doc.status,
+        # FIX 1: Safely verifying both the field and file existence before accessing .url
+        'photo_url': doc.photo.url if (doc.photo and getattr(doc.photo, 'name', None)) else None,
+    }
+
+    if today and doc.dob:
+        data['has_birthday_today'] = (doc.dob.month == today.month and doc.dob.day == today.day)
+    else:
+        data['has_birthday_today'] = False
+
+    if full:
+        data.update({
+            'email': doc.email or '',
+            'address': doc.address or '',
+            'dob': str(doc.dob) if doc.dob else None,
+            'dom': str(doc.dom) if doc.dom else None,
+            'spouse_dob': str(doc.spouse_dob) if doc.spouse_dob else None,
+            'latitude': str(doc.latitude) if doc.latitude else None,
+            'longitude': str(doc.longitude) if doc.longitude else None,
+            # FIX 1.1: Applied same safe image check for vcard_photo
+            'vcard_url': doc.vcard_photo.url if (doc.vcard_photo and getattr(doc.vcard_photo, 'name', None)) else None,
+            'allocated_to': {
+                'id': doc.allocated_to_id,
+                # FIX 2: Removed risky _allocated_to_cache hack
+                'name': doc.allocated_to.name if doc.allocated_to else '', 
+            } if doc.allocated_to_id else None,
+        })
+    return data
+
+def _chemist_dict(chem, full=False):
+    data = {
+        'id': chem.id,
+        'name': chem.name,
+        'phone': chem.phone or '',
+        'address': chem.address or '',
+        'route': {'id': chem.route.id, 'name': chem.route.name} if chem.route else None,
+        'territory': {'id': chem.territory.id, 'name': chem.territory.name} if chem.territory else None,
+        'status': chem.status,
+    }
+    
+    if full:
+        data.update({
+            'owner_name': chem.owner_name or '',
+            'owner_dob': str(chem.owner_dob) if chem.owner_dob else None,
+            # FIX 1.2: Safe image check for chemist card photo
+            'card_photo_url': chem.card_photo.url if (chem.card_photo and getattr(chem.card_photo, 'name', None)) else None,
+            'latitude': str(chem.latitude) if chem.latitude else None,
+            'longitude': str(chem.longitude) if chem.longitude else None,
+        })
+        
+    return data
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_doctor_detail(request, doc_id):
@@ -287,16 +351,19 @@ def api_doctor_detail(request, doc_id):
     except AttributeError:
         return Response({'error': 'Employee profile missing'}, status=400)
 
-    # 🚀 FIX: Team Hierarchy Check hata diya if user is Admin, 
-    # ya phir direct ID aur company filter use kiya taaki cross-mapping me error na aaye
+    # FIX 3: Removed strict team filter to prevent 404s for unassigned/mapped doctors
     doctor = get_object_or_404(
         Doctor.objects.select_related('route', 'territory', 'allocated_to'),
         id=doc_id,
         company=employee.company
     )
 
-    data = _doctor_dict(doctor, timezone.localdate(), full=True)
-    return Response(data)
+    try:
+        data = _doctor_dict(doctor, timezone.localdate(), full=True)
+        return Response(data)
+    except Exception as e:
+        # FIX 4: Wrap in try/except so Flutter gets valid JSON instead of HTML if backend fails
+        return Response({'error': f'Backend error processing doctor data: {str(e)}'}, status=500)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -306,18 +373,19 @@ def api_chemist_detail(request, chem_id):
     except AttributeError:
         return Response({'error': 'Employee profile missing'}, status=400)
 
-    # 🚀 FIX: Same for chemist, direct fetch via ID and company
     chemist = get_object_or_404(
         Chemist.objects.select_related('route', 'territory', 'allocated_to'),
         id=chem_id,
         company=employee.company
     )
 
-    data = _chemist_dict(chemist, full=True)
-    if chemist.allocated_to:
-        data['allocated_to'] = {'id': chemist.allocated_to.id, 'name': chemist.allocated_to.name}
-        
-    return Response(data)
+    try:
+        data = _chemist_dict(chemist, full=True)
+        if chemist.allocated_to:
+            data['allocated_to'] = {'id': chemist.allocated_to.id, 'name': chemist.allocated_to.name}
+        return Response(data)
+    except Exception as e:
+        return Response({'error': f'Backend error processing chemist data: {str(e)}'}, status=500)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -487,53 +555,6 @@ def api_dropdowns(request):
 # 🔧 PRIVATE HELPERS
 # ==============================================================================
 
-def _doctor_dict(doc, today=None, full=False):
-    data = {
-        'id': doc.id,
-        'name': doc.name,
-        'specialty': doc.specialty or '',
-        'category': doc.category or '',
-        'degree': doc.degree or '',
-        'mobile': doc.mobile or '',
-        'route': {'id': doc.route.id, 'name': doc.route.name} if doc.route else None,
-        'territory': {'id': doc.territory.id, 'name': doc.territory.name} if doc.territory else None,
-        'status': doc.status,
-        'photo_url': doc.photo.url if doc.photo else None,
-    }
-
-    if today and doc.dob:
-        data['has_birthday_today'] = (doc.dob.month == today.month and doc.dob.day == today.day)
-    else:
-        data['has_birthday_today'] = False
-
-    if full:
-        data.update({
-            'email': doc.email or '',
-            'address': doc.address or '',
-            'dob': str(doc.dob) if doc.dob else None,
-            'dom': str(doc.dom) if doc.dom else None,
-            'spouse_dob': str(doc.spouse_dob) if doc.spouse_dob else None,
-            'latitude': str(doc.latitude) if doc.latitude else None,
-            'longitude': str(doc.longitude) if doc.longitude else None,
-            'vcard_url': doc.vcard_photo.url if doc.vcard_photo else None,
-            'allocated_to': {
-                'id': doc.allocated_to_id,  # 🚀 OPTIMIZATION: Direct ID fetch karo (No Join needed)
-                # 🚀 SAFETY CHECK: Agar 'allocated_to' memory me hai tabhi name nikalo
-                'name': doc.allocated_to.name if hasattr(doc, '_allocated_to_cache') else '', 
-            } if doc.allocated_to_id else None,
-        })
-
-
-def _chemist_dict(chem, full=False):
-    data = {
-        'id': chem.id,
-        'name': chem.name,
-        'phone': chem.phone or '',
-        'address': chem.address or '',
-        'route': {'id': chem.route.id, 'name': chem.route.name} if chem.route else None,
-        'territory': {'id': chem.territory.id, 'name': chem.territory.name} if chem.territory else None,
-        'status': chem.status,
-    }
     
     # 🌟 NAYA: Full details mein Owner info aur Card Photo bhejna
     if full:
