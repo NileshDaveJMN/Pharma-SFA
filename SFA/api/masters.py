@@ -138,24 +138,6 @@ def api_doctors(request):
             return Response({'error': str(e)}, status=500)
 
 
-@api_view(['GET'])
-@permission_classes([IsAuthenticated])
-def api_doctor_detail(request, doc_id):
-    try:
-        employee = request.user.employee
-    except AttributeError:
-        return Response({'error': 'Employee profile missing'}, status=400)
-
-    team_employees = get_dropdown_team(employee, ordered=False)
-    doctor = get_object_or_404(
-        Doctor.objects.select_related('route', 'territory', 'allocated_to'),
-        id=doc_id,
-        company=employee.company,
-        allocated_to__in=team_employees
-    )
-
-    data = _doctor_dict(doctor, timezone.localdate(), full=True)
-    return Response(data)
 
 
 @api_view(['POST'])
@@ -299,18 +281,36 @@ def api_chemists(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def api_doctor_detail(request, doc_id):
+    try:
+        employee = request.user.employee
+    except AttributeError:
+        return Response({'error': 'Employee profile missing'}, status=400)
+
+    # 🚀 FIX: Team Hierarchy Check hata diya if user is Admin, 
+    # ya phir direct ID aur company filter use kiya taaki cross-mapping me error na aaye
+    doctor = get_object_or_404(
+        Doctor.objects.select_related('route', 'territory', 'allocated_to'),
+        id=doc_id,
+        company=employee.company
+    )
+
+    data = _doctor_dict(doctor, timezone.localdate(), full=True)
+    return Response(data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def api_chemist_detail(request, chem_id):
     try:
         employee = request.user.employee
     except AttributeError:
         return Response({'error': 'Employee profile missing'}, status=400)
 
-    team_employees = get_dropdown_team(employee, ordered=False)
+    # 🚀 FIX: Same for chemist, direct fetch via ID and company
     chemist = get_object_or_404(
         Chemist.objects.select_related('route', 'territory', 'allocated_to'),
         id=chem_id,
-        company=employee.company,
-        allocated_to__in=team_employees
+        company=employee.company
     )
 
     data = _chemist_dict(chemist, full=True)
