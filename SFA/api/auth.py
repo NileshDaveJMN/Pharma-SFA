@@ -90,7 +90,10 @@ def api_login(request):
         'token': token.key,
         'employee': _employee_dict(emp),
         'enable_offline_mode': is_offline_mode,
+        # 🌟 NAYA: Digital VA flag for Flutter App
+        'is_digital_va_enabled': emp.company.is_digital_va_enabled, 
     }, status=status.HTTP_200_OK)
+
 
 # ==============================================================================
 # 🚪 LOGOUT — Token delete karta hai

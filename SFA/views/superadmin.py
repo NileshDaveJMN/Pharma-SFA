@@ -13,6 +13,9 @@ def onboard_company_view(request):
     if request.method == 'POST' and request.FILES.get('onboard_file'):
         excel_file = request.FILES['onboard_file']
         
+        # 🌟 NAYA: Checkbox ki value POST request se nikali ('on' aata hai HTML se agar checked ho)
+        is_digital_va = request.POST.get('is_digital_va_enabled') == 'on'
+        
         try:
             wb = openpyxl.load_workbook(excel_file, data_only=True, read_only=True)
 
@@ -22,7 +25,13 @@ def onboard_company_view(request):
                 comp_name = str(sheet_company.cell(row=2, column=1).value).strip()
                 comp_code = str(sheet_company.cell(row=2, column=2).value).strip().upper()
                 
-                new_company = Company.objects.create(name=comp_name, code=comp_code, slug=comp_code.lower())
+                # 🌟 NAYA: Company model mein is_digital_va_enabled save karwaya
+                new_company = Company.objects.create(
+                    name=comp_name, 
+                    code=comp_code, 
+                    slug=comp_code.lower(),
+                    is_digital_va_enabled=is_digital_va
+                )
                 SystemSetting.objects.create(company=new_company)
 
                 # 2. CREATE TERRITORIES

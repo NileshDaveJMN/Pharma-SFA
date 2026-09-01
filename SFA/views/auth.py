@@ -3,15 +3,15 @@ SFA/views/auth.py
 =================
 Web-facing auth views: login, logout.
 
-Saare team/territory helpers ab yahan NAHI hain —
-wo SFA/services/team.py mein hain.
+All team/territory helpers are NO LONGER located here —
+they have been moved to SFA/services/team.py.
 
-Doosri views files import karein:
+Please import them from the new services file:
     from SFA.services.team import get_full_team_employees, ...
 
-🌟 BACKWARD COMPATIBILITY: Jo bhi file pehle auth.py se import karti thi
-   (core.py, reports.py, sales.py etc.) wo abhi bhi kaam karegi bina
-   kisi change ke — kyunki hum yahan re-export kar rahe hain.
+🌟 BACKWARD COMPATIBILITY: Any file that previously imported from auth.py
+   (e.g., core.py, reports.py, sales.py, etc.) will continue to function 
+   without any changes because we are re-exporting the modules here.
 """
 
 from django.shortcuts import render, redirect
@@ -19,8 +19,8 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.contrib import messages
 
-# 🌟 Re-export saare helpers from services layer
-# Purane imports (from .auth import get_full_team_employees) todenge nahi
+# 🌟 Re-export all helpers from the services layer 
+# to ensure existing legacy imports do not break
 from SFA.services.team import (
     get_full_team_employees,
     get_team_territory_ids,
@@ -50,14 +50,14 @@ __all__ = [
 
 
 # ==============================================================================
-# 🔐 LOGIN — Web browser ke liye (session-based)
+# 🔐 LOGIN — For Web Browser (Session-based)
 # ==============================================================================
 
 def login_view(request):
     if request.method == 'POST':
         comp_code = request.POST.get('company_code', '').strip()
 
-        # Dabbe se jo bhi input mila (mobile number ya sirf naam)
+        # Retrieve the input provided in the form field (mobile number or username)
         entered_username = (
             request.POST.get('mobile_number') or
             request.POST.get('username') or
@@ -68,13 +68,13 @@ def login_view(request):
 
         user = None
 
-        # 🎯 LOGIC 1: Purane users ke liye — exact username match (case-insensitive lookup)
+        # 🎯 LOGIC 1: For legacy users — exact username match (case-insensitive lookup)
         if entered_username:
             candidate = User.objects.filter(username__iexact=entered_username).first()
             if candidate:
                 user = authenticate(username=candidate.username, password=password)
 
-        # 🎯 LOGIC 2: Naye users ke liye — "COMPCODE_mobile" pattern (case-insensitive lookup)
+        # 🎯 LOGIC 2: For new users — "COMPCODE_mobile" pattern (case-insensitive lookup)
         if not user and comp_code and entered_username:
             combined = f"{comp_code}_{entered_username}"
             candidate = User.objects.filter(username__iexact=combined).first()
@@ -97,12 +97,12 @@ def login_view(request):
 # ==============================================================================
 
 def logout_view(request):
-    """Session logout — web browser ke liye."""
+    """Session logout for the web browser."""
     logout(request)
     return redirect('login')
 
 
 def custom_logout_view(request):
-    logout(request)  # 🧹 Ye line actual session/cookies destroy karti hai
+    logout(request)  # 🧹 This line clears the actual session/cookies
     messages.success(request, "You have been logged out successfully.")
-    return redirect('/login')  # Logout hone ke baad login page par bhejein
+    return redirect('/login')  # Redirect to the login page after logout

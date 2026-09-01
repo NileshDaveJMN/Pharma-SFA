@@ -14,6 +14,13 @@ class Company(models.Model):
     code = models.CharField(max_length=20, unique=True)
     slug = models.SlugField(unique=True)
     is_active = models.BooleanField(default=True)
+    
+    # 🌟 NAYA FIELD FOR SAAS ADMIN: Digital VA Control
+    is_digital_va_enabled = models.BooleanField(
+        default=False, 
+        help_text="SaaS Admin control: Enable or Disable the Digital VA module for this company."
+    )
+    
     logo = models.ImageField(upload_to='company_logos/', null=True, blank=True)
     address = models.TextField(blank=True)
     email = models.EmailField(blank=True)
@@ -28,6 +35,7 @@ class Company(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self): return f"{self.name} ({self.code})"
+
 
 class Territory(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='territories') # 🌟 CHANGED
@@ -467,7 +475,13 @@ class DCRVisit(models.Model):
     geofence_bypassed = models.BooleanField(
         default=False,
         help_text="True if backdated entry is made without location punch"
-        )
+    )
+    
+    # 🌟 NAYA FIELD: Digital Detailing Tracking
+    is_digital_detailing = models.BooleanField(
+        default=False, 
+        help_text="True agar is visit mein Digital Visual Aid use kiya gaya tha"
+    )
 
 class DCRProductDetail(models.Model):
     visit = models.ForeignKey(DCRVisit, on_delete=models.CASCADE, related_name='product_details')
@@ -1296,3 +1310,35 @@ def notify_on_comment(sender, instance, created, **kwargs):
                 send_push_notification(instance.event.employee.user, title, body)
             except Exception as e:
                 print("Notification Error:", e)
+# ==============================================================================
+# 📺 DIGITAL VISUAL AID (VA) & CLM TRACKING MODELS
+# ==============================================================================
+
+class ProductVAMedia(models.Model):
+    """Product ke liye slides (Images) store karega."""
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='va_medias')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='va_slides')
+    title = models.CharField(max_length=150, help_text="Slide ka naam ya title")
+    file = models.FileField(upload_to='va_media/', help_text="Digital VA ki image ya document")
+    slide_order = models.PositiveIntegerField(default=1, help_text="Slide dikhane ka sequence (1, 2, 3...)")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['product', 'slide_order']
+        # 🌟 Ek product me same order number repeat na ho
+        unique_together = ('product', 'slide_order') 
+
+    def __str__(self):
+        return f"{self.product.name} - Slide {self.slide_order} ({self.title})"
+
+class VAScreenTime(models.Model):
+    """Visit ke dauran kis product ki slide par kitne seconds lagaye gaye."""
+    visit = models.ForeignKey(DCRVisit, on_delete=models.CASCADE, related_name='va_screen_times')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    duration_seconds = models.PositiveIntegerField(default=0, help_text="Total time spent on this product in seconds")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        doc_name = self.visit.doctor.name if self.visit and self.visit.doctor else "Unknown"
+        return f"Dr. {doc_name} - {self.product.name} ({self.duration_seconds} sec)"
