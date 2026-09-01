@@ -318,7 +318,7 @@ def mr_dashboard_view(request, employee):
         'pending_doctors': pending_doctors,
         'visited_doctors': visited_docs,
         'pending_chemists': pending_chemists,
-        'visited_chemists': visited_chemists,
+        'visited_chemists': visited_chems,
         'is_day_started': is_day_started, 'is_day_ended': is_day_ended, 'tp': tp,
         'company_notices': CompanyNotice.objects.filter(company=employee.company, is_active=True).order_by('-created_at')[:5],
         'today_dr_visits': len(visited_docs), 'today_chem_visits': len(visited_chems),
