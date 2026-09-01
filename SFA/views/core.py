@@ -312,21 +312,21 @@ def mr_dashboard_view(request, employee):
                 gift_stock.append({'item': inv.item, 'stock_qty': inv.stock_qty, 'allowed_doctors': sorted(allowed)})
             else:
                 gift_stock.append({'item': inv.item, 'stock_qty': inv.stock_qty, 'allowed_doctors': None})
-     return render(request, 'dashboard.html', {
-        'employee': employee, 'today': working_date, 
-        'active_routes': active_routes, 'available_routes': available_routes, 
+    return render(request, 'dashboard.html', {
+        'employee': employee, 'today': working_date,
+        'active_routes': active_routes, 'available_routes': available_routes,
         'pending_doctors': pending_doctors,
-        'visited_doctors': visited_docs,        # 🌟 key badla — nayi template ye naam use karti hai
+        'visited_doctors': visited_docs,
         'pending_chemists': pending_chemists,
-        'visited_chemists': visited_chems,      # 🌟
-        'is_day_started': is_day_started, 'is_day_ended': is_day_ended, 'tp': tp, 
+        'visited_chemists': visited_chemists,
+        'is_day_started': is_day_started, 'is_day_ended': is_day_ended, 'tp': tp,
         'company_notices': CompanyNotice.objects.filter(company=employee.company, is_active=True).order_by('-created_at')[:5],
-        'today_dr_visits': len(visited_docs), 'today_chem_visits': len(visited_chems), 
+        'today_dr_visits': len(visited_docs), 'today_chem_visits': len(visited_chems),
         'today_samples': today_samples, 'today_pob': round(today_pob, 2),
         'open_day': open_day,
-        'products_data': products_data,    # 🌟 NAYA — product dropdown ke liye
-        'gift_stock': gift_stock,          # 🌟 NAYA — gift dropdown ke liye
-        'is_va_enabled': is_va_enabled,    # 🌟 NAYA — VA button ke liye
+        'products_data': products_data,
+        'gift_stock': gift_stock,
+        'is_va_enabled': is_va_enabled,
     })
 from django.contrib import messages
 from django.shortcuts import render, redirect
