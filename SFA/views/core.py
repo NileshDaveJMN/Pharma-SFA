@@ -610,7 +610,41 @@ def my_requests_view(request, employee):
     requests_list.sort(key=lambda r: r['date'] or timezone.now() - timedelta(days=36500), reverse=True)
 
     return render(request, 'my_requests.html', {'requests_list': requests_list})
+# ==============================================================================
+# 🌟 FIX: "MERI BAARI" CHECK — sirf tab block karo jab chain mein meri turn ho
+# ==============================================================================
+def _is_target_my_turn(target, manager):
+    """Target ki chain: territory(HQ) ke employee se upar. Mujhse PEHLE wale
+    sab managers approve kar chuke hon + maine abhi tak approve nahi kiya = meri baari."""
+    if not target.territory_id:
+        return False
+    approved = target.approved_by_managers or []
+    if manager.id in approved:
+        return False                                   # ✅ maine already approve kiya
+    chain_emp = Employee.objects.filter(headquarter_id=target.territory_id, is_active=True).first()
+    curr = chain_emp.manager if chain_emp else None
+    while curr is not None:
+        if curr.id == manager.id:
+            return True                                # 🎯 neeche ke sab done — ab MERI baari
+        if curr.id not in approved:
+            return False                               # neeche wale manager ki baari — main free
+        curr = curr.manager
+    return False                                       # chain mein main hi nahi (data mismatch)
 
+
+def _is_claim_my_turn(claim, manager):
+    """Free Claim ki chain: claim.employee (MR) se upar — same logic."""
+    approved = claim.approved_by_managers or []
+    if manager.id in approved:
+        return False
+    curr = claim.employee.manager if claim.employee else None
+    while curr is not None:
+        if curr.id == manager.id:
+            return True
+        if curr.id not in approved:
+            return False
+        curr = curr.manager
+    return False
 @employee_required
 def day_start_view(request, employee):
     # 🌟 CALENDAR SYNC (Always up-to-date)
@@ -742,16 +776,17 @@ def day_start_view(request, employee):
         if GiftCampaignPlan.objects.filter(employee_id__in=subordinate_ids, status='Pending').exists(): 
             pending_items.append('Gift Campaigns')
         
-        # Target Check (SQLite Safe JSON Check)
+            
+        # 🌟 FIXED: Target Check — sirf WOHI targets jo mere turn pe hain
         sub_territories = Employee.objects.filter(id__in=subordinate_ids).exclude(headquarter__isnull=True).values_list('headquarter_id', flat=True)
         pending_targets = MonthlyTargetMaster.objects.filter(territory_id__in=sub_territories, status='Pending_Manager')
-        has_pending_targets = any(employee.id not in (t.approved_by_managers or []) for t in pending_targets)
+        has_pending_targets = any(_is_target_my_turn(t, employee) for t in pending_targets)
         if has_pending_targets:
             pending_items.append('Targets')
-            
-        # Free Claims Check (SQLite Safe JSON Check)
+
+        # 🌟 FIXED: Free Claims Check — same turn logic
         pending_claims = FreeQtyClaimMaster.objects.filter(employee_id__in=subordinate_ids, status='Pending_Manager')
-        has_pending_claims = any(employee.id not in (c.approved_by_managers or []) for c in pending_claims)
+        has_pending_claims = any(_is_claim_my_turn(c, employee) for c in pending_claims)
         if has_pending_claims:
             pending_items.append('Free Claims')
         
