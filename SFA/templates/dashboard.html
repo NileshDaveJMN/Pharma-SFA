@@ -2,15 +2,14 @@
 
 {% block content %}
 <style>
-    /* 🌟 ONE-SCREEN LAYOUT */
-    body { overflow: hidden; }
-    .dcr-screen {
-        display: flex; flex-direction: column;
-        height: calc(100dvh - var(--nav-h, 60px));  /* navbar height ke hisaab se adjust karein */
-        overflow: hidden; padding: 4px 6px 0;
-    }
-    .dcr-flex { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+    /* 🌟 ONE-SCREEN LAYOUT — base.html aware
+       (navbar ~50px + mt-4 24px + bottom-nav ~85px + margins ≈ 175px) */
+    .dcr-screen { display: flex; flex-direction: column; }
     .dcr-shrink { flex-shrink: 0; }
+    .dcr-flex {
+        display: flex; flex-direction: column; overflow: hidden;
+        height: calc(100dvh - 175px);   /* 🎛️ TUNING KNOB: 175 = fit, cut ho to 185, gap ho to 165 */
+    }
 
     /* Visit Panel */
     #visitPanel { display: none; flex-direction: column; gap: 5px; }
@@ -21,8 +20,8 @@
     .vp-row input { width: 100%; padding: 5px 3px; font-size: 0.8rem; text-align: center; border: 1px solid #dee2e6; border-radius: 5px; }
     .vp-rm { background: none; border: none; color: #dc3545; font-size: 0.85rem; cursor: pointer; padding: 2px; }
 
-    /* Visited list */
-    #visitedList { flex: 1 1 auto; min-height: 60px; overflow-y: auto; }
+    /* Visited list — sirf ye andar scroll karti hai */
+    #visitedList { flex: 1 1 auto; min-height: 100px; overflow-y: auto; }
     #visitedList::-webkit-scrollbar { width: 4px; }
     #visitedList::-webkit-scrollbar-thumb { background: #c1c9d2; border-radius: 4px; }
 
@@ -31,7 +30,7 @@
 
     /* VA Overlay */
     .va-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; height: 100dvh; }
-    .va-topbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; padding-top: calc(8px + env(safe-area-inset-top)); background: #111; color: #fff; font-size: 0.85rem; }
+    .va-topbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; padding-top: calc(8px + env(safe-area-inset-top)); background: #111; color: #fff; font-size: 0.85rem; flex-shrink: 0; }
     .va-close { background: none; border: none; color: #fff; font-size: 1.2rem; cursor: pointer; }
     .va-pname { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .va-progress { opacity: .7; }
@@ -142,7 +141,7 @@
         </div>
 
         <!-- 📝 2. VISIT PANEL (doctor select karne par khulta hai) -->
-        <form id="visitForm" class="mx-1 mb-1 bg-white shadow-sm border p-1 dcr-shrink" id="visitForm" style="border-radius:8px;border-left:3px solid #6f42c1;overflow-y:auto;max-height:46dvh;display:none;">
+        <form id="visitForm" class="mx-1 mb-1 bg-white shadow-sm border p-1 dcr-shrink" style="border-radius:8px;border-left:3px solid #6f42c1;overflow-y:auto;max-height:45dvh;display:none;">
             {% csrf_token %}
             <input type="hidden" name="latitude" id="latInput" value="">
             <input type="hidden" name="longitude" id="lngInput" value="">
@@ -186,13 +185,13 @@
         </div>
         {% endif %}
 
-        <!-- ✅ 3. VISITED TODAY (sirf ye scroll karta hai) -->
+        <!-- ✅ 3. VISITED TODAY (sirf ye andar scroll karti hai) -->
         <h6 class="fw-bold text-success mb-1 border-bottom pb-1 px-1 dcr-shrink" style="font-size:0.65rem;">
             ✅ VISITED TODAY — <span id="visStats">💊 {{ today_samples }} • 🛒 ₹{{ today_pob }}</span>
         </h6>
         <div id="visitedList" class="px-1">
             {% for v in visited_doctors %}
-            <div class="card border-0 shadow-sm bg-white mb-1 vis-card" style="border-left:3px solid #8fa0b3;border-radius:6px;">
+            <div class="card border-0 shadow-sm bg-white mb-1" style="border-left:3px solid #8fa0b3;border-radius:6px;">
                 <div class="card-body p-1 px-2 d-flex justify-content-between align-items-center">
                     <div>
                         <h6 class="fw-bold text-secondary mb-0" style="font-size:0.75rem;">Dr. {{ v.doctor.name }}</h6>
@@ -228,7 +227,7 @@
             {% endif %}
         </div>
 
-        <!-- 🛑 4. DAY END -->
+        <!-- 🛑 4. DAY END (flex ke bottom pe, hamesha visible) -->
         <div class="px-1 py-1 dcr-shrink">
             <a href="{% url 'day_end' %}" class="btn btn-danger w-100 fw-bold shadow-sm py-2 d-flex align-items-center justify-content-center gap-2" style="border-radius:8px;font-size:0.85rem;">
                 <i class="bi bi-stop-circle-fill"></i> End Day & Submit Expense
@@ -344,6 +343,7 @@ function closePanel() {
     currentDoc = null; form.style.display = 'none';
     docSelect.value = ''; resetPanel();
 }
+
 // ================= 2. PRODUCT DROPDOWN → ROW =================
 prodSelect.addEventListener('change', () => {
     const pid = prodSelect.value; if (!pid) return;
@@ -452,14 +452,12 @@ function resetPanel() {
     document.getElementById('vaFlag').value = 'false';
     selectedPids = [];
 }
-
 // ================= CHEMIST (purana page khulta hai) =================
 const chemSelect = document.getElementById('chemSelect');
 if (chemSelect) chemSelect.addEventListener('change', () => {
     const opt = chemSelect.options[chemSelect.selectedIndex];
     if (opt && opt.dataset.url) window.location.href = opt.dataset.url;
 });
-
 // ================= 📱 VA (sirf SELECTED products) =================
 const overlay = document.getElementById('vaOverlay'), stage = document.getElementById('vaStage'),
       endScreen = document.getElementById('vaEndScreen');
@@ -495,7 +493,6 @@ function showSlide(i) {
 }
 function next() { idx < slides.length - 1 ? (idx++, showSlide(idx)) : finishVA(); }
 function prev() { if (idx > 0) { idx--; showSlide(idx); } }
-
 // 🌟 LAST slide swipe → END SCREEN + SUBMIT
 function finishVA() {
     clearInterval(tick); activePid = null;
