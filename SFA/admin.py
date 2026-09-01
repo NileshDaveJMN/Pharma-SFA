@@ -13,7 +13,8 @@ from .models import (
     TerritoryTarget, MonthlyTargetMaster, Holiday, LeaveBalance, 
     LeaveApplication, HQDistance, CompanyNotice, SystemNotification, DirectMessage,
     DailyDCRStatus, reverse_visit_inventory, DoctorEditRequest, ChemistEditRequest,
-    PromoItem, PromoDispatch, MRInventory, GiftCampaignPlan, DoctorROILedger, FreeQtyClaimMaster, FreeQtyClaimLine
+    PromoItem, PromoDispatch, MRInventory, GiftCampaignPlan, DoctorROILedger, FreeQtyClaimMaster, FreeQtyClaimLine,
+    ProductVAMedia, VAScreenTime  # 🌟 NAYA: VA Models imported
 )
 from SFA.models import SystemSetting
 
@@ -41,6 +42,8 @@ class TenantIsolationMixin:
                 return qs.filter(stockist__company=admin_company)
             elif hasattr(self.model, 'doctor'):
                 return qs.filter(doctor__company=admin_company)
+            elif hasattr(self.model, 'visit'): # 🌟 NAYA: VAScreenTime ke liye
+                return qs.filter(visit__daily_dcr__employee__company=admin_company)
         except Exception:
             return qs.none() # Error aane par list khali dikhegi
         return qs
@@ -66,6 +69,8 @@ class TenantIsolationMixin:
                     kwargs["queryset"] = db_field.related_model.objects.filter(company=admin_company)
                 elif db_field.name == "company":
                     kwargs["queryset"] = Company.objects.filter(id=admin_company.id)
+                elif db_field.name == "visit": # 🌟 NAYA
+                    kwargs["queryset"] = DCRVisit.objects.filter(daily_dcr__employee__company=admin_company)
             except Exception:
                 pass
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
@@ -101,13 +106,13 @@ class AssignCompanyMixin:
 # ==========================================
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
-    list_display = ('name', 'code', 'slug', 'subscription_plan', 'subscription_expiry', 'max_users', 'is_active')
-    list_filter = ('is_active', 'subscription_plan')
+    list_display = ('name', 'code', 'slug', 'subscription_plan', 'subscription_expiry', 'max_users', 'is_active', 'is_digital_va_enabled')
+    list_filter = ('is_active', 'subscription_plan', 'is_digital_va_enabled')
     search_fields = ('name', 'code', 'slug')
     prepopulated_fields = {'slug': ('code',)}
-    list_editable = ('is_active', 'subscription_plan')
+    list_editable = ('is_active', 'subscription_plan', 'is_digital_va_enabled')
     fieldsets = (
-        ('Basic Info', {'fields': ('name', 'code', 'slug', 'is_active', 'logo')}),
+        ('Basic Info', {'fields': ('name', 'code', 'slug', 'is_active', 'is_digital_va_enabled', 'logo')}),
         ('Contact', {'fields': ('email', 'phone', 'address')}),
         ('Settings', {'fields': ('financial_year_start', 'currency', 'timezone')}),
         ('Subscription', {'fields': ('subscription_plan', 'subscription_expiry', 'max_users')}),
@@ -185,8 +190,6 @@ class StockistAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
 
 @admin.register(Chemist)
 class ChemistAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
-    # 🌟 DEBUG FIX: 'company' column + filter add kiya taaki blank-company
-    # records shell ke bina hi list view me pakde ja sakein
     list_display = ('name', 'company', 'territory', 'route', 'allocated_to', 'status')
     list_filter = ('company', 'territory', 'route', 'status')
     search_fields = ('name', 'phone')
@@ -194,8 +197,6 @@ class ChemistAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
 
 @admin.register(Doctor)
 class DoctorAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
-    # 🌟 DEBUG FIX: 'company' column + filter add kiya taaki blank-company
-    # records shell ke bina hi list view me pakde ja sakein
     list_display = ('name', 'company', 'specialty', 'territory', 'route', 'allocated_to', 'status')
     list_filter = ('company', 'territory', 'route', 'specialty', 'status')
     search_fields = ('name', 'specialty')
@@ -215,7 +216,7 @@ class DCRProductDetailInline(admin.TabularInline):
 class DCRVisitInline(admin.TabularInline):
     model = DCRVisit
     extra = 0 
-    readonly_fields = ('latitude', 'longitude', 'created_at')
+    readonly_fields = ('latitude', 'longitude', 'created_at', 'is_digital_detailing') # 🌟 NAYA
     def get_queryset(self, request): return super().get_queryset(request).select_related('doctor', 'chemist')
 
 @admin.register(DailyDCR)
@@ -254,7 +255,8 @@ class DailyDCRAdmin(TenantIsolationMixin, admin.ModelAdmin):
 
 @admin.register(DCRVisit)
 class DCRVisitAdmin(TenantIsolationMixin, admin.ModelAdmin):
-    list_display = ('date_dcr', 'employee_dcr', 'target_name')
+    list_display = ('date_dcr', 'employee_dcr', 'target_name', 'is_digital_detailing') # 🌟 NAYA
+    list_filter = ('is_digital_detailing',) # 🌟 NAYA
     inlines = [DCRProductDetailInline]
     readonly_fields = ('latitude', 'longitude', 'created_at')
     def get_queryset(self, request): return super().get_queryset(request).select_related('daily_dcr', 'daily_dcr__employee', 'doctor', 'chemist')
@@ -432,17 +434,32 @@ class ChemistEditRequestAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('chemist', 'req_name', 'employee', 'status', 'created_at')
     
 # ==============================================================================
+# 🌟 DIGITAL VA & CLM ADMIN
+# ==============================================================================
+@admin.register(ProductVAMedia)
+class ProductVAMediaAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
+    list_display = ('product', 'company', 'title', 'slide_order', 'is_active', 'created_at')
+    list_filter = ('company', 'is_active', 'product')
+    search_fields = ('product__name', 'title')
+    ordering = ('company', 'product', 'slide_order')
+
+@admin.register(VAScreenTime)
+class VAScreenTimeAdmin(TenantIsolationMixin, admin.ModelAdmin):
+    list_display = ('visit', 'product', 'duration_seconds', 'created_at')
+    list_filter = ('product', 'created_at')
+    search_fields = ('visit__doctor__name', 'visit__daily_dcr__employee__name', 'product__name')
+
+
+# ==============================================================================
 # 🌟 ACTIVITY & COMMUNITY HUB ADMIN
 # ==============================================================================
 from .models import FieldEvent, EventPhoto, EventLike, EventComment
 
 class EventPhotoInline(admin.TabularInline):
     model = EventPhoto
-    extra = 1  # Event ke andar hi photo upload/dekhne ka option mil jayega
+    extra = 1  
     readonly_fields = ('photo_preview',)
 
-    # 🌟 DEBUG FIX: Actual saved image yahan dikhegi (agar Cloudinary URL
-    # broken hai toh ye <img> bhi broken dikhega — turant pata chal jayega)
     def photo_preview(self, obj):
         from django.utils.html import format_html
         if obj.photo:
@@ -455,15 +472,9 @@ class FieldEventAdmin(admin.ModelAdmin):
     list_display = ('subject', 'employee', 'category', 'event_date', 'is_shared_in_community')
     list_filter = ('category', 'is_shared_in_community', 'event_date', 'territory')
     search_fields = ('subject', 'employee__name', 'description')
-    inlines = [EventPhotoInline] # Event ke page par hi uski photos dikhengi
-    list_editable = ('is_shared_in_community',) # Admin direct bahar se hi post ko hide/show kar payega
+    inlines = [EventPhotoInline] 
+    list_editable = ('is_shared_in_community',) 
 
-    # 🌟 NAYA: Event delete karte waqt uske saare related records
-    # (photos + Cloudinary files, likes, comments) automatically CASCADE se
-    # delete ho jaate hain (models.py me on_delete=CASCADE already set hai,
-    # aur EventPhoto ke liye ek post_delete signal Cloudinary file bhi
-    # delete karta hai). Ye overrides sirf ek confirmation message dikhate
-    # hain ki kitna data saath me delete hua — safety/visibility ke liye.
     def delete_model(self, request, obj):
         photos, likes, comments = obj.photos.count(), obj.likes.count(), obj.comments.count()
         super().delete_model(request, obj)
@@ -489,8 +500,6 @@ class FieldEventAdmin(admin.ModelAdmin):
 
 @admin.register(EventPhoto)
 class EventPhotoAdmin(admin.ModelAdmin):
-    # 🌟 DEBUG FIX: Standalone list jisme har photo ka raw saved path/URL
-    # text me dikhega — bina shell ke confirm ho jayega Cloudinary pe gayi ya nahi
     list_display = ('event', 'photo', 'uploaded_at')
     search_fields = ('event__subject',)
     list_filter = ('uploaded_at',)

@@ -16,9 +16,14 @@
     <form method="POST" id="visitForm" class="m-0">
         {% csrf_token %}
         
-        <!-- 📍 GPS Hidden Fields & Status Alert -->
+        <!-- 📍 GPS & VA Hidden Fields -->
         <input type="hidden" name="latitude" id="lat">
         <input type="hidden" name="longitude" id="lng">
+        <input type="hidden" name="is_digital_detailing" id="is_digital_detailing" value="false">
+        {% for item in products_data %}
+            <input type="hidden" name="va_time_{{ item.product.id }}" id="va_time_{{ item.product.id }}" value="0">
+        {% endfor %}
+
         <div id="geo-status" class="alert alert-warning p-1 mb-2 mx-1 text-center fw-bold shadow-sm border-0" style="font-size: 0.65rem; border-radius: 6px;">
             ⏳ GPS Location fetch ho rahi hai...
         </div>
@@ -46,7 +51,7 @@
                             </td>
                             <td class="text-center py-1">
                                 <div class="form-check form-switch d-inline-block m-0">
-                                    <input class="form-check-input" type="checkbox" name="detailed_{{ item.product.id }}" style="width: 28px; height: 14px;">
+                                    <input class="form-check-input detail-checkbox" type="checkbox" name="detailed_{{ item.product.id }}" data-pid="{{ item.product.id }}" style="width: 28px; height: 14px;">
                                 </div>
                             </td>
                             <td class="text-center py-1">
@@ -100,13 +105,147 @@
             </div>
         </div>
 
-        <div class="mx-1 mb-5">
+        <!-- 🌟 ACTION BUTTONS -->
+        <div class="mx-1 mb-5 pb-4 d-flex gap-2">
             <button type="submit" id="submitBtn" class="btn btn-primary btn-sm w-100 fw-bold shadow-sm py-2" style="border-radius: 6px;" disabled>
-                ✔ Submit Doctor Visit
+                <i class="bi bi-check-circle"></i> Submit DCR
             </button>
+            
+            {% if is_va_enabled %}
+            <button type="button" id="startVABtn" class="btn btn-info btn-sm w-100 fw-bold shadow-sm py-2 text-dark" style="border-radius: 6px; background-color: #0dcaf0; border: none;">
+                <i class="bi bi-easel"></i> Digital Detailing
+            </button>
+            {% endif %}
         </div>
     </form>
 </div>
+
+<!-- ======================================================================= -->
+<!-- 📺 DIGITAL VA FULL-SCREEN OVERLAY (HIDDEN BY DEFAULT) -->
+<!-- ======================================================================= -->
+{% if is_va_enabled %}
+<div id="vaOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #000; z-index: 9999; flex-direction: column;">
+    <!-- Top Bar -->
+    <div class="d-flex justify-content-between align-items-center p-2" style="background: rgba(0,0,0,0.5); position: absolute; width: 100%; top: 0; z-index: 10;">
+        <span id="vaSlideCounter" class="badge bg-dark border text-white">1 / 1</span>
+        <button type="button" id="closeVABtn" class="btn btn-danger btn-sm fw-bold">Close</button>
+    </div>
+    
+    <!-- Image Display -->
+    <div style="flex: 1; display: flex; justify-content: center; align-items: center; overflow: hidden; position: relative;">
+        <img id="vaImage" src="" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+        
+        <!-- Navigation Areas -->
+        <div id="vaPrevArea" style="position: absolute; left: 0; top: 0; width: 30%; height: 100%; z-index: 5;"></div>
+        <div id="vaNextArea" style="position: absolute; right: 0; top: 0; width: 30%; height: 100%; z-index: 5;"></div>
+    </div>
+    
+    <!-- Bottom Bar -->
+    <div class="p-3 d-flex justify-content-center" style="background: rgba(0,0,0,0.5); position: absolute; width: 100%; bottom: 0; z-index: 10;">
+        <button type="button" id="finishVABtn" class="btn btn-success fw-bold w-100 shadow-lg" style="border-radius: 30px;">
+            ✅ Finish Detailing & Submit DCR
+        </button>
+    </div>
+</div>
+
+<script>
+    const vaDatabase = {
+        {% for item in products_data %}
+        "{{ item.product.id }}": [
+            {% for slide in item.va_slides %}
+            { url: "{{ slide.url }}", title: "{{ slide.title }}" },
+            {% endfor %}
+        ],
+        {% endfor %}
+    };
+
+    let activeSlides = [];
+    let currentSlideIndex = 0;
+    
+    // Timer Variables
+    let currentProductId = null;
+    let slideStartTime = null;
+    let productTimes = {}; // Format: { "prodId": totalSeconds }
+
+    const vaOverlay = document.getElementById('vaOverlay');
+    const vaImage = document.getElementById('vaImage');
+    const vaSlideCounter = document.getElementById('vaSlideCounter');
+    
+    function recordTimeSpent() {
+        if (currentProductId && slideStartTime) {
+            let timeSpent = Math.round((Date.now() - slideStartTime) / 1000);
+            productTimes[currentProductId] = (productTimes[currentProductId] || 0) + timeSpent;
+        }
+        slideStartTime = Date.now(); // Reset timer
+    }
+
+    function renderSlide(index) {
+        if (index < 0 || index >= activeSlides.length) return;
+        
+        recordTimeSpent(); // Record time of previous slide before changing
+        
+        currentSlideIndex = index;
+        let slide = activeSlides[index];
+        currentProductId = slide.pid;
+        
+        vaImage.src = slide.url;
+        vaSlideCounter.innerText = (index + 1) + " / " + activeSlides.length;
+    }
+
+    document.getElementById('startVABtn').addEventListener('click', function() {
+        activeSlides = [];
+        productTimes = {};
+        
+        // Find which products are "Detailed"
+        document.querySelectorAll('.detail-checkbox').forEach(function(checkbox) {
+            if (checkbox.checked) {
+                let pid = checkbox.getAttribute('data-pid');
+                let slides = vaDatabase[pid];
+                if (slides && slides.length > 0) {
+                    slides.forEach(s => activeSlides.push({ pid: pid, url: s.url, title: s.title }));
+                }
+            }
+        });
+
+        if (activeSlides.length === 0) {
+            alert("Please select (Det) at least one product that has Visual Aid slides.");
+            return;
+        }
+
+        // Open Overlay
+        vaOverlay.style.display = 'flex';
+        slideStartTime = Date.now();
+        renderSlide(0);
+    });
+
+    document.getElementById('vaNextArea').addEventListener('click', function() {
+        if (currentSlideIndex < activeSlides.length - 1) renderSlide(currentSlideIndex + 1);
+    });
+
+    document.getElementById('vaPrevArea').addEventListener('click', function() {
+        if (currentSlideIndex > 0) renderSlide(currentSlideIndex - 1);
+    });
+
+    document.getElementById('closeVABtn').addEventListener('click', function() {
+        recordTimeSpent();
+        vaOverlay.style.display = 'none';
+        currentProductId = null;
+    });
+
+    document.getElementById('finishVABtn').addEventListener('click', function() {
+        recordTimeSpent(); // Add final slide's time
+        
+        // Populate hidden inputs with tracked time
+        for (let pid in productTimes) {
+            let input = document.getElementById('va_time_' + pid);
+            if (input) input.value = productTimes[pid];
+        }
+        
+        document.getElementById('is_digital_detailing').value = "true";
+        document.getElementById('visitForm').submit();
+    });
+</script>
+{% endif %}
 
 <!-- 📍 GPS Logic Script -->
 <script>

@@ -1000,6 +1000,9 @@ def day_end_view(request, employee):
     })
 
 
+# Upar imports mein ye zaroor add karein agar nahi hai:
+# from SFA.models import ProductVAMedia, VAScreenTime
+
 @employee_required
 def doctor_visit_view(request, employee, doc_id):
     open_day, stuck_day = get_open_day(employee)
@@ -1014,14 +1017,15 @@ def doctor_visit_view(request, employee, doc_id):
     if request.method == "POST":
         daily_dcr, _ = DailyDCR.objects.get_or_create(employee=employee, date=open_day.date)
         
-        # 🌟 NAYA: GEOFENCE BYPASS TRACKING (Agar entry backdate mein hai)
         setting = SystemSetting.objects.filter(company=employee.company).first()
         is_backdated = open_day.date < timezone.localdate()
         is_bypassed = False
         if is_backdated:
-            # Agar backdate allowed hai without strict geofencing, then it's a bypass.
             if not setting or not setting.strict_geofence_for_backdate:
                 is_bypassed = True
+        
+        # 🌟 NAYA: Check if Digital Detailing was performed
+        is_digital = request.POST.get('is_digital_detailing') == 'true'
                 
         visit = DCRVisit.objects.create(
             daily_dcr=daily_dcr, 
@@ -1030,7 +1034,8 @@ def doctor_visit_view(request, employee, doc_id):
             remark=request.POST.get('remark', ''), 
             latitude=request.POST.get('latitude') or None, 
             longitude=request.POST.get('longitude') or None,
-            geofence_bypassed=is_bypassed  # 🚩 Geofence exception marked!
+            geofence_bypassed=is_bypassed,
+            is_digital_detailing=is_digital  # 🌟 NAYA FIELD SAVED
         )
         
         # 1. PRODUCT SAMPLING & INVENTORY DEDUCTION
@@ -1042,12 +1047,21 @@ def doctor_visit_view(request, employee, doc_id):
             if is_det or sq > 0 or oq > 0: 
                 DCRProductDetail.objects.create(visit=visit, product=p, is_detailed=is_det, sample_qty=sq, order_qty=oq)
                 
-                # Bag se Sample minus karo!
                 if sq > 0:
                     sample_inv = MRInventory.objects.filter(employee=employee, item__linked_product=p, item__item_type='Sample').first()
                     if sample_inv and sample_inv.stock_qty >= sq:
                         sample_inv.stock_qty -= sq
                         sample_inv.save()
+
+            # 🌟 NAYA: SCREEN TIME TRACKING SAVED
+            if is_digital:
+                time_spent = int(request.POST.get(f'va_time_{p.id}') or 0)
+                if time_spent > 0:
+                    VAScreenTime.objects.create(
+                        visit=visit,
+                        product=p,
+                        duration_seconds=time_spent
+                    )
 
         # 2. GIFTS/INPUTS DEDUCTION & ROI
         for key, value in request.POST.items():
@@ -1080,11 +1094,26 @@ def doctor_visit_view(request, employee, doc_id):
     my_inventory = MRInventory.objects.filter(employee=employee, stock_qty__gt=0).select_related('item')
     sample_stock_map = {inv.item.linked_product_id: inv.stock_qty for inv in my_inventory if inv.item.item_type == 'Sample' and inv.item.linked_product_id}
     
+    # 🌟 NAYA: ZERO-OVERHEAD LOGIC FOR VA MEDIA
+    is_va_enabled = getattr(employee.company, 'is_digital_va_enabled', False)
     products_with_stock = []
+    
+    # Pre-fetch VA slides if enabled to prevent N+1 queries
+    va_media_dict = {}
+    if is_va_enabled:
+        from SFA.models import ProductVAMedia
+        slides = ProductVAMedia.objects.filter(company=employee.company, is_active=True).order_by('product_id', 'slide_order')
+        for slide in slides:
+            if slide.file:
+                if slide.product_id not in va_media_dict:
+                    va_media_dict[slide.product_id] = []
+                va_media_dict[slide.product_id].append({'url': slide.file.url, 'title': slide.title})
+
     for p in Product.objects.filter(company=employee.company):
         products_with_stock.append({
             'product': p,
-            'stock': sample_stock_map.get(p.id, 0)
+            'stock': sample_stock_map.get(p.id, 0),
+            'va_slides': va_media_dict.get(p.id, []) if is_va_enabled else []  # 🌟 Frontend ko bhejne ke liye
         })
         
     today = open_day.date
@@ -1107,9 +1136,9 @@ def doctor_visit_view(request, employee, doc_id):
     return render(request, 'dr_visit_form.html', {
         'doctor': doctor, 
         'products_data': products_with_stock,
-        'gift_stock': gift_stock
+        'gift_stock': gift_stock,
+        'is_va_enabled': is_va_enabled # 🌟 HTML me if-condition ke liye
     })
-
 
 @employee_required
 def chemist_visit_view(request, employee, chem_id):
