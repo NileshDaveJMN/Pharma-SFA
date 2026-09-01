@@ -3,6 +3,7 @@ import calendar
 from io import BytesIO
 from django.http import JsonResponse
 from SFA.models import MRInventory, DoctorROILedger
+from SFA.models import ProductVAMedia, VAScreenTime
 from SFA.models import SystemSetting, DailyDCRStatus, Holiday, LeaveApplication, MonthlyTargetMaster, FreeQtyClaimMaster
 from datetime import timedelta
 from PIL import Image
