@@ -1,31 +1,75 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container-fluid p-0 mb-4 mt-1">
-    
+<style>
+    /* 🌟 ONE-SCREEN LAYOUT */
+    body { overflow: hidden; }
+    .dcr-screen {
+        display: flex; flex-direction: column;
+        height: calc(100dvh - var(--nav-h, 60px));  /* navbar height ke hisaab se adjust karein */
+        overflow: hidden; padding: 4px 6px 0;
+    }
+    .dcr-flex { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .dcr-shrink { flex-shrink: 0; }
+
+    /* Visit Panel */
+    #visitPanel { display: none; flex-direction: column; gap: 5px; }
+    .vp-row { display: grid; grid-template-columns: 1fr 58px 58px 24px; align-items: center; gap: 5px; }
+    .vp-row.gift { grid-template-columns: 1fr 62px 24px; }
+    .vp-row .nm { font-size: 0.72rem; font-weight: 700; line-height: 1.15; }
+    .vp-row .nm small { display: block; font-weight: 400; color: #999; font-size: 0.55rem; }
+    .vp-row input { width: 100%; padding: 5px 3px; font-size: 0.8rem; text-align: center; border: 1px solid #dee2e6; border-radius: 5px; }
+    .vp-rm { background: none; border: none; color: #dc3545; font-size: 0.85rem; cursor: pointer; padding: 2px; }
+
+    /* Visited list */
+    #visitedList { flex: 1 1 auto; min-height: 60px; overflow-y: auto; }
+    #visitedList::-webkit-scrollbar { width: 4px; }
+    #visitedList::-webkit-scrollbar-thumb { background: #c1c9d2; border-radius: 4px; }
+
+    /* Toast */
+    #dcrToast { position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 9998; display: none; }
+
+    /* VA Overlay */
+    .va-overlay { position: fixed; inset: 0; z-index: 9999; background: #000; display: none; flex-direction: column; height: 100dvh; }
+    .va-topbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; padding-top: calc(8px + env(safe-area-inset-top)); background: #111; color: #fff; font-size: 0.85rem; }
+    .va-close { background: none; border: none; color: #fff; font-size: 1.2rem; cursor: pointer; }
+    .va-pname { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .va-progress { opacity: .7; }
+    .va-stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .va-stage img { max-width: 100%; max-height: 82%; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+    .va-slide-title { color: #ccc; font-size: 0.75rem; margin-top: 4px; }
+    .va-hint { color: #777; font-size: 0.65rem; padding: 8px 0 calc(8px + env(safe-area-inset-bottom)); }
+    .va-end { flex: 1; display: none; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(160deg,#1a1a2e,#16213e); color: #fff; padding: 20px; overflow-y: auto; }
+    .va-end-icon { font-size: 2.8rem; }
+    .va-summary { margin: 10px 0; width: 100%; max-width: 340px; }
+    .va-summary table { width: 100%; font-size: 0.8rem; border-collapse: collapse; }
+    .va-summary td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,.15); }
+    .va-summary td:last-child { text-align: right; font-weight: 600; }
+</style>
+
+<div class="dcr-screen">
+
     <!-- 🌟 COMPACT GREETING HEADER -->
-    <div class="d-flex justify-content-between align-items-center mb-2 px-2">
+    <div class="d-flex justify-content-between align-items-center mb-1 px-1 dcr-shrink">
         <div>
-            <h6 class="fw-bold text-dark mb-0 fs-6">Hi, {{ employee.name }} 👋</h6>
+            <h6 class="fw-bold text-dark mb-0">Hi, {{ employee.name }} 👋</h6>
             <small class="text-muted fw-bold" style="font-size: 0.65rem;">{{ today|date:"l, d M Y" }}</small>
         </div>
-        
-        <!-- Status Badge -->
         {% if request.user.employee.designation != 'System Administrator' and request.user.employee.designation != 'Admin' %}
             {% if is_day_started and not is_day_ended %}
-                <span class="badge bg-success-subtle text-success border border-success px-2 py-1 shadow-sm" style="font-size: 0.65rem; border-radius: 6px;">Day Active 🟢</span>
+                <span class="badge bg-success-subtle text-success border border-success px-2 py-1" style="font-size: 0.65rem;">Day Active 🟢</span>
             {% elif is_day_ended %}
-                <span class="badge bg-danger-subtle text-danger border border-danger px-2 py-1 shadow-sm" style="font-size: 0.65rem; border-radius: 6px;">Day Closed 🛑</span>
+                <span class="badge bg-danger-subtle text-danger border border-danger px-2 py-1" style="font-size: 0.65rem;">Day Closed 🛑</span>
             {% endif %}
         {% endif %}
     </div>
 
-    <!-- 📢 COMPACT NOTICE MARQUEE -->
+    <!-- 📢 NOTICE MARQUEE -->
     {% if company_notices %}
-    <a href="{% url 'notice_board' %}" style="text-decoration: none; color: inherit;">
-    <div class="alert alert-warning p-1 mb-2 shadow-sm border-0 d-flex align-items-center mx-1" style="border-radius: 6px;">
-        <span class="me-1" style="font-size: 0.75rem;">📢</span>
-        <marquee behavior="scroll" direction="left" class="fw-bold text-dark mb-0" style="font-size: 0.70rem;">
+    <a href="{% url 'notice_board' %}" style="text-decoration:none;color:inherit;" class="dcr-shrink">
+    <div class="alert alert-warning p-1 mb-1 shadow-sm border-0 d-flex align-items-center mx-1" style="border-radius:6px;">
+        <span class="me-1" style="font-size:0.75rem;">📢</span>
+        <marquee behavior="scroll" direction="left" class="fw-bold text-dark mb-0" style="font-size:0.65rem;">
             {% for n in company_notices %}{{ n.title }}: {{ n.message }} &bull; {% endfor %}
         </marquee>
     </div>
@@ -34,248 +78,480 @@
 
     <!-- 📊 HEADER STATS -->
     {% if request.user.employee.designation != 'System Administrator' and request.user.employee.designation != 'Admin' %}
-    <div class="mx-1 mb-2">
+    <div class="mx-1 mb-1 dcr-shrink">
         {% include 'partials/_header_stats.html' with dr_count=today_dr_visits chem_count=today_chem_visits sample_count=today_samples pob_value=today_pob %}
     </div>
     {% endif %}
 
-    <!-- ========================================== -->
-    <!-- 🌟 ADMIN WORKSPACE CARD -->
-    <!-- ========================================== -->
     {% if request.user.employee.designation == 'System Administrator' or request.user.employee.designation == 'Admin' %}
-        <div class="card border-0 shadow-sm text-center p-3 bg-white mx-1 mt-2" style="border-top: 3px solid #0dcaf0 !important; border-radius: 8px;">
+        <div class="card border-0 shadow-sm text-center p-3 bg-white mx-1 mt-2" style="border-top:3px solid #0dcaf0 !important;border-radius:8px;">
             <div class="mb-1"><span class="fs-1">🛡️</span></div>
             <h6 class="fw-bold text-dark mb-1">Admin Workspace</h6>
-            <p class="text-muted mb-0" style="font-size: 0.65rem;">System ka full access active hai.<br>Kripya <b class="text-primary">Request</b> aur <b class="text-primary">View</b> tabs ka upyog karein.</p>
+            <p class="text-muted mb-0" style="font-size:0.65rem;">Kripya <b class="text-primary">Request</b> aur <b class="text-primary">View</b> tabs ka upyog karein.</p>
         </div>
 
-    <!-- ========================================== -->
-    <!-- 📝 NON-ADMINS KE LIYE VIEWS -->
-    <!-- ========================================== -->
     {% elif is_day_ended %}
-        <div class="card border-0 shadow-sm text-center p-3 bg-white mx-1 mt-2" style="border-top: 3px solid #dc3545 !important; border-radius: 8px;">
+        <div class="card border-0 shadow-sm text-center p-3 bg-white mx-1 mt-2" style="border-top:3px solid #dc3545 !important;border-radius:8px;">
             <div class="mb-1"><span class="fs-1">🌙</span></div>
             <h6 class="fw-bold text-dark mb-1">Day Completed</h6>
-            <p class="text-muted mb-0" style="font-size: 0.70rem;">Aapka aaj ka din aur expenses close ho chuke hain.</p>
+            <p class="text-muted mb-0" style="font-size:0.70rem;">Aapka aaj ka din aur expenses close ho chuke hain.</p>
         </div>
 
     {% elif not is_day_started %}
-        <div class="card border-0 shadow-sm text-center p-3 bg-white mx-1 mt-2" style="border-top: 3px solid #198754 !important; border-radius: 8px;">
+        <div class="card border-0 shadow-sm text-center p-3 bg-white mx-1 mt-2" style="border-top:3px solid #198754 !important;border-radius:8px;">
             <div class="mb-1"><span class="fs-1">🌅</span></div>
             <h6 class="fw-bold text-dark mb-1">Good Morning!</h6>
-            <p class="text-muted mb-2" style="font-size: 0.70rem;">Aapne apna din start nahi kiya hai.</p>
-            <a href="{% url 'day_start' %}" class="btn btn-primary btn-sm w-100 fw-bold shadow-sm py-2" style="border-radius: 8px; font-size: 0.85rem;">🚀 Tap Here to Start Day</a>
+            <p class="text-muted mb-2" style="font-size:0.70rem;">Aapne apna din start nahi kiya hai.</p>
+            <a href="{% url 'day_start' %}" class="btn btn-primary btn-sm w-100 fw-bold shadow-sm py-2" style="border-radius:8px;">🚀 Tap Here to Start Day</a>
         </div>
 
     {% elif open_day and open_day.work_type != 'Field Work' %}
-        <div class="card border-0 shadow-sm text-center p-3 bg-white mx-1 mt-2" style="border-top: 3px solid #ffc107 !important; border-radius: 8px;">
+        <div class="card border-0 shadow-sm text-center p-3 bg-white mx-1 mt-2" style="border-top:3px solid #ffc107 !important;border-radius:8px;">
             <div class="mb-1"><span class="fs-1">
-                {% if open_day.work_type == 'Meeting' %}🤝
-                {% elif open_day.work_type == 'Transit' %}🚗
-                {% elif open_day.work_type == 'Holiday' %}⛱️
-                {% elif open_day.work_type == 'Leave' %}🏖️
-                {% else %}🏢{% endif %}
+                {% if open_day.work_type == 'Meeting' %}🤝{% elif open_day.work_type == 'Transit' %}🚗
+                {% elif open_day.work_type == 'Holiday' %}⛱️{% elif open_day.work_type == 'Leave' %}🏖️{% else %}🏢{% endif %}
             </span></div>
             <h6 class="fw-bold text-dark mb-1">{{ open_day.work_type }} Day</h6>
-            <p class="text-muted mb-2" style="font-size: 0.65rem;">Visits allowed nahi hain. Din khtam hone par close karein.</p>
-            <a href="{% url 'day_end' %}" class="btn btn-warning btn-sm w-100 fw-bold text-dark shadow-sm py-2" style="border-radius: 8px;">🛑 End Day & Submit Expense</a>
+            <p class="text-muted mb-2" style="font-size:0.65rem;">Visits allowed nahi hain.</p>
+            <a href="{% url 'day_end' %}" class="btn btn-warning btn-sm w-100 fw-bold shadow-sm py-2" style="border-radius:8px;">🛑 End Day & Submit Expense</a>
         </div>
 
     {% else %}
-        <!-- 🗺️ ACTIVE ROUTES & ADD BUTTON IN SAME LINE -->
-        <div class="d-flex justify-content-between align-items-center mx-1 mb-2 bg-white p-1 shadow-sm border" style="border-radius: 6px;">
+    <div class="dcr-flex">
+
+        <!-- 🗺️ ROUTES BAR -->
+        <div class="d-flex justify-content-between align-items-center mx-1 mb-1 bg-white p-1 shadow-sm border dcr-shrink" style="border-radius:6px;">
             <div class="d-flex flex-wrap gap-1 px-1">
                 {% for route in active_routes %}
-                    <span class="badge bg-primary text-white shadow-sm" style="font-size:0.65rem; border-radius: 4px;"><i class="bi bi-geo-alt-fill me-1"></i>{{ route.name }}</span>
+                    <span class="badge bg-primary shadow-sm" style="font-size:0.65rem;">📍{{ route.name }}</span>
                 {% empty %}
-                    <span class="badge bg-warning text-dark shadow-sm" style="font-size:0.65rem; border-radius: 4px;">⚠️ No Route</span>
+                    <span class="badge bg-warning text-dark shadow-sm" style="font-size:0.65rem;">⚠️ No Route</span>
                 {% endfor %}
             </div>
-            <button class="btn btn-light border btn-sm fw-bold shadow-sm py-0 px-2 text-primary" style="font-size: 0.60rem; border-radius: 4px;" data-bs-toggle="modal" data-bs-target="#addRouteModal">
-                ➕ Add Route
-            </button>
+            <button class="btn btn-light border btn-sm fw-bold py-0 px-2 text-primary" style="font-size:0.6rem;" data-bs-toggle="modal" data-bs-target="#addRouteModal">➕ Add</button>
         </div>
 
-        <div class="mx-1">
-            
-            <!-- ⏳ PENDING VISITS -->
-            <h6 class="fw-bold text-secondary mb-1 border-bottom pb-1 px-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">⏳ PENDING VISITS</h6>
-
-            <!-- 🔎 SEARCH BAR -->
-            <div class="mb-2">
-                <div class="input-group input-group-sm shadow-sm" style="border-radius: 6px; overflow: hidden;">
-                    <span class="input-group-text bg-white border-0" style="font-size: 0.75rem;">🔎</span>
-                    <input type="text" id="pendingSearchInput" class="form-control border-0 bg-white fw-bold" placeholder="Dr. ya Chemist ka naam search karein..." style="font-size: 0.75rem;">
-                </div>
-            </div>
-
-            <style>
-                #pendingVisitsList::-webkit-scrollbar { width: 4px; }
-                #pendingVisitsList::-webkit-scrollbar-thumb { background: #c1c9d2; border-radius: 4px; }
-            </style>
-            
-            <div class="row g-1 mb-3" id="pendingVisitsList" style="max-height: 180px; overflow-y: auto; padding-right: 2px;">
+        <!-- 👨‍⚕️ 1. DOCTOR DROPDOWN -->
+        <div class="mx-1 mb-1 dcr-shrink">
+            <select class="form-select form-select-sm fw-bold shadow-sm" id="docSelect">
+                <option value="">👨‍⚕️ Doctor chunein ({{ pending_doctors|length }} pending)…</option>
                 {% for doc in pending_doctors %}
-                <div class="col-12 pending-item" data-name="dr. {{ doc.name|lower }}">
-                    <div class="card border-0 shadow-sm bg-white" style="border-left: 3px solid #6f42c1; border-radius: 6px;">
-                        <div class="card-body p-1 px-2 d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="fw-bold text-dark mb-0" style="font-size: 0.80rem;">Dr. {{ doc.name }}</h6>
-                                <small class="text-muted fw-bold" style="font-size: 0.60rem;">{{ doc.specialty|default:"Specialty NA" }}</small>
-                            </div>
-                            <a href="{% url 'doctor_visit' doc.id %}" class="btn btn-primary btn-sm py-0 px-2 fw-bold shadow-sm" style="font-size: 0.65rem; background-color: #0056b3; border: none; border-radius: 4px;">Report</a>
-                        </div>
-                    </div>
-                </div>
+                <option value="{{ doc.id }}">Dr. {{ doc.name }}{% if doc.specialty %} — {{ doc.get_specialty_display }}{% endif %}</option>
                 {% endfor %}
+            </select>
+        </div>
 
+        <!-- 📝 2. VISIT PANEL (doctor select karne par khulta hai) -->
+        <form id="visitForm" class="mx-1 mb-1 bg-white shadow-sm border p-1 dcr-shrink" id="visitForm" style="border-radius:8px;border-left:3px solid #6f42c1;overflow-y:auto;max-height:46dvh;display:none;">
+            {% csrf_token %}
+            <input type="hidden" name="latitude" id="latInput" value="">
+            <input type="hidden" name="longitude" id="lngInput" value="">
+            <input type="hidden" name="is_digital_detailing" id="vaFlag" value="false">
+
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <b id="vpDocName" style="font-size:0.8rem;">—</b>
+                <button type="button" class="btn-close" style="font-size:0.6rem;" id="vpCancel"></button>
+            </div>
+
+            <select class="form-select form-select-sm mb-1 fw-bold" id="prodSelect">
+                <option value="">➕ Product chunein (sample / order)…</option>
+                {% for pd in products_data %}
+                <option value="{{ pd.product.id }}">{{ pd.product.name }} — Stock {{ pd.stock }}</option>
+                {% endfor %}
+            </select>
+            <div id="prodRows"></div>
+
+            <select class="form-select form-select-sm mb-1 fw-bold" id="giftSelect">
+                <option value="">🎁 Gift / Input (optional)…</option>
+            </select>
+            <div id="giftRows"></div>
+
+            <input type="text" class="form-control form-control-sm mb-1" name="remark" id="remarkInput" placeholder="Remark (optional)" style="font-size:0.75rem;">
+
+            <div class="d-flex gap-1">
+                <button type="button" class="btn btn-primary btn-sm fw-bold flex-fill" id="vaBtn" style="display:none;">📱 Digital VA</button>
+                <button type="button" class="btn btn-success btn-sm fw-bold flex-fill" id="saveVisitBtn">✔ Save Visit</button>
+            </div>
+        </form>
+
+        <!-- 🧪 CHEMIST DROPDOWN (purana chemist page khulta hai) -->
+        {% if pending_chemists %}
+        <div class="mx-1 mb-1 dcr-shrink">
+            <select class="form-select form-select-sm fw-bold shadow-sm" id="chemSelect">
+                <option value="">🧪 Chemist visit karni ho to chunein…</option>
                 {% for chem in pending_chemists %}
-                <div class="col-12 pending-item" data-name="{{ chem.name|lower }}">
-                    <div class="card border-0 shadow-sm bg-white" style="border-left: 3px solid #20c997; border-radius: 6px;">
-                        <div class="card-body p-1 px-2 d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="fw-bold text-dark mb-0" style="font-size: 0.80rem;">{{ chem.name }}</h6>
-                                <small class="text-muted fw-bold" style="font-size: 0.60rem;">Chemist</small>
-                            </div>
-                            <a href="{% url 'chemist_visit' chem.id %}" class="btn btn-success btn-sm py-0 px-2 fw-bold shadow-sm text-white" style="font-size: 0.65rem; background-color: #198754; border: none; border-radius: 4px;">Report</a>
-                        </div>
-                    </div>
-                </div>
+                <option value="{{ chem.id }}" data-url="{% url 'chemist_visit' chem.id %}">{{ chem.name }} — Chemist</option>
                 {% endfor %}
-                
-                {% if not pending_doctors and not pending_chemists %}
-                <div class="col-12">
-                    <div class="alert alert-light text-center text-muted p-2 border-0 shadow-sm mb-0" style="font-size: 0.70rem; border-radius: 6px;">
-                        🎉 Sabhi pending visits complete ho gayi!
+            </select>
+        </div>
+        {% endif %}
+
+        <!-- ✅ 3. VISITED TODAY (sirf ye scroll karta hai) -->
+        <h6 class="fw-bold text-success mb-1 border-bottom pb-1 px-1 dcr-shrink" style="font-size:0.65rem;">
+            ✅ VISITED TODAY — <span id="visStats">💊 {{ today_samples }} • 🛒 ₹{{ today_pob }}</span>
+        </h6>
+        <div id="visitedList" class="px-1">
+            {% for v in visited_doctors %}
+            <div class="card border-0 shadow-sm bg-white mb-1 vis-card" style="border-left:3px solid #8fa0b3;border-radius:6px;">
+                <div class="card-body p-1 px-2 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="fw-bold text-secondary mb-0" style="font-size:0.75rem;">Dr. {{ v.doctor.name }}</h6>
+                        <small class="text-muted fw-bold" style="font-size:0.55rem;">{{ v.created_at|time:"h:i A" }}</small>
+                    </div>
+                    <div>
+                        <a href="{% url 'edit_visit' v.id %}" class="btn btn-light border btn-sm px-2 py-0 me-1 shadow-sm" style="font-size:0.65rem;">✏️</a>
+                        <a href="{% url 'delete_visit' v.id %}" class="btn btn-danger btn-sm px-2 py-0 shadow-sm" style="font-size:0.65rem;" onclick="return confirm('Sach mein delete karna hai?')">🗑️</a>
                     </div>
                 </div>
-                {% endif %}
             </div>
+            {% endfor %}
 
-            <!-- 🚫 NO SEARCH RESULTS MESSAGE -->
-            <div class="col-12 d-none mb-3" id="noSearchResults">
-                <div class="alert alert-light text-center text-muted p-2 border-0 shadow-sm mb-0" style="font-size: 0.70rem; border-radius: 6px;">
-                    😕 Is naam se koi doctor/chemist nahi mila.
-                </div>
-            </div>
-
-            <!-- ✅ VISITED TODAY -->
-            <h6 class="fw-bold text-success mb-1 border-bottom pb-1 px-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">✅ VISITED TODAY</h6>
-            
-            <div class="row g-1 mb-2">
-                {% for v in visited_doctors %}
-                <div class="col-12">
-                    <div class="card border-0 shadow-sm bg-white" style="border-left: 3px solid #8fa0b3; border-radius: 6px;">
-                        <div class="card-body p-1 px-2 d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="fw-bold text-secondary mb-0" style="font-size: 0.75rem;">Dr. {{ v.doctor.name }}</h6>
-                                <small class="text-muted fw-bold" style="font-size: 0.55rem;">{{ v.created_at|time:"h:i A" }}</small>
-                            </div>
-                            <div>
-                                <a href="{% url 'edit_visit' v.id %}" class="btn btn-light border btn-sm px-2 py-0 me-1 shadow-sm" style="font-size: 0.65rem; border-radius: 4px;">✏️</a>
-                                <a href="{% url 'delete_visit' v.id %}" class="btn btn-danger btn-sm px-2 py-0 shadow-sm" style="font-size: 0.65rem; border-radius: 4px;" onclick="return confirm('Sach mein delete karna hai?')">🗑️</a>
-                            </div>
-                        </div>
+            {% for v in visited_chemists %}
+            <div class="card border-0 shadow-sm bg-white mb-1" style="border-left:3px solid #20c997;border-radius:6px;">
+                <div class="card-body p-1 px-2 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="fw-bold text-secondary mb-0" style="font-size:0.75rem;">{{ v.chemist.name }}</h6>
+                        <small class="text-muted fw-bold" style="font-size:0.55rem;">{{ v.created_at|time:"h:i A" }}</small>
+                    </div>
+                    <div>
+                        <a href="{% url 'edit_visit' v.id %}" class="btn btn-light border btn-sm px-2 py-0 me-1 shadow-sm" style="font-size:0.65rem;">✏️</a>
+                        <a href="{% url 'delete_visit' v.id %}" class="btn btn-danger btn-sm px-2 py-0 shadow-sm" style="font-size:0.65rem;" onclick="return confirm('Sach mein delete karna hai?')">🗑️</a>
                     </div>
                 </div>
-                {% endfor %}
-
-                {% for v in visited_chemists %}
-                <div class="col-12">
-                    <div class="card border-0 shadow-sm bg-white" style="border-left: 3px solid #8fa0b3; border-radius: 6px;">
-                        <div class="card-body p-1 px-2 d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="fw-bold text-secondary mb-0" style="font-size: 0.75rem;">{{ v.chemist.name }}</h6>
-                                <small class="text-muted fw-bold" style="font-size: 0.55rem;">{{ v.created_at|time:"h:i A" }}</small>
-                            </div>
-                            <div>
-                                <a href="{% url 'edit_visit' v.id %}" class="btn btn-light border btn-sm px-2 py-0 me-1 shadow-sm" style="font-size: 0.65rem; border-radius: 4px;">✏️</a>
-                                <a href="{% url 'delete_visit' v.id %}" class="btn btn-danger btn-sm px-2 py-0 shadow-sm" style="font-size: 0.65rem; border-radius: 4px;" onclick="return confirm('Sach mein delete karna hai?')">🗑️</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-                
-                {% if not visited_doctors and not visited_chemists %}
-                <div class="col-12">
-                    <div class="alert alert-light text-center text-muted p-2 border-0 shadow-sm mb-0" style="font-size: 0.70rem; border-radius: 6px;">
-                        📭 Abhi tak koi visit nahi hui hai.
-                    </div>
-                </div>
-                {% endif %}
             </div>
-            
-            <!-- 🛑 NAYA: END DAY BUTTON YAHAN ADD KIYA HAI -->
-            <div class="mt-4 mb-3 px-1">
-                <a href="{% url 'day_end' %}" class="btn btn-danger w-100 fw-bold shadow-sm py-2 d-flex align-items-center justify-content-center gap-2" style="border-radius: 8px; font-size: 0.90rem;">
-                    <i class="bi bi-stop-circle-fill"></i> End Day & Submit Expense
-                </a>
-                <p class="text-muted text-center mt-1 mb-0" style="font-size: 0.65rem;">Day close karne ke baad aap aur visits nahi kar payenge.</p>
-            </div>
+            {% endfor %}
 
+            {% if not visited_doctors and not visited_chemists %}
+            <div class="alert alert-light text-center text-muted p-2 border-0 shadow-sm mb-0" style="font-size:0.70rem;border-radius:6px;">
+                📭 Abhi tak koi visit nahi hui hai.
+            </div>
+            {% endif %}
         </div>
 
-        <!-- ➕ ADD ROUTE MODAL -->
-        <div class="modal fade" id="addRouteModal" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered modal-sm">
-                <div class="modal-content border-0 shadow" style="border-radius: 8px;">
-                    <div class="modal-header bg-light border-0 py-2">
-                        <h6 class="modal-title fw-bold text-dark fs-6">Add Extra Route</h6>
-                        <button type="button" class="btn-close" style="font-size: 0.6rem;" data-bs-dismiss="modal"></button>
-                    </div>
-                    <form method="POST">
-                        {% csrf_token %}
-                        <div class="modal-body p-2">
-                            <label class="form-label fw-bold text-secondary mb-1" style="font-size: 0.65rem;">🗺️ Select Route</label>
-                            <select name="extra_route" class="form-select form-select-sm bg-light border-0 fw-bold" style="border-radius: 6px;" required>
-                                <option value="">-- Route Chunein --</option>
-                                {% for r in available_routes %}
-                                    <option value="{{ r.id }}">{{ r.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="modal-footer border-0 p-2">
-                            <button type="submit" name="add_extra_route" class="btn btn-primary btn-sm w-100 fw-bold shadow-sm" style="border-radius: 6px;">➕ Add Route</button>
-                        </div>
-                    </form>
+        <!-- 🛑 4. DAY END -->
+        <div class="px-1 py-1 dcr-shrink">
+            <a href="{% url 'day_end' %}" class="btn btn-danger w-100 fw-bold shadow-sm py-2 d-flex align-items-center justify-content-center gap-2" style="border-radius:8px;font-size:0.85rem;">
+                <i class="bi bi-stop-circle-fill"></i> End Day & Submit Expense
+            </a>
+        </div>
+    </div>
+
+    <!-- ➕ ADD ROUTE MODAL (purana wala) -->
+    <div class="modal fade" id="addRouteModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content border-0 shadow" style="border-radius:8px;">
+                <div class="modal-header bg-light border-0 py-2">
+                    <h6 class="modal-title fw-bold">Add Extra Route</h6>
+                    <button type="button" class="btn-close" style="font-size:0.6rem;" data-bs-dismiss="modal"></button>
                 </div>
+                <form method="POST">
+                    {% csrf_token %}
+                    <div class="modal-body p-2">
+                        <label class="form-label fw-bold text-secondary mb-1" style="font-size:0.65rem;">🗺️ Select Route</label>
+                        <select name="extra_route" class="form-select form-select-sm bg-light border-0 fw-bold" required>
+                            <option value="">-- Route Chunein --</option>
+                            {% for r in available_routes %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="modal-footer border-0 p-2">
+                        <button type="submit" name="add_extra_route" class="btn btn-primary btn-sm w-100 fw-bold">➕ Add Route</button>
+                    </div>
+                </form>
             </div>
         </div>
+    </div>
     {% endif %}
 </div>
 
-<!-- 🔎 PENDING VISITS SEARCH SCRIPT -->
+<!-- 📱 VA OVERLAY (full screen, form ke bahar) -->
+<div id="vaOverlay" class="va-overlay">
+    <div class="va-topbar">
+        <button type="button" id="vaCloseBtn" class="va-close">✕</button>
+        <span id="vaProductName" class="va-pname"></span>
+        <span id="vaProgress" class="va-progress"></span>
+    </div>
+    <div id="vaStage" class="va-stage">
+        <img id="vaSlideImg" src="" alt="slide">
+        <div id="vaSlideTitle" class="va-slide-title"></div>
+        <div class="va-hint">◀ Left swipe = back • Right swipe = next ▶</div>
+    </div>
+    <div id="vaEndScreen" class="va-end">
+        <div class="va-end-icon">✅</div>
+        <h2 style="font-size:1.2rem;">Detailing Complete!</h2>
+        <div id="vaTimeSummary" class="va-summary"></div>
+        <button type="button" class="btn btn-success w-100 fw-bold py-2" id="vaFinishBtn">✔ Submit Visit</button>
+        <button type="button" class="btn btn-link text-secondary py-2" id="vaBackBtn">↩ Wapas slides dekhein</button>
+    </div>
+</div>
+
+<div id="dcrToast" class="alert alert-dark py-1 px-3 shadow" style="border-radius:20px;font-size:0.75rem;"></div>
+
 <script>
-    document.addEventListener("DOMContentLoaded", function() {
-        var searchInput = document.getElementById('pendingSearchInput');
-        if (!searchInput) return;
+// ================= DATA =================
+const productsData = [
+{% for pd in products_data %}
+ { id: {{ pd.product.id }}, name: "{{ pd.product.name|escapejs }}", stock: {{ pd.stock }}, price: {{ pd.price|floatformat:"2" }},
+   va_slides: [{% for s in pd.va_slides %}{ url: "{{ s.url|escapejs }}", title: "{{ s.title|escapejs }}" },{% endfor %}] },
+{% endfor %}
+];
+const giftsData = [
+{% for g in gift_stock %}
+ { id: {{ g.item.id }}, name: "{{ g.item.name|escapejs }}", stock: {{ g.stock_qty }},
+   allowed: {% if g.allowed_doctors %}[{% for d in g.allowed_doctors %}{{ d }},{% endfor %}]{% else %}null{% endif %} },
+{% endfor %}
+];
+const isVAEnabled = {{ is_va_enabled|yesno:"true,false" }};
+// URL templates (edit/delete/visit)
+const visitUrlT = "{% url 'doctor_visit' 999999 %}".replace('999999', '__ID__');
+const editUrlT   = "{% url 'edit_visit' 999999 %}".replace('999999', '__ID__');
+const delUrlT    = "{% url 'delete_visit' 999999 %}".replace('999999', '__ID__');
 
-        var items = document.querySelectorAll('#pendingVisitsList .pending-item');
-        var noResultsMsg = document.getElementById('noSearchResults');
+const form = document.getElementById('visitForm');
+const docSelect = document.getElementById('docSelect');
+const prodSelect = document.getElementById('prodSelect');
+const giftSelect = document.getElementById('giftSelect');
+const prodRows = document.getElementById('prodRows');
+const giftRows = document.getElementById('giftRows');
+let currentDoc = null, selectedPids = [], geoDone = false, saving = false;
+let stats = { samples: {{ today_samples }}, pob: parseFloat('{{ today_pob }}') || 0 };
 
-        searchInput.addEventListener('input', function() {
-            var query = this.value.trim().toLowerCase();
-            var visibleCount = 0;
+function toast(m) { const t = document.getElementById('dcrToast'); t.textContent = m; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 2200); }
 
-            items.forEach(function(item) {
-                var name = item.getAttribute('data-name') || '';
-                if (name.indexOf(query) !== -1) {
-                    item.classList.remove('d-none');
-                    visibleCount++;
-                } else {
-                    item.classList.add('d-none');
-                }
-            });
-
-            if (noResultsMsg) {
-                if (visibleCount === 0 && query !== '') {
-                    noResultsMsg.classList.remove('d-none');
-                } else {
-                    noResultsMsg.classList.add('d-none');
-                }
-            }
-        });
+// ================= GEO =================
+function tryGeo() {
+    return new Promise(res => {
+        if (geoDone || !navigator.geolocation) return res();
+        navigator.geolocation.getCurrentPosition(
+            p => { document.getElementById('latInput').value = p.coords.latitude;
+                   document.getElementById('lngInput').value = p.coords.longitude; geoDone = true; res(); },
+            () => res(), { timeout: 4000, maximumAge: 30000 });
     });
+}
+window.addEventListener('load', () => tryGeo());
+
+// ================= 1. DOCTOR SELECT → PANEL =================
+docSelect.addEventListener('change', () => {
+    const id = docSelect.value;
+    if (!id) { closePanel(); return; }
+    currentDoc = id;
+    document.getElementById('vpDocName').textContent = docSelect.options[docSelect.selectedIndex].text.split(' — ')[0];
+    renderGiftOptions();
+    form.style.display = 'block';
+    updateVABtn();
+});
+document.getElementById('vpCancel').addEventListener('click', () => { closePanel(); });
+function closePanel() {
+    currentDoc = null; form.style.display = 'none';
+    docSelect.value = ''; resetPanel();
+}
+// ================= 2. PRODUCT DROPDOWN → ROW =================
+prodSelect.addEventListener('change', () => {
+    const pid = prodSelect.value; if (!pid) return;
+    if (selectedPids.includes(pid)) { toast('Already added hai'); prodSelect.value = ''; return; }
+    selectedPids.push(pid);
+    const p = productsData.find(x => String(x.id) === pid);
+    const row = document.createElement('div');
+    row.className = 'vp-row mb-1'; row.id = 'prow_' + pid;
+    row.innerHTML = `
+        <div class="nm">${p.name}<small>Stock: ${p.stock}${p.va_slides.length ? ' • 📱VA' : ''}</small>
+            <input type="hidden" name="detailed_${pid}" value="on"></div>
+        <input type="number" name="sample_${pid}" min="0" max="${p.stock}" value="0" placeholder="Smp">
+        <input type="number" name="order_${pid}" min="0" value="0" placeholder="POB">
+        <button type="button" class="vp-rm">✕</button>`;
+    row.querySelector('.vp-rm').addEventListener('click', () => { row.remove(); selectedPids = selectedPids.filter(x => x !== pid); updateVABtn(); });
+    prodRows.appendChild(row);
+    prodSelect.value = '';
+    updateVABtn();
+});
+// ================= GIFT DROPDOWN (doctor-wise HighValue filter) =================
+function renderGiftOptions() {
+    giftSelect.innerHTML = '<option value="">🎁 Gift / Input (optional)…</option>';
+    giftsData.forEach(g => {
+        if (g.allowed && currentDoc && !g.allowed.includes(parseInt(currentDoc))) return;
+        if (g.stock <= 0) return;
+        const o = document.createElement('option');
+        o.value = g.id; o.textContent = `${g.name} — Stock ${g.stock}`;
+        giftSelect.appendChild(o);
+    });
+}
+giftSelect.addEventListener('change', () => {
+    const gid = giftSelect.value; if (!gid) return;
+    if (document.getElementById('grow_' + gid)) { toast('Already added'); giftSelect.value = ''; return; }
+    const g = giftsData.find(x => String(x.id) === gid);
+    const row = document.createElement('div');
+    row.className = 'vp-row gift mb-1'; row.id = 'grow_' + gid;
+    row.innerHTML = `
+        <div class="nm">${g.name}<small>Stock: ${g.stock}</small></div>
+        <input type="number" name="promo_qty_${gid}" min="0" max="${g.stock}" value="1">
+        <button type="button" class="vp-rm">✕</button>`;
+    row.querySelector('.vp-rm').addEventListener('click', () => row.remove());
+    giftRows.appendChild(row);
+    giftSelect.value = '';
+});
+// ================= 3. AJAX SAVE (page reload NAHI) =================
+document.getElementById('saveVisitBtn').addEventListener('click', submitVisit);
+async function submitVisit() {
+    if (!currentDoc || saving) return;
+    saving = true;
+    const btn = document.getElementById('saveVisitBtn');
+    btn.disabled = true; btn.textContent = '⏳ Saving...';
+    await tryGeo();
+    try {
+        const r = await fetch(visitUrlT.replace('__ID__', currentDoc), {
+            method: 'POST', body: new FormData(form),
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin'
+        });
+        if (!r.ok) throw new Error();
+        const data = await r.json();
+        const opt = docSelect.querySelector(`option[value="${currentDoc}"]`);
+        const name = opt ? opt.textContent.split(' — ')[0] : 'Doctor';
+        if (opt) opt.remove();
+        addVisitedCard(name, data.visit_id);
+        // stats + gift stock update
+        selectedPids.forEach(pid => {
+            const s = parseInt((form.querySelector(`input[name="sample_${pid}"]`) || {}).value || 0);
+            const o = parseInt((form.querySelector(`input[name="order_${pid}"]`) || {}).value || 0);
+            const p = productsData.find(x => String(x.id) === pid);
+            stats.samples += s; stats.pob += o * (p ? p.price : 0);
+        });
+        form.querySelectorAll('input[name^="promo_qty_"]').forEach(inp => {
+            const g = giftsData.find(x => 'promo_qty_' + x.id === inp.name);
+            if (g) g.stock -= parseInt(inp.value || 0);
+        });
+        document.getElementById('visStats').textContent = `💊 ${stats.samples} • 🛒 ₹${stats.pob.toFixed(2)}`;
+        closePanel();
+        toast(docSelect.options.length <= 1 ? '🎉 Sab doctors done!' : '✅ Visit saved!');
+    } catch (e) { toast('❌ Save fail — dobara try karein'); }
+    btn.disabled = false; btn.textContent = '✔ Save Visit';
+    saving = false;
+}
+function addVisitedCard(name, visitId) {
+    const list = document.getElementById('visitedList');
+    const empty = list.querySelector('.alert-light'); if (empty) empty.remove();
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const card = document.createElement('div');
+    card.className = 'card border-0 shadow-sm bg-white mb-1';
+    card.style.cssText = 'border-left:3px solid #8fa0b3;border-radius:6px;';
+    card.innerHTML = `
+        <div class="card-body p-1 px-2 d-flex justify-content-between align-items-center">
+            <div>
+                <h6 class="fw-bold text-secondary mb-0" style="font-size:0.75rem;">${name}</h6>
+                <small class="text-muted fw-bold" style="font-size:0.55rem;">${time}</small>
+            </div>
+            <div>
+                <a href="${editUrlT.replace('__ID__', visitId)}" class="btn btn-light border btn-sm px-2 py-0 me-1 shadow-sm" style="font-size:0.65rem;">✏️</a>
+                <a href="${delUrlT.replace('__ID__', visitId)}" class="btn btn-danger btn-sm px-2 py-0 shadow-sm" style="font-size:0.65rem;" onclick="return confirm('Sach mein delete karna hai?')">🗑️</a>
+            </div>
+        </div>`;
+    list.prepend(card);
+}
+function resetPanel() {
+    prodRows.innerHTML = ''; giftRows.innerHTML = '';
+    document.getElementById('remarkInput').value = '';
+    form.querySelectorAll('input[name^="va_time_"]').forEach(i => i.remove());
+    document.getElementById('vaFlag').value = 'false';
+    selectedPids = [];
+}
+
+// ================= CHEMIST (purana page khulta hai) =================
+const chemSelect = document.getElementById('chemSelect');
+if (chemSelect) chemSelect.addEventListener('change', () => {
+    const opt = chemSelect.options[chemSelect.selectedIndex];
+    if (opt && opt.dataset.url) window.location.href = opt.dataset.url;
+});
+
+// ================= 📱 VA (sirf SELECTED products) =================
+const overlay = document.getElementById('vaOverlay'), stage = document.getElementById('vaStage'),
+      endScreen = document.getElementById('vaEndScreen');
+let slides = [], idx = 0, timers = {}, activePid = null, tick = null;
+
+function updateVABtn() {
+    const b = document.getElementById('vaBtn');
+    const any = selectedPids.some(pid => { const p = productsData.find(x => String(x.id) === pid); return p && p.va_slides.length; });
+    b.style.display = (isVAEnabled && any) ? 'block' : 'none';
+}
+document.getElementById('vaBtn').addEventListener('click', () => {
+    slides = [];
+    selectedPids.forEach(pid => {   // 🌟 sirf dropdown se SELECTED products
+        const p = productsData.find(x => String(x.id) === pid);
+        if (p) p.va_slides.forEach(s => slides.push({ pid: p.id, pname: p.name, url: s.url, title: s.title }));
+    });
+    if (!slides.length) { toast('⚠️ Selected products ki slides nahi hain'); return; }
+    timers = {}; activePid = null; idx = 0;
+    showSlide(0);
+    stage.style.display = 'flex'; endScreen.style.display = 'none';
+    overlay.style.display = 'flex';
+    if (overlay.requestFullscreen) overlay.requestFullscreen().catch(() => {});
+    clearInterval(tick);
+    tick = setInterval(() => { if (activePid) timers[activePid] = (timers[activePid] || 0) + 1; }, 1000);
+});
+function showSlide(i) {
+    const s = slides[i]; activePid = s.pid;
+    document.getElementById('vaSlideImg').src = s.url;
+    document.getElementById('vaSlideTitle').textContent = s.title || '';
+    document.getElementById('vaProductName').textContent = s.pname;
+    document.getElementById('vaProgress').textContent = (i + 1) + ' / ' + slides.length;
+    if (slides[i + 1]) { const pre = new Image(); pre.src = slides[i + 1].url; }
+}
+function next() { idx < slides.length - 1 ? (idx++, showSlide(idx)) : finishVA(); }
+function prev() { if (idx > 0) { idx--; showSlide(idx); } }
+
+// 🌟 LAST slide swipe → END SCREEN + SUBMIT
+function finishVA() {
+    clearInterval(tick); activePid = null;
+    const merged = flushTimers();
+    stage.style.display = 'none'; endScreen.style.display = 'flex';
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    let html = '<table>', total = 0;
+    Object.keys(merged).forEach(pid => {
+        const p = productsData.find(x => String(x.id) === pid);
+        if (merged[pid] > 0) { total += merged[pid];
+            html += `<tr><td>${p ? p.name : '#' + pid}</td><td>${fmt(merged[pid])}</td></tr>`; }
+    });
+    if (total) html += `<tr><td><b>Total</b></td><td><b>${fmt(total)}</b></td></tr>`;
+    document.getElementById('vaTimeSummary').innerHTML = html + '</table>';
+}
+function fmt(s) { return Math.floor(s / 60) + 'm ' + (s % 60) + 's'; }
+function flushTimers() {
+    const merged = {};
+    form.querySelectorAll('input[name^="va_time_"]').forEach(inp => merged[inp.name.replace('va_time_', '')] = parseInt(inp.value || 0) || 0);
+    Object.keys(timers).forEach(pid => merged[pid] = (merged[pid] || 0) + timers[pid]);
+    Object.keys(merged).forEach(pid => {
+        let inp = form.querySelector(`input[name="va_time_${pid}"]`);
+        if (!inp) { inp = document.createElement('input'); inp.type = 'hidden'; inp.name = 'va_time_' + pid; form.appendChild(inp); }
+        inp.value = merged[pid];
+    });
+    timers = {};
+    document.getElementById('vaFlag').value = 'true';
+    return merged;
+}
+document.getElementById('vaFinishBtn').addEventListener('click', () => {
+    overlay.style.display = 'none';
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    submitVisit();   // AJAX save
+});
+document.getElementById('vaBackBtn').addEventListener('click', () => {
+    endScreen.style.display = 'none'; stage.style.display = 'flex';
+    idx = slides.length - 1; showSlide(idx);
+    tick = setInterval(() => { if (activePid) timers[activePid] = (timers[activePid] || 0) + 1; }, 1000);
+    if (overlay.requestFullscreen) overlay.requestFullscreen().catch(() => {});
+});
+document.getElementById('vaCloseBtn').addEventListener('click', () => {
+    flushTimers(); clearInterval(tick); activePid = null;   // time save rehta hai
+    overlay.style.display = 'none';
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+});
+// Swipe + desktop keys
+let sx = 0;
+stage.addEventListener('touchstart', e => sx = e.changedTouches[0].screenX, { passive: true });
+stage.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].screenX - sx;
+    if (dx < -40) next(); else if (dx > 40) prev();
+}, { passive: true });
+document.addEventListener('keydown', e => {
+    if (overlay.style.display === 'none' || stage.style.display === 'none') return;
+    if (e.key === 'ArrowRight') next();
+    if (e.key === 'ArrowLeft') prev();
+});
 </script>
 {% endblock %}

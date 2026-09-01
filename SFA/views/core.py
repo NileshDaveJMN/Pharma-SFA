@@ -205,29 +205,17 @@ def mr_dashboard_view(request, employee):
     open_day, stuck_day = get_open_day(employee)
 
     if stuck_day:
-        messages.error(request, f"🚫 An older Day Start on {stuck_day.date.strftime('%d %b %Y')} was never closed (Day End), and that date is now locked or before your joining date. To start new work, Admin needs to manually close this day from Django Admin (by adding a Day End).")
-
-    # 🌟 REMOVED: Pehle yahan har dashboard-load par "Draft Expense" warning
-    # dikhti thi — jo galat jagah thi (roz-roz, chahe Draft kitna bhi purana
-    # ho). Ye warning ab sirf Expense Hub me hi dikhti hai, aur sirf TABHI
-    # jab employee khud 'Save' button dabaye — jo asli relevant moment hai
-    # (taaki Submit bhoolne wali real-life problem solve ho, bina Dashboard
-    # ko roz-roz clutter kiye).
+        messages.error(request, f"🚫 An older Day Start on {stuck_day.date.strftime('%d %b %Y')} was never closed (Day End), and that date is now locked. Please contact Admin.")
 
     open_day, stuck_day = get_open_day(employee)
-
-    # 🌟 NAYA: Check karein ki kya koi purani date abhi bhi 'Open' aur 'Unsubmitted' hai
     oldest_pending_status = DailyDCRStatus.objects.filter(
         employee=employee, is_open=True, is_submitted=False
     ).order_by('date').first()
 
-    # Priority 1: Jo din start ho chuka hai (par end nahi hua)
     if open_day:
         working_date = open_day.date
-    # Priority 2: Jo din abhi start hona baaki hai (Admin ne khola ho ya regular pending ho)
     elif oldest_pending_status:
         working_date = oldest_pending_status.date
-    # Priority 3: Default aaj ka din
     else:
         working_date = timezone.localdate()
 
@@ -239,55 +227,107 @@ def mr_dashboard_view(request, employee):
         new_route_id = request.POST.get('extra_route')
         if new_route_id and open_day and not is_day_ended: open_day.routes.add(new_route_id); messages.success(request, "Extra route added!")
         return redirect('mr_dashboard')
-
+    products_data, gift_stock, is_va_enabled = [], [], False   # 🌟 NAYA
     active_routes, available_routes, pending_doctors, visited_docs, pending_chemists, visited_chems = [], [], [], [], [], []
     today_samples, today_pob = 0, 0
-    
+    # 🌟 NAYA: one-screen visit panel ke liye data
+    products_data, gift_stock, is_va_enabled = [], [], False
+
     if is_day_started and open_day.work_type == 'Field Work':
         active_routes = open_day.routes.all()
         team_employees = get_full_team_employees(employee)
         my_all_route_ids = set(Route.objects.filter(territory_id__in=team_employees.exclude(headquarter__isnull=True).values_list('headquarter_id', flat=True)).values_list('id', flat=True))
-        
-        # 🌟 FIX: Sirf Approved ke routes fetch honge
         my_all_route_ids.update(Doctor.objects.filter(allocated_to__in=team_employees, status='Approved').values_list('route_id', flat=True))
         my_all_route_ids.update(Chemist.objects.filter(allocated_to__in=team_employees, status='Approved').values_list('route_id', flat=True))
         my_all_route_ids.discard(None)
-        
         available_routes = Route.objects.filter(id__in=my_all_route_ids).exclude(id__in=[r.id for r in active_routes]) if my_all_route_ids else Route.objects.filter(company=employee.company).exclude(id__in=[r.id for r in active_routes])
-        
+
         daily_dcr = DailyDCR.objects.prefetch_related('visits__doctor', 'visits__chemist').filter(employee=employee, date=working_date).first()
         visited_doc_ids, visited_chem_ids = set(), set()
         if daily_dcr:
             all_visits = list(daily_dcr.visits.all())
             visited_docs, visited_chems = [v for v in all_visits if v.doctor], [v for v in all_visits if v.chemist]
             visited_doc_ids, visited_chem_ids = {v.doctor_id for v in visited_docs}, {v.chemist_id for v in visited_chems}
-            
             agg = DCRProductDetail.objects.filter(visit__daily_dcr=daily_dcr).aggregate(s=Sum('sample_qty'))
             today_samples = agg['s'] or 0
-            
             for d in DCRProductDetail.objects.filter(visit__daily_dcr=daily_dcr).select_related('product'):
                 price = float(d.product.price) if getattr(d.product, 'price', None) else 0.0
                 today_pob += (d.order_qty or 0) * price
 
-        # 🌟 FIX: Sirf Approved hi dashboard pe dikhenge
         pending_doctors = [d for d in Doctor.objects.select_related('route').filter(allocated_to__in=team_employees, route__in=active_routes, status='Approved') if d.id not in visited_doc_ids]
         pending_chemists = [c for c in Chemist.objects.select_related('route').filter(allocated_to__in=team_employees, route__in=active_routes, status='Approved') if c.id not in visited_chem_ids]
+        is_va_enabled = getattr(employee.company, 'is_digital_va_enabled', False)
+        my_inventory = MRInventory.objects.filter(employee=employee, stock_qty__gt=0).select_related('item')
+        sample_map = {inv.item.linked_product_id: inv.stock_qty for inv in my_inventory if inv.item.item_type == 'Sample' and inv.item.linked_product_id}
 
-    return render(request, 'dashboard.html', {
+        va_media_dict = {}
+        if is_va_enabled:
+            for s in ProductVAMedia.objects.filter(company=employee.company, is_active=True).order_by('product_id', 'slide_order'):
+                if s.file:
+                    va_media_dict.setdefault(s.product_id, []).append({'url': s.file.url, 'title': s.title})
+
+        for p in Product.objects.filter(company=employee.company):
+            products_data.append({
+                'product': p, 'stock': sample_map.get(p.id, 0), 'price': float(p.price),
+                'va_slides': va_media_dict.get(p.id, [])
+            })
+
+        hv_map = {}
+        for g in GiftCampaignPlan.objects.filter(employee=employee, status='Approved', month=working_date.month, year=working_date.year).values('doctor_id', 'item_id'):
+            hv_map.setdefault(g['item_id'], set()).add(g['doctor_id'])
+        for inv in my_inventory:
+            if inv.item.item_type == 'Sample': continue
+            if inv.item.item_type == 'HighValue':
+                allowed = hv_map.get(inv.item_id)
+                if not allowed: continue
+                gift_stock.append({'item': inv.item, 'stock_qty': inv.stock_qty, 'allowed_doctors': sorted(allowed)})
+            else:
+                gift_stock.append({'item': inv.item, 'stock_qty': inv.stock_qty, 'allowed_doctors': None})
+        # ============= 🌟 NAYA: VISIT PANEL DATA =============
+        is_va_enabled = getattr(employee.company, 'is_digital_va_enabled', False)
+        my_inventory = MRInventory.objects.filter(employee=employee, stock_qty__gt=0).select_related('item')
+        sample_map = {inv.item.linked_product_id: inv.stock_qty for inv in my_inventory if inv.item.item_type == 'Sample' and inv.item.linked_product_id}
+
+        va_media_dict = {}
+        if is_va_enabled:
+            for s in ProductVAMedia.objects.filter(company=employee.company, is_active=True).order_by('product_id', 'slide_order'):
+                if s.file:
+                    va_media_dict.setdefault(s.product_id, []).append({'url': s.file.url, 'title': s.title})
+
+        for p in Product.objects.filter(company=employee.company):
+            products_data.append({
+                'product': p, 'stock': sample_map.get(p.id, 0), 'price': float(p.price),
+                'va_slides': va_media_dict.get(p.id, [])
+            })
+
+        # Gifts: HighValue sirf usi doctor ke liye jiska campaign approved hai
+        hv_map = {}
+        for g in GiftCampaignPlan.objects.filter(employee=employee, status='Approved', month=working_date.month, year=working_date.year).values('doctor_id', 'item_id'):
+            hv_map.setdefault(g['item_id'], set()).add(g['doctor_id'])
+        for inv in my_inventory:
+            if inv.item.item_type == 'Sample': continue
+            if inv.item.item_type == 'HighValue':
+                allowed = hv_map.get(inv.item_id)
+                if not allowed: continue   # kisi doctor ke liye bhi approved nahi — skip
+                gift_stock.append({'item': inv.item, 'stock_qty': inv.stock_qty, 'allowed_doctors': sorted(allowed)})
+            else:
+                gift_stock.append({'item': inv.item, 'stock_qty': inv.stock_qty, 'allowed_doctors': None})
+     return render(request, 'dashboard.html', {
         'employee': employee, 'today': working_date, 
         'active_routes': active_routes, 'available_routes': available_routes, 
-        'pending_doctors': pending_doctors, 'visited_doctors': visited_docs, 
-        'pending_chemists': pending_chemists, 'visited_chemists': visited_chems, 
+        'pending_doctors': pending_doctors,
+        'visited_doctors': visited_docs,        # 🌟 key badla — nayi template ye naam use karti hai
+        'pending_chemists': pending_chemists,
+        'visited_chemists': visited_chems,      # 🌟
         'is_day_started': is_day_started, 'is_day_ended': is_day_ended, 'tp': tp, 
         'company_notices': CompanyNotice.objects.filter(company=employee.company, is_active=True).order_by('-created_at')[:5],
-        'today_dr_visits': len(visited_docs), 
-        'today_chem_visits': len(visited_chems), 
-        'today_samples': today_samples, 
-        'today_pob': round(today_pob, 2),
-        'open_day': open_day
+        'today_dr_visits': len(visited_docs), 'today_chem_visits': len(visited_chems), 
+        'today_samples': today_samples, 'today_pob': round(today_pob, 2),
+        'open_day': open_day,
+        'products_data': products_data,    # 🌟 NAYA — product dropdown ke liye
+        'gift_stock': gift_stock,          # 🌟 NAYA — gift dropdown ke liye
+        'is_va_enabled': is_va_enabled,    # 🌟 NAYA — VA button ke liye
     })
-
-
 from django.contrib import messages
 from django.shortcuts import render, redirect
 from django.utils import timezone
@@ -1089,7 +1129,10 @@ def doctor_visit_view(request, employee, doc_id):
                             )
                 except (ValueError, MRInventory.DoesNotExist) as e:
                     pass
-                    
+
+        # 🌟 AJAX request → chhota JSON response (page reload nahi hota)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'status': 'ok', 'visit_id': visit.id})
         return redirect('mr_dashboard')
     
     my_inventory = MRInventory.objects.filter(employee=employee, stock_qty__gt=0).select_related('item')
