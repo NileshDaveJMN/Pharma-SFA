@@ -1,276 +1,381 @@
-{% extends 'base.html' %}
-{% block content %}
-<div class="container-fluid p-0 mb-4 mt-1">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visit — Dr. {{ doctor.name }}</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
+body { background:#eef1f5; min-height:100vh; min-height:100dvh; }
 
-    <!-- 🌟 COMPACT HEADER -->
-    <div class="card border-0 shadow-sm mx-1 mb-2 bg-white" style="border-radius: 8px;">
-        <div class="card-body p-2 d-flex justify-content-between align-items-center">
-            <div>
-                <h6 class="fw-bold text-primary mb-0" style="font-size: 0.90rem;">👨‍⚕️ Dr. {{ doctor.name }}</h6>
-                <small class="text-secondary fw-bold" style="font-size: 0.65rem;">🩺 {{ doctor.specialty }}</small>
-            </div>
-            <a href="{% url 'mr_dashboard' %}" class="btn btn-light btn-sm border shadow-sm px-2 py-0 fw-bold text-secondary" style="font-size: 0.65rem; border-radius: 4px;">Cancel</a>
-        </div>
+/* ================= PAGE ================= */
+.page { max-width:520px; margin:0 auto; padding:12px 12px 140px; }
+.doc-header { background:linear-gradient(135deg,#0d47a1,#1976d2); color:#fff; border-radius:14px; padding:18px; }
+.doc-header h1 { font-size:20px; }
+.doc-header p { font-size:13px; opacity:.9; margin-top:4px; }
+.card { background:#fff; border-radius:14px; padding:16px; margin-top:12px; box-shadow:0 1px 5px rgba(0,0,0,.08); }
+.card h2 { font-size:15px; color:#333; margin-bottom:12px; }
+
+/* ================= PRODUCT ROWS ================= */
+.p-row { border-bottom:1px solid #eee; padding:12px 0; }
+.p-row:last-child { border-bottom:none; }
+.p-top { display:flex; align-items:center; gap:10px; }
+.p-top input[type=checkbox] { width:20px; height:20px; accent-color:#1976d2; flex-shrink:0; cursor:pointer; }
+.p-name { font-weight:600; font-size:15px; flex:1; cursor:pointer; }
+.p-name small { display:block; font-weight:400; color:#888; font-size:12px; }
+.p-va { font-size:11px; background:#e8f5e9; color:#2e7d32; padding:3px 8px; border-radius:20px; white-space:nowrap; }
+.p-inputs { display:flex; gap:10px; margin-top:8px; padding-left:30px; }
+.inp { flex:1; }
+.inp label { font-size:11px; color:#888; display:block; margin-bottom:3px; }
+.inp input { width:100%; padding:9px 10px; border:1px solid #ddd; border-radius:8px; font-size:15px; }
+.inp small { font-size:10px; color:#aaa; }
+.gift-row .p-top { gap:10px; }
+.gift-qty { width:70px; padding:9px; border:1px solid #ddd; border-radius:8px; font-size:15px; text-align:center; }
+textarea { width:100%; min-height:70px; padding:10px; border:1px solid #ddd; border-radius:8px; font-size:14px; resize:vertical; }
+
+/* ================= SUBMIT BAR ================= */
+.submit-bar { position:fixed; bottom:0; left:0; right:0; padding:10px 12px calc(10px + env(safe-area-inset-bottom)); background:#fff; box-shadow:0 -2px 10px rgba(0,0,0,.08); display:flex; flex-direction:column; gap:8px; z-index:100; max-width:544px; margin:0 auto; }
+.btn { border:none; border-radius:12px; padding:15px; font-size:16px; font-weight:700; cursor:pointer; width:100%; }
+.btn-submit { background:#28a745; color:#fff; }
+.btn-va { background:#1976d2; color:#fff; }
+.btn:disabled { opacity:.6; }
+.submit-note { font-size:11px; color:#888; text-align:center; }
+
+/* ================= VA OVERLAY ================= */
+.va-overlay { position:fixed; inset:0; z-index:9999; background:#000; display:none; flex-direction:column; height:100vh; height:100dvh; }
+.va-topbar { display:flex; align-items:center; gap:10px; padding:10px 14px; padding-top:calc(10px + env(safe-area-inset-top)); background:#111; color:#fff; font-size:14px; flex-shrink:0; }
+.va-close { background:none; border:none; color:#fff; font-size:22px; cursor:pointer; padding:4px 10px; }
+.va-pname { flex:1; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.va-progress { opacity:0.75; white-space:nowrap; }
+.va-stage { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative; }
+.va-slide-img { max-width:100%; max-height:82%; object-fit:contain; user-select:none; -webkit-user-drag:none; }
+.va-slide-title { color:#ccc; font-size:13px; margin-top:6px; text-align:center; padding:0 16px; }
+.va-hint { color:#777; font-size:12px; padding:14px 0 calc(14px + env(safe-area-inset-bottom)); }
+.va-tap-left, .va-tap-right { position:absolute; top:0; bottom:0; width:22%; z-index:5; }
+.va-tap-left { left:0; } .va-tap-right { right:0; }
+
+/* ================= END SCREEN ================= */
+.va-end { flex:1; display:none; flex-direction:column; align-items:center; justify-content:center; background:linear-gradient(160deg,#1a1a2e,#16213e); color:#fff; padding:24px; overflow-y:auto; }
+.va-end-icon { font-size:60px; margin-bottom:8px; }
+.va-end h2 { font-size:22px; }
+.va-end p { font-size:13px; opacity:.8; margin-top:6px; text-align:center; }
+.va-summary { margin:18px 0; width:100%; max-width:360px; }
+.va-summary table { width:100%; border-collapse:collapse; font-size:14px; }
+.va-summary td { padding:7px 8px; border-bottom:1px solid rgba(255,255,255,.15); }
+.va-summary td:last-child { text-align:right; font-weight:600; }
+.va-submit-btn { width:100%; max-width:360px; padding:16px; font-size:18px; font-weight:700; background:#28a745; color:#fff; border:none; border-radius:12px; cursor:pointer; margin-top:8px; }
+.va-back-btn { background:none; border:none; color:#9aa; padding:14px; cursor:pointer; font-size:14px; margin-top:4px; }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+    <!-- ============ DOCTOR HEADER ============ -->
+    <div class="doc-header">
+        <h1>🩺 Dr. {{ doctor.name }}</h1>
+        <p>{{ doctor.get_specialty_display|default:"—" }}{% if doctor.route %} • {{ doctor.route.name }}{% endif %}</p>
     </div>
 
-    <form method="POST" id="visitForm" class="m-0">
+    <form id="visitForm" method="POST" onsubmit="event.preventDefault(); submitVisit('mainSubmitBtn');">
         {% csrf_token %}
-        
-        <!-- 📍 GPS & VA Hidden Fields -->
-        <input type="hidden" name="latitude" id="lat">
-        <input type="hidden" name="longitude" id="lng">
-        <input type="hidden" name="is_digital_detailing" id="is_digital_detailing" value="false">
-        {% for item in products_data %}
-            <input type="hidden" name="va_time_{{ item.product.id }}" id="va_time_{{ item.product.id }}" value="0">
-        {% endfor %}
+        <input type="hidden" id="latInput" name="latitude" value="">
+        <input type="hidden" id="lngInput" name="longitude" value="">
+        <input type="hidden" name="is_digital_detailing" value="false">
 
-        <div id="geo-status" class="alert alert-warning p-1 mb-2 mx-1 text-center fw-bold shadow-sm border-0" style="font-size: 0.65rem; border-radius: 6px;">
-            ⏳ GPS Location fetch ho rahi hai...
-        </div>
-        
-        <h6 class="text-secondary fw-bold px-2 mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">💊 PRODUCTS & SAMPLING</h6>
-        
-        <!-- 📦 COMPACT PRODUCT LIST -->
-        <div class="mx-1 mb-3">
-            <div class="table-responsive border bg-white shadow-sm" style="border-radius: 6px;">
-                <table class="table table-sm align-middle mb-0" style="font-size: 0.70rem;">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="ps-2 py-1 text-secondary fw-bold" style="width: 40%;">Product</th>
-                            <th class="text-center py-1 text-secondary fw-bold" style="width: 20%;">Det</th>
-                            <th class="text-center py-1 text-secondary fw-bold" style="width: 20%;">Smp</th>
-                            <th class="text-center pe-2 py-1 text-secondary fw-bold" style="width: 20%;">Ord</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in products_data %}
-                        <tr>
-                            <td class="ps-2 py-1">
-                                <span class="fw-bold text-dark d-block mb-0">{{ item.product.name }}</span>
-                                <small class="text-success fw-bold" style="font-size: 0.55rem;">Bag: {{ item.stock }}</small>
-                            </td>
-                            <td class="text-center py-1">
-                                <div class="form-check form-switch d-inline-block m-0">
-                                    <input class="form-check-input detail-checkbox" type="checkbox" name="detailed_{{ item.product.id }}" data-pid="{{ item.product.id }}" style="width: 28px; height: 14px;">
-                                </div>
-                            </td>
-                            <td class="text-center py-1">
-                                <input type="number" class="form-control form-control-sm text-center fw-bold {% if item.stock == 0 %}bg-light text-muted border-0{% else %}bg-white border{% endif %}" 
-                                       name="sample_{{ item.product.id }}" min="0" max="{{ item.stock }}" placeholder="0"
-                                       {% if item.stock == 0 %}readonly{% endif %} style="height: 26px; border-radius: 4px; font-size: 0.70rem;">
-                            </td>
-                            <td class="text-center pe-2 py-1">
-                                <input type="number" class="form-control form-control-sm text-center fw-bold bg-light border-0" 
-                                       name="order_{{ item.product.id }}" min="0" placeholder="0" style="height: 26px; border-radius: 4px; font-size: 0.70rem;">
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="4" class="text-center text-muted fw-bold py-2" style="font-size: 0.70rem;">Koi products available nahi hain.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- 🎁 COMPACT GIFTS & INPUTS -->
-        {% if gift_stock %}
-        <h6 class="text-secondary fw-bold px-2 mb-1" style="font-size: 0.65rem; letter-spacing: 0.5px;">🎁 GIFTS & INPUTS</h6>
-        <div class="mx-1 mb-3">
-            <div class="card border border-warning shadow-sm bg-white" style="border-radius: 6px;">
-                <div class="card-body p-0">
-                    <ul class="list-group list-group-flush" style="border-radius: 6px;">
-                        {% for stock in gift_stock %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center py-1 px-2 border-warning">
-                            <div>
-                                <span class="fw-bold text-dark" style="font-size: 0.75rem;">{{ stock.item.name }}</span>
-                                <small class="text-muted fw-bold d-block" style="font-size: 0.55rem;">Bag Qty: {{ stock.stock_qty }}</small>
-                            </div>
-                            <input type="number" name="promo_qty_{{ stock.item.id }}" class="form-control form-control-sm text-center fw-bold bg-light border-0 shadow-sm" 
-                                   placeholder="0" min="0" max="{{ stock.stock_qty }}" style="max-width: 60px; height: 26px; font-size: 0.75rem; border-radius: 4px;">
-                        </li>
-                        {% endfor %}
-                    </ul>
+        <!-- ============ PRODUCTS ============ -->
+        <div class="card">
+            <h2>💊 Product Detailing / Samples / Order</h2>
+            {% for pd in products_data %}
+            <div class="p-row">
+                <div class="p-top">
+                    <input type="checkbox" id="det_{{ pd.product.id }}" name="detailed_{{ pd.product.id }}">
+                    <label class="p-name" for="det_{{ pd.product.id }}">
+                        {{ pd.product.name }}
+                        <small>{{ pd.product.pack_size }}</small>
+                    </label>
+                    {% if is_va_enabled and pd.va_slides %}<span class="p-va">📱 VA</span>{% endif %}
+                </div>
+                <div class="p-inputs">
+                    <div class="inp">
+                        <label>Sample Qty</label>
+                        <input type="number" name="sample_{{ pd.product.id }}" min="0" max="{{ pd.stock }}" value="0">
+                        <small>Stock: {{ pd.stock }}</small>
+                    </div>
+                    <div class="inp">
+                        <label>Order Qty (POB)</label>
+                        <input type="number" name="order_{{ pd.product.id }}" min="0" value="0">
+                    </div>
                 </div>
             </div>
+            {% endfor %}
+        </div>
+
+        <!-- ============ GIFTS / INPUTS ============ -->
+        {% if gift_stock %}
+        <div class="card">
+            <h2>🎁 Gifts / Inputs Given</h2>
+            {% for inv in gift_stock %}
+            <div class="p-row gift-row">
+                <div class="p-top">
+                    <input type="number" class="gift-qty" name="promo_qty_{{ inv.item.id }}" min="0" max="{{ inv.stock_qty }}" placeholder="0">
+                    <label class="p-name">
+                        {{ inv.item.name }}
+                        <small>{{ inv.item.get_item_type_display }} • Stock: {{ inv.stock_qty }} • ₹{{ inv.item.price }}</small>
+                    </label>
+                </div>
+            </div>
+            {% endfor %}
         </div>
         {% endif %}
 
-        <!-- 📝 COMPACT REMARK -->
-        <div class="mx-1 mb-3">
-            <div class="card border-0 shadow-sm bg-white" style="border-radius: 6px;">
-                <div class="card-body p-2">
-                    <label class="form-label text-secondary fw-bold mb-1" style="font-size: 0.65rem;">📝 SPECIAL REMARK (OPTIONAL)</label>
-                    <textarea name="remark" class="form-control form-control-sm bg-light border-0 fw-bold" rows="2" placeholder="Dr. se kya baat hui?" style="font-size: 0.70rem; border-radius: 4px;"></textarea>
-                </div>
-            </div>
+        <!-- ============ REMARK ============ -->
+        <div class="card">
+            <h2>📝 Visit Remark</h2>
+            <textarea name="remark" placeholder="Visit ka brief remark..."></textarea>
         </div>
 
-        <!-- 🌟 ACTION BUTTONS -->
-        <div class="mx-1 mb-5 pb-4 d-flex gap-2">
-            <button type="submit" id="submitBtn" class="btn btn-primary btn-sm w-100 fw-bold shadow-sm py-2" style="border-radius: 6px;" disabled>
-                <i class="bi bi-check-circle"></i> Submit DCR
-            </button>
-            
-            {% if is_va_enabled %}
-            <button type="button" id="startVABtn" class="btn btn-info btn-sm w-100 fw-bold shadow-sm py-2 text-dark" style="border-radius: 6px; background-color: #0dcaf0; border: none;">
-                <i class="bi bi-easel"></i> Digital Detailing
-            </button>
-            {% endif %}
+        <!-- ============ VA OVERLAY (form ke andar) ============ -->
+        <div id="vaOverlay" class="va-overlay">
+            <div class="va-topbar">
+                <button type="button" id="vaCloseBtn" class="va-close">✕</button>
+                <span id="vaProductName" class="va-pname"></span>
+                <span id="vaProgress" class="va-progress"></span>
+            </div>
+
+            <!-- Slides — yahan KOI submit button nahi -->
+            <div id="vaStage" class="va-stage">
+                <div class="va-tap-left" id="vaTapLeft"></div>
+                <div class="va-tap-right" id="vaTapRight"></div>
+                <img id="vaSlideImg" class="va-slide-img" src="" alt="VA slide">
+                <div id="vaSlideTitle" class="va-slide-title"></div>
+                <div class="va-hint">◀ Left swipe/tap = back &nbsp;•&nbsp; Right swipe/tap = next ▶</div>
+            </div>
+
+            <!-- END SCREEN — sirf LAST slide swipe karne ke BAAD dikhta hai -->
+            <div id="vaEndScreen" class="va-end" style="display:none;">
+                <div class="va-end-icon">✅</div>
+                <h2>Detailing Complete!</h2>
+                <p>Sabhi selected products ki slides dekh li gayi.</p>
+                <div id="vaTimeSummary" class="va-summary"></div>
+                <button type="button" id="vaFinishBtn" class="va-submit-btn" onclick="submitVisit('vaFinishBtn')">✔ Submit Visit</button>
+                <button type="button" id="vaBackBtn" class="va-back-btn">↩ Wapas slides dekhein</button>
+            </div>
         </div>
     </form>
 </div>
 
-<!-- ======================================================================= -->
-<!-- 📺 DIGITAL VA FULL-SCREEN OVERLAY (HIDDEN BY DEFAULT) -->
-<!-- ======================================================================= -->
-{% if is_va_enabled %}
-<div id="vaOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; background: #000; z-index: 9999; flex-direction: column;">
-    <!-- Top Bar -->
-    <div class="d-flex justify-content-between align-items-center p-2" style="background: rgba(0,0,0,0.5); position: absolute; width: 100%; top: 0; z-index: 10;">
-        <span id="vaSlideCounter" class="badge bg-dark border text-white">1 / 1</span>
-        <button type="button" id="closeVABtn" class="btn btn-danger btn-sm fw-bold">Close</button>
-    </div>
-    
-    <!-- Image Display -->
-    <div style="flex: 1; display: flex; justify-content: center; align-items: center; overflow: hidden; position: relative;">
-        <img id="vaImage" src="" style="max-width: 100%; max-height: 100%; object-fit: contain;">
-        
-        <!-- Navigation Areas -->
-        <div id="vaPrevArea" style="position: absolute; left: 0; top: 0; width: 30%; height: 100%; z-index: 5;"></div>
-        <div id="vaNextArea" style="position: absolute; right: 0; top: 0; width: 30%; height: 100%; z-index: 5;"></div>
-    </div>
-    
-    <!-- Bottom Bar -->
-    <div class="p-3 d-flex justify-content-center" style="background: rgba(0,0,0,0.5); position: absolute; width: 100%; bottom: 0; z-index: 10;">
-        <button type="button" id="finishVABtn" class="btn btn-success fw-bold w-100 shadow-lg" style="border-radius: 30px;">
-            ✅ Finish Detailing & Submit DCR
-        </button>
-    </div>
+<!-- ============ FIXED SUBMIT BAR (page pe) ============ -->
+<div class="submit-bar">
+    {% if is_va_enabled %}
+    <button type="button" class="btn btn-va" id="vaOpenBtn" onclick="openVA()">📱 Start Digital Detailing</button>
+    <p class="submit-note" id="vaNote">Selected (✓) products ki slides swipe karein — end par Submit milega</p>
+    {% endif %}
+    <button type="submit" class="btn btn-submit" id="mainSubmitBtn">✔ Submit Visit</button>
 </div>
 
 <script>
-    const vaDatabase = {
-        {% for item in products_data %}
-        "{{ item.product.id }}": [
-            {% for slide in item.va_slides %}
-            { url: "{{ slide.url }}", title: "{{ slide.title }}" },
-            {% endfor %}
-        ],
+// ================= DATA (view se) =================
+const productsData = [
+{% for pd in products_data %}
+    {
+        id: {{ pd.product.id }},
+        name: "{{ pd.product.name|escapejs }}",
+        hasSlides: {% if pd.va_slides %}true{% else %}false{% endif %},
+        va_slides: [
+        {% for s in pd.va_slides %}
+            { url: "{{ s.url|escapejs }}", title: "{{ s.title|escapejs }}" },
         {% endfor %}
-    };
+        ]
+    },
+{% endfor %}
+];
+const isVAEnabled = {{ is_va_enabled|yesno:"true,false" }};
+const STRICT_VA = false; // 🌟 true karo to: detailing complete kiye bina Submit button hide rahega
 
-    let activeSlides = [];
-    let currentSlideIndex = 0;
-    
-    // Timer Variables
-    let currentProductId = null;
-    let slideStartTime = null;
-    let productTimes = {}; // Format: { "prodId": totalSeconds }
+// ================= ELEMENTS =================
+const form = document.getElementById('visitForm');
+const overlay = document.getElementById('vaOverlay');
+const stage = document.getElementById('vaStage');
+const slideImg = document.getElementById('vaSlideImg');
+const slideTitle = document.getElementById('vaSlideTitle');
+const endScreen = document.getElementById('vaEndScreen');
+const pnameEl = document.getElementById('vaProductName');
+const progressEl = document.getElementById('vaProgress');
+const summaryEl = document.getElementById('vaTimeSummary');
+const mainSubmitBtn = document.getElementById('mainSubmitBtn');
+const latInput = document.getElementById('latInput');
+const lngInput = document.getElementById('lngInput');
 
-    const vaOverlay = document.getElementById('vaOverlay');
-    const vaImage = document.getElementById('vaImage');
-    const vaSlideCounter = document.getElementById('vaSlideCounter');
-    
-    function recordTimeSpent() {
-        if (currentProductId && slideStartTime) {
-            let timeSpent = Math.round((Date.now() - slideStartTime) / 1000);
-            productTimes[currentProductId] = (productTimes[currentProductId] || 0) + timeSpent;
+let slides = [], idx = 0, timers = {}, activePid = null, tick = null;
+let vaCompleted = false, submitting = false, geoDone = false;
+
+// ================= GEOLOCATION =================
+function tryGeo() {
+    return new Promise(resolve => {
+        if (geoDone || !navigator.geolocation) return resolve();
+        navigator.geolocation.getCurrentPosition(
+            pos => { latInput.value = pos.coords.latitude; lngInput.value = pos.coords.longitude; geoDone = true; resolve(); },
+            () => resolve(),
+            { timeout: 4000, maximumAge: 30000 }
+        );
+    });
+}
+window.addEventListener('load', () => tryGeo());
+
+// ================= SUBMIT =================
+async function submitVisit(btnId) {
+    if (submitting) return;
+    submitting = true;
+    const btn = document.getElementById(btnId || 'mainSubmitBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Submitting...'; }
+    await tryGeo();
+    form.submit();
+}
+
+// ================= VA: OPEN (🌟 SIRF SELECTED PRODUCTS) =================
+function openVA() {
+    slides = [];
+    let selectedCount = 0;
+    productsData.forEach(p => {
+        const cb = form.querySelector('input[name="detailed_' + p.id + '"]');
+        if (!cb || !cb.checked) return;              // 🌟 unchecked = SKIP
+        selectedCount++;
+        if (p.va_slides && p.va_slides.length) {
+            p.va_slides.forEach(s => slides.push({ pid: p.id, pname: p.name, url: s.url, title: s.title }));
         }
-        slideStartTime = Date.now(); // Reset timer
-    }
+    });
 
-    function renderSlide(index) {
-        if (index < 0 || index >= activeSlides.length) return;
-        
-        recordTimeSpent(); // Record time of previous slide before changing
-        
-        currentSlideIndex = index;
-        let slide = activeSlides[index];
-        currentProductId = slide.pid;
-        
-        vaImage.src = slide.url;
-        vaSlideCounter.innerText = (index + 1) + " / " + activeSlides.length;
-    }
+    if (selectedCount === 0) { alert('⚠️ Pehle kam se kam ek product select (✓) karein!'); return; }
+    if (slides.length === 0) { alert('⚠️ Aapke SELECTED products ke liye koi VA slide upload nahi hai.'); return; }
 
-    document.getElementById('startVABtn').addEventListener('click', function() {
-        activeSlides = [];
-        productTimes = {};
-        
-        // Find which products are "Detailed"
-        document.querySelectorAll('.detail-checkbox').forEach(function(checkbox) {
-            if (checkbox.checked) {
-                let pid = checkbox.getAttribute('data-pid');
-                let slides = vaDatabase[pid];
-                if (slides && slides.length > 0) {
-                    slides.forEach(s => activeSlides.push({ pid: pid, url: s.url, title: s.title }));
-                }
-            }
-        });
+    timers = {}; activePid = null; idx = 0; vaCompleted = false;
+    showSlide(0);
+    stage.style.display = 'flex';
+    endScreen.style.display = 'none';
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    startTimer();
+    if (overlay.requestFullscreen) overlay.requestFullscreen().catch(() => {}); // URL bar fix
+    updateSubmitBar();
+}
+window.openVA = openVA;
 
-        if (activeSlides.length === 0) {
-            alert("Please select (Det) at least one product that has Visual Aid slides.");
-            return;
+// ================= TIMER (per product) =================
+function startTimer() {
+    clearInterval(tick);
+    tick = setInterval(() => { if (activePid) timers[activePid] = (timers[activePid] || 0) + 1; }, 1000);
+}
+
+function showSlide(i) {
+    const s = slides[i];
+    activePid = s.pid;
+    slideImg.src = s.url;
+    slideTitle.textContent = s.title || '';
+    pnameEl.textContent = s.pname;
+    progressEl.textContent = (i + 1) + ' / ' + slides.length;
+    if (slides[i + 1]) { const pre = new Image(); pre.src = slides[i + 1].url; } // preload next
+}
+
+function next() { idx < slides.length - 1 ? (idx++, showSlide(idx)) : finishVA(); }
+function prev() { if (idx > 0) { idx--; showSlide(idx); } }
+
+// ================= 🌟 LAST SLIDE KE BAAD: END SCREEN + SUBMIT =================
+function finishVA() {
+    clearInterval(tick); activePid = null;
+    const merged = flushTimers();
+    vaCompleted = true;
+    stage.style.display = 'none';
+    endScreen.style.display = 'flex';
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+
+    let html = '<table>';
+    let total = 0;
+    Object.keys(merged).forEach(pid => {
+        const p = productsData.find(x => String(x.id) === String(pid));
+        if (merged[pid] > 0) {
+            total += merged[pid];
+            html += '<tr><td>' + (p ? p.name : 'Product #' + pid) + '</td><td>' + fmt(merged[pid]) + '</td></tr>';
         }
-
-        // Open Overlay
-        vaOverlay.style.display = 'flex';
-        slideStartTime = Date.now();
-        renderSlide(0);
     });
+    if (total > 0) html += '<tr><td><b>Total</b></td><td><b>' + fmt(total) + '</b></td></tr>';
+    summaryEl.innerHTML = html + '</table>';
+    updateSubmitBar();
+}
 
-    document.getElementById('vaNextArea').addEventListener('click', function() {
-        if (currentSlideIndex < activeSlides.length - 1) renderSlide(currentSlideIndex + 1);
+// ================= TIME → HIDDEN FORM FIELDS (backend same fields padhta hai) =================
+function flushTimers() {
+    const merged = {};
+    form.querySelectorAll('input[name^="va_time_"]').forEach(inp => {
+        merged[inp.name.replace('va_time_', '')] = parseInt(inp.value || 0) || 0;
     });
+    Object.keys(timers).forEach(pid => { merged[pid] = (merged[pid] || 0) + timers[pid]; });
+    Object.keys(merged).forEach(pid => {
+        let inp = form.querySelector('input[name="va_time_' + pid + '"]');
+        if (!inp) { inp = document.createElement('input'); inp.type = 'hidden'; inp.name = 'va_time_' + pid; form.appendChild(inp); }
+        inp.value = merged[pid];
+    });
+    timers = {};
+    const flag = form.querySelector('input[name="is_digital_detailing"]');
+    if (flag) flag.value = 'true';   // 🌟 backend ko batata hai: digital detailing hui
+    return merged;
+}
 
-    document.getElementById('vaPrevArea').addEventListener('click', function() {
-        if (currentSlideIndex > 0) renderSlide(currentSlideIndex - 1);
-    });
+function fmt(s) { return Math.floor(s / 60) + 'm ' + (s % 60) + 's'; }
 
-    document.getElementById('closeVABtn').addEventListener('click', function() {
-        recordTimeSpent();
-        vaOverlay.style.display = 'none';
-        currentProductId = null;
-    });
+// ================= BUTTONS =================
+document.getElementById('vaBackBtn').addEventListener('click', () => {
+    endScreen.style.display = 'none';
+    stage.style.display = 'flex';
+    idx = slides.length - 1; showSlide(idx); startTimer();
+    if (overlay.requestFullscreen) overlay.requestFullscreen().catch(() => {});
+});
 
-    document.getElementById('finishVABtn').addEventListener('click', function() {
-        recordTimeSpent(); // Add final slide's time
-        
-        // Populate hidden inputs with tracked time
-        for (let pid in productTimes) {
-            let input = document.getElementById('va_time_' + pid);
-            if (input) input.value = productTimes[pid];
-        }
-        
-        document.getElementById('is_digital_detailing').value = "true";
-        document.getElementById('visitForm').submit();
+document.getElementById('vaCloseBtn').addEventListener('click', () => {
+    flushTimers();   // ab tak ka time save rahega
+    clearInterval(tick); activePid = null;
+    overlay.style.display = 'none';
+    document.body.style.overflow = '';
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    updateSubmitBar();
+});
+
+// ================= SWIPE + TAP ZONES =================
+let sx = 0;
+stage.addEventListener('touchstart', e => sx = e.changedTouches[0].screenX, { passive: true });
+stage.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].screenX - sx;
+    if (dx < -40) next(); else if (dx > 40) prev();
+}, { passive: true });
+
+document.getElementById('vaTapRight').addEventListener('click', next);
+document.getElementById('vaTapLeft').addEventListener('click', prev);
+
+// Desktop testing: arrow keys
+document.addEventListener('keydown', e => {
+    if (overlay.style.display === 'none' || stage.style.display === 'none') return;
+    if (e.key === 'ArrowRight') next();
+    if (e.key === 'ArrowLeft') prev();
+});
+
+// ================= STRICT MODE (optional) =================
+function updateSubmitBar() {
+    if (!STRICT_VA || !isVAEnabled) return;
+    const anySelectedWithSlides = productsData.some(p => {
+        const cb = form.querySelector('input[name="detailed_' + p.id + '"]');
+        return cb && cb.checked && p.va_slides && p.va_slides.length;
     });
+    if (mainSubmitBtn) mainSubmitBtn.style.display = (anySelectedWithSlides && !vaCompleted) ? 'none' : 'block';
+    const note = document.getElementById('vaNote');
+    if (note) note.style.display = (anySelectedWithSlides && !vaCompleted) ? 'block' : 'none';
+}
+form.querySelectorAll('input[name^="detailed_"]').forEach(cb => cb.addEventListener('change', updateSubmitBar));
+
+// VA button hide karo agar kisi product ki slides hi nahi hain
+if (isVAEnabled && !productsData.some(p => p.va_slides && p.va_slides.length)) {
+    const b = document.getElementById('vaOpenBtn');
+    if (b) b.style.display = 'none';
+}
 </script>
-{% endif %}
-
-<!-- 📍 GPS Logic Script -->
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        var statusDiv = document.getElementById('geo-status');
-        var submitBtn = document.getElementById('submitBtn');
-
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                function(position) {
-                    document.getElementById('lat').value = position.coords.latitude;
-                    document.getElementById('lng').value = position.coords.longitude;
-                    statusDiv.className = "alert alert-success p-1 mb-2 mx-1 text-center fw-bold shadow-sm border-0";
-                    statusDiv.innerHTML = "📍 Location Captured Successfully!";
-                    submitBtn.disabled = false;
-                }, 
-                function(error) {
-                    statusDiv.className = "alert alert-danger p-1 mb-2 mx-1 text-center fw-bold shadow-sm border-0";
-                    statusDiv.innerHTML = "⚠️ Error: GPS Enable karein!";
-                },
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-            );
-        } else {
-            statusDiv.innerHTML = "GPS Not Supported.";
-        }
-    });
-</script>
-{% endblock %}
+</body>
+</html>
