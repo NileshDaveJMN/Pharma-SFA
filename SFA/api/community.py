@@ -8,32 +8,47 @@ from django.core.paginator import Paginator
 from SFA.models import FieldEvent, EventPhoto, EventLike, EventComment, Employee, Doctor, Chemist, Territory
 from SFA.services.team import get_full_team_employees
 from .reports_helpers import _resolve_selected_employee, _employee_brief
-# ==============================================================================
-# 📢 1. GET COMMUNITY FEED & LEADERBOARD (Webapp Logic Matched)
-# ==============================================================================
+from django.db.models import Prefetch
+from django.core.cache import cache
+from SFA.models import FieldEvent, EventPhoto, EventComment, EventLike, Employee, Doctor, Chemist, Territory
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_community_feed(request):
     emp = request.user.employee
-    # Webapp: FieldEvent.objects.filter(is_shared_in_community=True).select_related(...)
-    event_list = FieldEvent.objects.filter(is_shared_in_community=True).select_related('employee', 'territory', 'doctor', 'chemist').order_by('-created_at')
-    
-    # Webapp: Paginator(event_list, 10)
+
+    # 🚀 N+1 FIXED: photos, comments (+employee), likes — sab ek query mein prefetch
+    comments_qs = EventComment.objects.select_related('employee').order_by('-created_at')
+    event_list = FieldEvent.objects.filter(
+        is_shared_in_community=True
+    ).select_related(
+        'employee', 'territory', 'doctor', 'chemist'
+    ).prefetch_related(
+        'photos',
+        Prefetch('comments', queryset=comments_qs),
+        'likes',
+    ).order_by('-created_at')
+
     paginator = Paginator(event_list, 10)
-    page_number = request.GET.get('page', 1)
-    events = paginator.get_page(page_number)
-    
+    events = paginator.get_page(request.GET.get('page', 1))
+
     feed_data = []
     for ev in events:
-        # 🌟 PHOTOS: Webapp ke 'ev.photos.all()' ke equal - Saari photos ki URLs bhej rahe hain
-        photos_list = [p.photo.url for p in ev.photos.all()]
-        
-        # 🌟 COMMENTS: Webapp jaisa nested comments
+        # 🚀 Sab kuch PREFETCHED data se — loop mein ZERO queries
+        photos_list = [
+    p.photo.url.replace('/upload/', '/upload/c_limit,w_800,q_auto,f_auto/')
+    for p in ev.photos.all()
+]
+
         comments_list = [{
             'employee_name': c.employee.name,
             'comment': c.comment,
             'time': c.created_at.strftime('%d %b %Y %I:%M %p')
-        } for c in ev.comments.all().order_by('-created_at')]
+        } for c in ev.comments.all()]   # Prefetch queryset order-by laga raha hai
+
+        likes = list(ev.likes.all())
+        likes_count = len(likes)                                # count() → Python len
+        is_liked_by_me = any(l.employee_id == emp.id for l in likes)  # exists() → Python
 
         feed_data.append({
             'id': ev.id,
@@ -43,30 +58,30 @@ def api_community_feed(request):
             'creator_name': ev.employee.name,
             'territory': ev.territory.name if ev.territory else "N/A",
             'time': ev.created_at.strftime('%d %b %Y %I:%M %p'),
-            'photos': photos_list, # 🌟 SAARI PHOTOS
-            'likes_count': ev.likes.count(),
-            'is_liked_by_me': ev.likes.filter(employee=emp).exists(),
+            'photos': photos_list,
+            'likes_count': likes_count,
+            'is_liked_by_me': is_liked_by_me,
             'comments': comments_list
         })
-        
-    # 🌟 LEADERBOARD: Webapp jaisa monthly leaderboard
+
+    # 🚀 LEADERBOARD: Cache (5 min TTL) + 🐛 company filter fix
     today = timezone.now().date()
-    leaderboard_qs = Employee.objects.annotate(
-        total_events=Count(
-            'field_events',
-            filter=Q(
+    cache_key = f"lb_{emp.company_id}_{today.year}_{today.month}"
+    leaderboard_data = cache.get(cache_key)
+    if leaderboard_data is None:
+        leaderboard_qs = Employee.objects.filter(company=emp.company).annotate(   # 🐛 SaaS leak fix
+            total_events=Count('field_events', filter=Q(
                 field_events__created_at__year=today.year,
                 field_events__created_at__month=today.month,
-            )
-        )
-    ).filter(total_events__gt=0).order_by('-total_events')[:5]
-    
-    leaderboard_data = [{'name': e.name, 'events_count': e.total_events} for e in leaderboard_qs]
-        
+            ))
+        ).filter(total_events__gt=0).order_by('-total_events')[:5]
+        leaderboard_data = [{'name': e.name, 'events_count': e.total_events} for e in leaderboard_qs]
+        cache.set(cache_key, leaderboard_data, 300)   # 5 minute
+
     return Response({
         'feed': feed_data,
         'leaderboard': leaderboard_data,
-        'has_next_page': events.has_next(), 
+        'has_next_page': events.has_next(),
         'current_page': events.number,
         'total_pages': paginator.num_pages
     })
@@ -106,7 +121,10 @@ def api_event_report(request):
     
     report_data = []
     for ev in events:
-        photos_list = [p.photo.url for p in ev.photos.all()]
+        photos_list = [
+    p.photo.url.replace('/upload/', '/upload/c_limit,w_800,q_auto,f_auto/')
+    for p in ev.photos.all()
+]
 
         report_data.append({
             'id': ev.id,

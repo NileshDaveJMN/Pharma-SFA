@@ -128,30 +128,34 @@ def api_team_tree(request):
 @api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated])
 def api_profile(request):
+    # 🚀 Employee + headquarter + manager + company — EK hi query mein
     try:
-        emp = request.user.employee
-    except AttributeError:
+        emp = Employee.objects.select_related('headquarter', 'manager', 'company').get(user=request.user)
+    except Employee.DoesNotExist:
         return Response({'error': 'Employee profile missing'}, status=status.HTTP_400_BAD_REQUEST)
 
     if request.method == 'GET':
         emp_id = request.query_params.get('employee_id')
-        
+
         if emp_id:
             try:
-                target_emp = Employee.objects.get(id=emp_id, company=emp.company)
-                team_members = get_full_team_employees(emp)
-                managers = emp.get_my_managers()
-                allowed_ids = set(team_members.values_list('id', flat=True)) | set([m.id for m in managers])
-                
-                if target_emp.id not in allowed_ids and target_emp.id != emp.id:
+                # 🚀 Target bhi select_related ke saath
+                target_emp = Employee.objects.select_related(
+                    'headquarter', 'manager', 'company'
+                ).get(id=emp_id, company=emp.company)
+
+                # 🚀 Sirf IDs chahiye — full objects nahi
+                team_ids = set(get_full_team_employees(emp).values_list('id', flat=True))
+                manager_ids = {m.id for m in emp.get_my_managers()}
+
+                if target_emp.id not in team_ids and target_emp.id not in manager_ids and target_emp.id != emp.id:
                     return Response({'error': 'Access Denied: You can only view your team members.'}, status=403)
-                    
+
                 emp = target_emp
             except Employee.DoesNotExist:
                 return Response({'error': 'Employee not found'}, status=404)
 
-        data = _employee_dict(emp, include_manager=True)
-        return Response(data, status=status.HTTP_200_OK)
+        return Response(_employee_dict(emp, include_manager=True), status=status.HTTP_200_OK)
 
     if request.method == 'PUT':
         action = request.data.get('action')
@@ -229,56 +233,40 @@ def api_save_token(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_organogram(request):
-    try:
-        emp = request.user.employee
-    except AttributeError:
-        return Response({'error': 'Employee profile missing'}, status=400)
+    emp = Employee.objects.select_related('headquarter').get(user=request.user)
 
     nodes = []
-    
     managers = emp.get_my_managers(include_inactive=False)
     managers.reverse()
     for m in managers:
-        nodes.append({
-            'id': m.id,
-            'name': m.name,
-            'role': m.designation,
-            'hq': m.headquarter.name if m.headquarter else 'N/A',
-            'is_me': False,
-            'is_vacant': False,
-            'depth': 0
-        })
-        
-    nodes.append({
-        'id': emp.id,
-        'name': f"{emp.name} (You)",
-        'role': emp.designation,
-        'hq': emp.headquarter.name if emp.headquarter else 'N/A',
-        'is_me': True,
-        'is_vacant': False,
-        'depth': 0
-    })
-    
-    def get_subs(parent, depth):
-        direct_reports = Employee.objects.filter(manager=parent).exclude(id=parent.id).order_by('name')
-        for sub in direct_reports:
+        nodes.append({'id': m.id, 'name': m.name, 'role': m.designation,
+                      'hq': m.headquarter.name if m.headquarter else 'N/A',
+                      'is_me': False, 'is_vacant': False, 'depth': 0})
+
+    nodes.append({'id': emp.id, 'name': f"{emp.name} (You)", 'role': emp.designation,
+                  'hq': emp.headquarter.name if emp.headquarter else 'N/A',
+                  'is_me': True, 'is_vacant': False, 'depth': 0})
+
+    # 🚀 N+1 KILLED: poori company EK query mein + tree Python mein banao
+    children_map = {}
+    for e in Employee.objects.filter(company=emp.company).select_related('headquarter'):
+        if e.manager_id and e.manager_id != e.id:
+            children_map.setdefault(e.manager_id, []).append(e)
+    for k in children_map:
+        children_map[k].sort(key=lambda x: x.name)
+
+    def get_subs(parent_id, depth):
+        for sub in children_map.get(parent_id, []):
             if not sub.is_active and not sub.is_placeholder:
                 continue
-                
-            is_vacant = sub.is_placeholder
-            nodes.append({
-                'id': sub.id,
-                'name': 'Vacant Position' if is_vacant else sub.name,
-                'role': sub.designation,
-                'hq': sub.headquarter.name if sub.headquarter else 'N/A',
-                'is_me': False,
-                'is_vacant': is_vacant,
-                'depth': depth
-            })
-            get_subs(sub, depth + 1)
-            
-    get_subs(emp, 1)
-        
+            nodes.append({'id': sub.id,
+                          'name': 'Vacant Position' if sub.is_placeholder else sub.name,
+                          'role': sub.designation,
+                          'hq': sub.headquarter.name if sub.headquarter else 'N/A',
+                          'is_me': False, 'is_vacant': sub.is_placeholder, 'depth': depth})
+            get_subs(sub.id, depth + 1)
+
+    get_subs(emp.id, 1)
     return Response(nodes, status=200)
 
 # ==============================================================================
