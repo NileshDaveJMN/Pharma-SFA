@@ -437,7 +437,7 @@ def api_routes(request):
 
     team_employees = get_dropdown_team(employee, ordered=False)
     terr_ids = get_team_territory_ids(team_employees)
-    routes = get_team_requested_routes(team_employees, terr_ids).filter(
+    routes = get_team_requested_routes(team_employees, terr_ids).select_related('territory').filter(
         company=employee.company
     )
 
@@ -527,7 +527,7 @@ def api_dropdowns(request):
     team_employees = get_dropdown_team(employee)
     terr_ids = get_team_territory_ids(team_employees)
     territories = get_territories(employee.company, id__in=terr_ids).order_by('name')
-    routes = get_team_requested_routes(team_employees, terr_ids).filter(
+    routes = get_team_requested_routes(team_employees, terr_ids).select_related('territory').filter(
         company=employee.company
     )
 
