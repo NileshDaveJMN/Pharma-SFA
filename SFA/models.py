@@ -1143,7 +1143,7 @@ class FocusProductTracking(models.Model):
 
     class Meta:
         # Ek company me ek product ek hi baar active list me ho sakta hai
-        unique_together = ('company', 'product')
+        unique_together = ('company', 'product', 'added_by')
 
     def __str__(self):
         status = "Active" if self.is_active else "Inactive"

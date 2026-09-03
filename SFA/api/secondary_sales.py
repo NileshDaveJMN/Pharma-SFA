@@ -267,6 +267,7 @@ def api_rsm_manage_focus_products(request):
                 'message': f'Campaign is now {status_text}'
             })
         
+        
         elif action == 'save_products':
             if not control.is_weekly_focus_active:
                 return Response({'success': False, 'error': 'Campaign is OFF, products cannot be saved.'}, status=400)
@@ -274,17 +275,24 @@ def api_rsm_manage_focus_products(request):
             product_ids = request.data.get('product_ids', [])
             
             with transaction.atomic():
-                FocusProductTracking.objects.filter(company=company, added_by=employee).update(is_active=False)
+                FocusProductTracking.objects.filter(
+                    company=company, added_by=employee
+                ).update(is_active=False)
                 
                 new_trackings = [
-                    FocusProductTracking(company=company, product_id=pid, added_by=employee, is_active=True)
+                    FocusProductTracking(
+                        company=company,
+                        product_id=pid,
+                        added_by=employee,
+                        is_active=True
+                    )
                     for pid in product_ids
                 ]
                 if new_trackings:
                     FocusProductTracking.objects.bulk_create(
-                        new_trackings, 
-                        update_conflicts=True, 
-                        unique_fields=['company', 'product', 'added_by'], 
+                        new_trackings,
+                        update_conflicts=True,
+                        unique_fields=['company', 'product', 'added_by'],
                         update_fields=['is_active']
                     )
             
