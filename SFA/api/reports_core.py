@@ -673,9 +673,9 @@ def api_primary_sales_report(request):
             'party_name': pdata['party_name'], 
             'products': prod_list,
             'monthly_list': [{'qty': st_monthly[m]['qty'], 'val': round(st_monthly[m]['val'], 2)} for m in months_range],
-            'total_qty': st_tot_qty,                                # 🌟 FIX
-            'total_val': round(st_tot_val, 2                                 # 🌟 FIX
-        })
+            'total_qty': st_tot_qty,
+            'total_val': round(st_tot_val, 2)      # ✅ round ka ( ) dono round-brackets
+    })
     prod_out = []
     for pr_id, pr_data in prod_dict.items():
         pr_data['monthly_list'] = [pr_data['monthly'][m] for m in months_range]
