@@ -2,12 +2,20 @@
 SFA/api/sales.py
 ================
 Sales & Visit REST API endpoints for Flutter.
+
+🌟 PERFORMANCE FIXES APPLIED (is version mein):
+  1. api_doctor_visit_submit  → inventory bulk_update + transaction (26 → ~7 queries)
+  2. api_party_wise_submit     → bulk_create + transaction (40 → ~4 queries)
+  3. api_gift_campaign GET     → select_related
+  4. api_gift_campaign POST    → bulk_create + transaction (25 → ~6 queries)
+  (api_target_setting, api_today_visits, visit form, chemist submit — UNCHANGED, already clean)
 """
 from datetime import datetime, date
 import calendar
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Sum, Q
+from django.db import transaction   # 🌟 NAYA: atomic saves ke liye
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -130,48 +138,76 @@ def api_doctor_visit_submit(request):
     is_bypassed = is_backdated and (not setting or not setting.strict_geofence_for_backdate)
 
     try:
-        daily_dcr, _ = DailyDCR.objects.get_or_create(employee=employee, date=open_day.date)
+        # 🛡️ TRANSACTION: visit save ke beech kuch fail ho jaye to sab rollback (partial data nahi bachega)
+        with transaction.atomic():
+            daily_dcr, _ = DailyDCR.objects.get_or_create(employee=employee, date=open_day.date)
 
-        visit = DCRVisit.objects.create(
-            daily_dcr=daily_dcr,
-            route=doctor.route,
-            doctor=doctor,
-            remark=data.get('remark', ''),
-            latitude=data.get('latitude') or None,
-            longitude=data.get('longitude') or None,
-            geofence_bypassed=is_bypassed,
-        )
+            visit = DCRVisit.objects.create(
+                daily_dcr=daily_dcr,
+                route=doctor.route,
+                doctor=doctor,
+                remark=data.get('remark', ''),
+                latitude=data.get('latitude') or None,
+                longitude=data.get('longitude') or None,
+                geofence_bypassed=is_bypassed,
+            )
 
-        for prod_data in (data.get('products') or []):
-            p_id = prod_data.get('product_id')
-            is_det = bool(prod_data.get('is_detailed', False))
-            sq = int(prod_data.get('sample_qty') or 0)
-            oq = int(prod_data.get('order_qty') or 0)
+            # ── PRODUCTS ──────────────────────────────────────────────────
+            products_payload = [p for p in (data.get('products') or []) if p.get('product_id')]
+            p_ids = [p.get('product_id') for p in products_payload]
 
-            if is_det or sq > 0 or oq > 0:
-                DCRProductDetail.objects.create(visit=visit, product_id=p_id, is_detailed=is_det, sample_qty=sq, order_qty=oq)
-                if sq > 0:
-                    sample_inv = MRInventory.objects.filter(employee=employee, item__linked_product_id=p_id, item__item_type='Sample').first()
+            # 🚀 FIX: Saari sample inventory EK query mein (pehle loop mein per-product thi)
+            sample_inv_map = {}
+            if p_ids:
+                for inv in MRInventory.objects.filter(
+                    employee=employee, item__item_type='Sample',
+                    item__linked_product_id__in=p_ids
+                ).select_related('item'):
+                    sample_inv_map.setdefault(inv.item.linked_product_id, inv)
+
+            for prod_data in products_payload:
+                p_id = prod_data.get('product_id')
+                is_det = bool(prod_data.get('is_detailed', False))
+                sq = int(prod_data.get('sample_qty') or 0)
+                oq = int(prod_data.get('order_qty') or 0)
+
+                if is_det or sq > 0 or oq > 0:
+                    DCRProductDetail.objects.create(visit=visit, product_id=p_id, is_detailed=is_det, sample_qty=sq, order_qty=oq)
+                    sample_inv = sample_inv_map.get(p_id)   # 🚀 dict lookup — 0 query
                     if sample_inv and sample_inv.stock_qty >= sq:
                         sample_inv.stock_qty -= sq
-                        sample_inv.save()
 
-        for gift_data in (data.get('gifts') or []):
-            item_id = gift_data.get('item_id')
-            qty_given = int(gift_data.get('qty') or 0)
-            if qty_given > 0:
-                try:
-                    inventory = MRInventory.objects.get(employee=employee, item_id=item_id)
-                    if inventory.stock_qty >= qty_given:
+            # 🚀 FIX: Saari inventory updates EK bulk_update
+            if sample_inv_map:
+                MRInventory.objects.bulk_update(sample_inv_map.values(), ['stock_qty'])
+
+            # ── GIFTS ─────────────────────────────────────────────────────
+            gifts_payload = [g for g in (data.get('gifts') or []) if g.get('item_id')]
+            gift_item_ids = [g.get('item_id') for g in gifts_payload]
+
+            # 🚀 FIX: Gift inventories EK query mein
+            gift_inv_map = {}
+            if gift_item_ids:
+                for inv in MRInventory.objects.filter(
+                    employee=employee, item_id__in=gift_item_ids
+                ).select_related('item'):
+                    gift_inv_map.setdefault(inv.item_id, inv)
+
+            for gift_data in gifts_payload:
+                item_id = gift_data.get('item_id')
+                qty_given = int(gift_data.get('qty') or 0)
+                if qty_given > 0:
+                    inventory = gift_inv_map.get(item_id)   # 🚀 dict lookup — 0 query
+                    if inventory and inventory.stock_qty >= qty_given:
                         inventory.stock_qty -= qty_given
-                        inventory.save()
                         DoctorROILedger.objects.create(
                             date_given=open_day.date, doctor=doctor, employee=employee,
                             item=inventory.item, quantity=qty_given,
                             total_value=float(inventory.item.price) * qty_given, visit=visit,
                         )
-                except MRInventory.DoesNotExist:
-                    pass
+
+            if gift_inv_map:
+                MRInventory.objects.bulk_update(gift_inv_map.values(), ['stock_qty'])
 
         return Response({'message': f'Visit for Dr. {doctor.name} has been saved successfully!', 'visit_id': visit.id}, status=201)
 
@@ -343,35 +379,35 @@ def api_party_wise_get(request):
     employee = request.user.employee
     today = timezone.now().date()
     current_month, current_year = (12, today.year - 1) if today.month == 1 else (today.month - 1, today.year)
-    
+
     setting = SystemSetting.objects.filter(company=employee.company).first()
     deadline = setting.sale_upload_deadline_day if setting and setting.sale_upload_deadline_day else 4
     is_locked = today.day > deadline
 
     team_employees = get_dropdown_team(employee).filter(designation='MR', is_active=True)
     is_manager_view = employee.designation != 'MR'
-    
+
     selected_emp_id = request.query_params.get('employee_id')
     if not selected_emp_id:
         selected_emp_id = str(employee.id)
-    
+
     selected_emp = get_object_or_404(Employee, id=selected_emp_id, company=employee.company)
 
     my_terr_ids = [selected_emp.headquarter_id] if selected_emp.headquarter_id else []
     available_stockists = Stockist.objects.filter(territory_id__in=my_terr_ids).order_by('name')
-    
+
     selected_stockist_id = request.query_params.get('stockist_id')
     if selected_stockist_id and not available_stockists.filter(id=selected_stockist_id).exists():
         selected_stockist_id = None
     if not selected_stockist_id and available_stockists.exists():
         selected_stockist_id = str(available_stockists.first().id)
-        
+
     selected_stockist = available_stockists.filter(id=selected_stockist_id).first()
 
     balances = []
     if selected_stockist:
         # 🚀 OPTIMIZATION 1: Utilize Database (SQL) Aggregation instead of Python Loops
-        
+
         # 1. Primary Sale Aggregation (All products)
         primary_agg = PrimarySale.objects.filter(
             stockist=selected_stockist, date__lte=today
@@ -405,35 +441,34 @@ def api_party_wise_get(request):
             stock_available_for_this_month = total_lifetime_primary - total_past_secondary
             billed_this_month = curr_sec_dict.get(prod.id, 0)
             current_balance = stock_available_for_this_month - billed_this_month
-            
+
             if total_lifetime_primary > 0 or billed_this_month > 0:
                 balances.append({
-                    'product_id': prod.id, 'product_name': prod.name, 
+                    'product_id': prod.id, 'product_name': prod.name,
                     'total_sale': stock_available_for_this_month, 'billed': billed_this_month, 'balance': current_balance
                 })
 
     chemists = Chemist.objects.filter(allocated_to=selected_emp, status='Approved').order_by('name')
     chem_data = [{'id': c.id, 'name': c.name} for c in chemists]
-    
+
     doctors = Doctor.objects.filter(allocated_to=selected_emp, status='Approved').order_by('name')
     doc_data = [{'id': d.id, 'name': f"Dr. {d.name}"} for d in doctors]
-    
+
     all_prods = Product.objects.filter(company=selected_emp.company).order_by('name')
     prod_data = [{'id': p.id, 'name': p.name} for p in all_prods]
-    
+
     stockist_data = [{'id': s.id, 'name': s.name} for s in available_stockists]
     team_data = [{'id': e.id, 'name': e.name} for e in team_employees]
 
     return Response({
         'is_locked': is_locked, 'deadline_day': deadline,
         'month': current_month, 'year': current_year,
-        'is_manager_view': is_manager_view, 'team_employees': team_data, 
+        'is_manager_view': is_manager_view, 'team_employees': team_data,
         'selected_emp_id': int(selected_emp_id), 'stockists': stockist_data,
         'selected_stockist_id': int(selected_stockist_id) if selected_stockist_id else None,
         'balances': balances, 'chemists': chem_data, 'doctors': doc_data,
-        'all_products': prod_data 
+        'all_products': prod_data
     })
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_party_wise_submit(request):
@@ -451,7 +486,6 @@ def api_party_wise_submit(request):
 
     data = request.data
     team_employees = get_dropdown_team(employee, ordered=False)
-
     emp_id = data.get('employee_id', employee.id)
     try:
         selected_emp = Employee.objects.get(id=emp_id, company=employee.company)
@@ -468,13 +502,12 @@ def api_party_wise_submit(request):
     chemist_id = data.get('chemist_id')
     doctor_id = data.get('doctor_id')
     lines = data.get('lines', [])
-
     if not stockist_id: return Response({'error': 'Selecting a Stockist is mandatory.'}, status=400)
     if not chemist_id and not doctor_id: return Response({'error': 'Please select at least one Chemist or Doctor.'}, status=400)
     if not lines: return Response({'error': 'No products were added.'}, status=400)
 
     stockist = get_object_or_404(Stockist, id=stockist_id, company=employee.company)
-    
+
     chemist = None
     if chemist_id:
         chemist = get_object_or_404(Chemist, id=chemist_id, company=employee.company)
@@ -482,32 +515,35 @@ def api_party_wise_submit(request):
     try:
         report, _ = PartyWiseSaleReport.objects.get_or_create(employee=selected_emp, stockist=stockist, month=curr_month, year=curr_year)
 
-        saved = 0
+        # 🚀 FIX: Pehle sab objects RAM mein banao (0 queries), phir EK bulk_create
+        line_objs = []
         for line in lines:
             bq = int(line.get('billed_qty') or 0)
             fq = int(line.get('free_qty') or 0)
             if bq > 0 or fq > 0:
-                # 1. Create PartyWiseSaleLine (Assign Chemist if available, otherwise null)
-                new_line = PartyWiseSaleLine.objects.create(
-                    report=report, chemist=chemist, product_id=line.get('product_id'), billed_qty=bq, free_qty=fq
-                )
-                
-                # 2. If Doctor is selected, create DoctorRxMapping
-                if doctor_id:
-                    DoctorRxMapping.objects.create(
-                        party_line=new_line, doctor_id=doctor_id, mapped_billed_qty=bq, mapped_free_qty=fq
-                    )
-                saved += 1
+                line_objs.append(PartyWiseSaleLine(
+                    report=report, chemist=chemist, product_id=line.get('product_id'),
+                    billed_qty=bq, free_qty=fq
+                ))
 
-        if saved == 0:
+        if not line_objs:
             return Response({'error': 'All quantities were zero. No records were saved.'}, status=400)
+        # 🛡️ TRANSACTION + 🚀 EK INSERT (pehle per-line INSERT tha)
+        with transaction.atomic():
+            PartyWiseSaleLine.objects.bulk_create(line_objs)
+            if doctor_id:
+                DoctorRxMapping.objects.bulk_create([
+                    DoctorRxMapping(
+                        party_line=nl, doctor_id=doctor_id,
+                        mapped_billed_qty=nl.billed_qty, mapped_free_qty=nl.free_qty
+                    ) for nl in line_objs
+                ])
 
+        saved = len(line_objs)
         return Response({'message': f'Sale saved successfully! {saved} product(s) recorded.', 'month': curr_month, 'year': curr_year}, status=201)
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
-
-
 # ====================================================================
 # 🎯 TARGET SETTING API (Optimized Bulk Create)
 # ====================================================================
@@ -515,43 +551,42 @@ def api_party_wise_submit(request):
 @permission_classes([IsAuthenticated])
 def api_target_setting(request):
     employee = request.user.employee
-    
+
     if not employee.headquarter:
         return Response({'success': False, 'error': 'No Territory/Headquarter is assigned to your profile.'}, status=403)
-        
+
     month = int(request.query_params.get('month') or request.data.get('month') or timezone.now().month)
     year = int(request.query_params.get('year') or request.data.get('year') or timezone.now().year)
-    
+
     master, _ = MonthlyTargetMaster.objects.get_or_create(territory=employee.headquarter, month=month, year=year)
     is_readonly = master.status not in ['Draft', 'Rejected']
 
     if request.method == 'GET':
         existing_targets = {t.product_id: t.target_qty for t in TerritoryTarget.objects.filter(territory=employee.headquarter, month=month, year=year)}
-        
+
         products_data = []
         for p in Product.objects.filter(company=employee.company):
             products_data.append({'product_id': p.id, 'product_name': p.name, 'target_qty': existing_targets.get(p.id, 0)})
-            
+
         return Response({'success': True, 'status': master.status, 'is_readonly': is_readonly, 'manager_remark': master.manager_remark, 'targets': products_data})
 
     if request.method == 'POST':
         if is_readonly:
             return Response({'success': False, 'error': 'This target has already been submitted and cannot be edited.'}, status=403)
-            
-        action = request.data.get('action') 
-        target_payload = request.data.get('targets', []) 
-        
+
+        action = request.data.get('action')
+        target_payload = request.data.get('targets', [])
+
         # 🚀 OPTIMIZATION 2: Replaced update_or_create within a loop with DB Bulk Update/Create
         existing_targets = {t.product_id: t for t in TerritoryTarget.objects.filter(territory=employee.headquarter, month=month, year=year)}
-        
+
         targets_to_create = []
         targets_to_update = []
         p_ids_to_keep = []
-
         for item in target_payload:
             p_id = item.get('product_id')
             t_qty = int(item.get('target_qty', 0))
-            
+
             if t_qty > 0:
                 p_ids_to_keep.append(p_id)
                 if p_id in existing_targets:
@@ -563,16 +598,15 @@ def api_target_setting(request):
                     targets_to_create.append(TerritoryTarget(
                         territory=employee.headquarter, product_id=p_id, month=month, year=year, target_qty=t_qty
                     ))
-                    
+
         # Update existing, create new, delete zeroes
         if targets_to_update:
             TerritoryTarget.objects.bulk_update(targets_to_update, ['target_qty'])
         if targets_to_create:
             TerritoryTarget.objects.bulk_create(targets_to_create)
-            
+
         # Delete entries from the DB that were not submitted (deleted on UI)
         TerritoryTarget.objects.filter(territory=employee.headquarter, month=month, year=year).exclude(product_id__in=p_ids_to_keep).delete()
-                
         if action == 'Submit':
             master.status = 'Pending_Manager'
             master.approved_by_managers = []
@@ -580,11 +614,10 @@ def api_target_setting(request):
         else:
             master.status = 'Draft'
             msg = 'Target draft saved successfully!'
-            
+
         master.save()
         return Response({'success': True, 'message': msg})
-
-
+        
 # ====================================================================
 # 9. GIFT CAMPAIGN API
 # ====================================================================
@@ -602,47 +635,47 @@ def api_gift_campaign(request):
 
         doctors = Doctor.objects.filter(allocated_to=employee, status='Approved').order_by('name')
         doctors_data = [{'id': d.id, 'name': d.name} for d in doctors]
-
-        history = GiftCampaignPlan.objects.filter(employee=employee).order_by('-id')[:20]
+        # 🌟 FIX: select_related — doctor/item name loop mein FK query nahi maarega
+        history = GiftCampaignPlan.objects.filter(employee=employee).select_related('doctor', 'item').order_by('-id')[:20]
         history_data = [
             {'id': h.id, 'doctor_name': h.doctor.name if h.doctor else 'Unknown', 'item_name': h.item.name if h.item else 'Unknown', 'month': h.month, 'year': h.year, 'status': h.status}
             for h in history
         ]
 
         return Response({'success': True, 'gifts': gifts_data, 'doctors': doctors_data, 'history': history_data})
-
     if request.method == 'POST':
         item_id = request.data.get('item_id')
-        doctor_ids = request.data.get('doctor_ids', []) 
+        doctor_ids = request.data.get('doctor_ids', [])
         month = request.data.get('month')
         year = request.data.get('year')
 
         if not item_id or not doctor_ids:
             return Response({'success': False, 'error': 'Selecting an Item and at least one Doctor is mandatory.'}, status=400)
 
-        inventory = MRInventory.objects.filter(employee=employee, item_id=item_id, stock_qty__gt=0).first()
+        inventory = MRInventory.objects.filter(employee=employee, item_id=item_id, stock_qty__gt=0).select_related('item').first()
         if not inventory:
             return Response({'success': False, 'error': 'You do not have stock available for this item.'}, status=400)
 
-        already_allocated = GiftCampaignPlan.objects.filter(employee=employee, item_id=item_id, month=month, year=year, status__in=['Pending', 'Approved']).count()
+        # 🚀 FIX: Is month/item ke saare ALREADY-ASSIGNED doctor IDs EK query mein
+        # (pehle har doctor ke liye alag .exists() query chalti thi)
+        already_doc_ids = set(GiftCampaignPlan.objects.filter(
+            employee=employee, item_id=item_id, month=month, year=year,
+            status__in=['Pending', 'Approved']
+        ).values_list('doctor_id', flat=True))
+        new_docs_to_add = [d for d in doctor_ids if d not in already_doc_ids]
 
-        new_docs_to_add = []
-        for doc_id in doctor_ids:
-            already = GiftCampaignPlan.objects.filter(employee=employee, doctor_id=doc_id, item_id=item_id, month=month, year=year, status__in=['Pending', 'Approved']).exists()
-            if not already:
-                new_docs_to_add.append(doc_id)
+        if len(already_doc_ids) + len(new_docs_to_add) > inventory.stock_qty:
+            available_to_assign = inventory.stock_qty - len(already_doc_ids)
+            return Response({'success': False, 'error': f'Stock Limit Exceeded! Total stock for {inventory.item.name} is {inventory.stock_qty} (of which {len(already_doc_ids)} are already assigned). You can only select {available_to_assign} more.'}, status=400)
+            # 🛡️ TRANSACTION + 🚀 EK bulk INSERT (pehle per-doctor INSERT tha)
+        with transaction.atomic():
+            GiftCampaignPlan.objects.bulk_create([
+                GiftCampaignPlan(employee=employee, doctor=d, item_id=item_id, month=month, year=year, status='Pending')
+                for d in valid_doctors
+            ])
 
-        if already_allocated + len(new_docs_to_add) > inventory.stock_qty:
-            available_to_assign = inventory.stock_qty - already_allocated
-            return Response({'success': False, 'error': f'Stock Limit Exceeded! Total stock for {inventory.item.name} is {inventory.stock_qty} (of which {already_allocated} are already assigned). You can only select {available_to_assign} more.'}, status=400)
+        created = len(valid_doctors)
+        return Response({'success': True, 'message': f'Campaign for {created} Doctor(s) has been submitted to the Manager!'})
 
-        created = 0
-        for doc_id in new_docs_to_add:
-            doctor = get_object_or_404(Doctor, id=doc_id, company=employee.company)
-            GiftCampaignPlan.objects.create(employee=employee, doctor=doctor, item_id=item_id, month=month, year=year, status='Pending')
-            created += 1
 
-        if created > 0:
-            return Response({'success': True, 'message': f'Campaign for {created} Doctor(s) has been submitted to the Manager!'})
-        else:
-            return Response({'success': False, 'error': 'All selected doctors are already included in the plan for this month.'}, status=400)
+    

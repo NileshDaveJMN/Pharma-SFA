@@ -224,30 +224,27 @@ def api_messages(request):
         'sentbox': [{'id': m.id, 'receiver': m.receiver.name, 'message': m.message, 'date': m.created_at.strftime('%d %b, %I:%M %p')} for m in sent]
     })
 
-# ==============================================================================
-# 📝 EDIT VISIT
-# ==============================================================================
-# ==============================================================================
-# 📝 EDIT VISIT
-# ==============================================================================
-
+from django.db.models import Count
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_vacancy_list(request):
     employee = request.user.employee
-    vacancies = get_full_team_employees(employee).filter(is_placeholder=True).select_related('headquarter', 'manager').order_by('headquarter__name', 'designation')
+    vacancies = get_full_team_employees(employee).filter(is_placeholder=True).select_related(
+        'headquarter', 'manager'
+    ).annotate(
+        doc_count=Count('doctors', distinct=True),      # reverse FK: related_name='doctors'
+        chem_count=Count('chemists', distinct=True),    # related_name='chemists'
+        team_count=Count('subordinates', distinct=True) # related_name='subordinates'
+    ).order_by('headquarter__name', 'designation')
 
-    data = []
-    for v in vacancies:
-        data.append({
-            'id': v.id, 'name': v.name, 'hq': v.headquarter.name if v.headquarter else 'No HQ',
-            'designation': v.designation, 'doc_count': Doctor.objects.filter(allocated_to=v).count(),
-            'chem_count': Chemist.objects.filter(allocated_to=v).count(), 'team_count': Employee.objects.filter(manager=v).count(),
-        })
+    data = [{
+        'id': v.id, 'name': v.name, 'hq': v.headquarter.name if v.headquarter else 'No HQ',
+        'designation': v.designation, 'doc_count': v.doc_count,
+        'chem_count': v.chem_count, 'team_count': v.team_count,
+    } for v in vacancies]
 
     return Response({'success': True, 'vacancies': data})
-
 # ==============================================================================
 # 📋 MY REQUESTS
 # ==============================================================================
@@ -319,6 +316,9 @@ def api_mtp(request):
         return Response({'error': 'Invalid request'}, status=405)
 
 
+from collections import defaultdict
+from django.db import transaction
+
 def handle_get_mtp(employee):
     """Flutter ko MTP ka initial data (Calendar, Routes, Leaves) bhejne ke liye"""
     today = timezone.localdate()
@@ -326,7 +326,6 @@ def handle_get_mtp(employee):
     curr_month = today.month
     next_month, next_year = (1, current_year + 1) if curr_month == 12 else (curr_month + 1, current_year)
 
-    # Allowed Months Logic
     is_new_joiner = employee.joining_date and (today - employee.joining_date).days <= 7
     setting = SystemSetting.objects.filter(company=employee.company).first()
     allow_current_month = setting.allow_current_month_mtp if setting else False
@@ -337,53 +336,62 @@ def handle_get_mtp(employee):
     if is_new_joiner or allow_current_month:
         allowed_months.insert(0, {'month': curr_month, 'year': current_year, 'name': calendar.month_name[curr_month], 'label': f"{calendar.month_name[curr_month]} {current_year}"})
 
-    # 🌟 FIX: Routes Fetch mein Company filter lagaya
     team_employees = get_full_team_employees(employee)
     all_terr_ids = list(team_employees.exclude(headquarter__isnull=True).values_list('headquarter_id', flat=True))
     routes = Route.objects.filter(territory_id__in=all_terr_ids, company=employee.company, status='Approved').select_related('territory').order_by('category', 'name')
     routes_data = [{'id': r.id, 'name': r.name, 'category': r.category, 'territory': r.territory.name} for r in routes]
 
-    # Existing Drafts Fetch
-    draft_mtps = MonthlyTourProgram.objects.filter(employee=employee, status__in=['Draft', 'Rejected']).order_by('-year', '-month')
-    
-    mtp_calendar_data = []
-    for mtp in draft_mtps:
-        # Leaves Logic
-        approved_leaves = LeaveApplication.objects.filter(
-            employee=employee, status='Approved',
-            start_date__lte=date(mtp.year, mtp.month, calendar.monthrange(mtp.year, mtp.month)[1]),
-            end_date__gte=date(mtp.year, mtp.month, 1)
-        )
-        leave_dates = {}
-        for l in approved_leaves:
-            delta = l.end_date - l.start_date
-            for i in range(delta.days + 1):
-                d = l.start_date + timedelta(days=i)
-                if d.month == mtp.month and d.year == mtp.year:
-                    leave_dates[d.day] = l.leave_type
+    draft_mtps = list(MonthlyTourProgram.objects.filter(employee=employee, status__in=['Draft', 'Rejected']).order_by('-year', '-month'))
 
-        # Holidays Logic
+    # ================= 🚀 N+1 KILLED: sab kuch loop se PEHLE, EK-EK query =================
+    all_leaves, all_holidays, plans_by_mtp = [], [], {}
+    if draft_mtps:
+        # RBM + Admin creators — EK baar (per-MTP chain-walk khatam)
         rbm_emp = None
-        curr = employee
-        while curr:
-            if curr.designation == 'RBM': rbm_emp = curr; break
-            curr = curr.manager
-            
+        for m in employee.get_my_managers():
+            if m.designation == 'RBM': rbm_emp = m; break
         holiday_creators = list(Employee.objects.filter(designation='Admin', company=employee.company).values_list('id', flat=True))
         if rbm_emp: holiday_creators.append(rbm_emp.id)
-        
-        holidays = Holiday.objects.filter(proposed_by_id__in=holiday_creators, status='Approved', date__month=mtp.month, date__year=mtp.year)
-        holiday_dates = {h.date.day: h.name for h in holidays}
 
-        existing_plans = {p.date.day: p.route_id for p in DailyTourPlan.objects.filter(mtp=mtp)}
+        span_start = min(date(m.year, m.month, 1) for m in draft_mtps)
+        span_end = max(date(m.year, m.month, calendar.monthrange(m.year, m.month)[1]) for m in draft_mtps)
 
-        # DOJ Logic
+        all_leaves = list(LeaveApplication.objects.filter(
+            employee=employee, status='Approved', start_date__lte=span_end, end_date__gte=span_start
+        ))
+        all_holidays = list(Holiday.objects.filter(
+            proposed_by_id__in=holiday_creators, status='Approved', date__gte=span_start, date__lte=span_end
+        ))
+        # Saare drafts ki daily plans — 1 query
+        plans_by_mtp = defaultdict(dict)
+        for p in DailyTourPlan.objects.filter(mtp__in=draft_mtps).values('mtp_id', 'date', 'route_id'):
+            plans_by_mtp[p['mtp_id']][p['date'].day] = p['route_id']
+    # ====================================================================================
+
+    mtp_calendar_data = []
+    for mtp in draft_mtps:
+        # 🚀 Leaves — prefetched list se Python filter (0 queries)
+        leave_dates = {}
+        month_last = date(mtp.year, mtp.month, calendar.monthrange(mtp.year, mtp.month)[1])
+        for l in all_leaves:
+            if l.start_date <= month_last and l.end_date >= date(mtp.year, mtp.month, 1):
+                d = l.start_date
+                while d <= l.end_date:
+                    if d.month == mtp.month and d.year == mtp.year:
+                        leave_dates[d.day] = l.leave_type
+                    d += timedelta(days=1)
+
+        # 🚀 Holidays — prefetched se Python filter (0 queries)
+        holiday_dates = {h.date.day: h.name for h in all_holidays if h.date.month == mtp.month and h.date.year == mtp.year}
+
+        existing_plans = plans_by_mtp.get(mtp.id, {})
+
         start_day = 1
         if employee.joining_date:
             mtp_val = mtp.year * 12 + mtp.month
             join_val = employee.joining_date.year * 12 + employee.joining_date.month
             if mtp_val == join_val: start_day = employee.joining_date.day
-            elif mtp_val < join_val: start_day = 32 
+            elif mtp_val < join_val: start_day = 32
 
         days_list = []
         num_days = calendar.monthrange(mtp.year, mtp.month)[1]
@@ -392,35 +400,20 @@ def handle_get_mtp(employee):
             is_sunday = curr_date.weekday() == 6
             is_leave = day in leave_dates
             is_holiday = day in holiday_dates
-
             status_text = ""
             if is_leave: status_text = f"🏖️ On Leave ({leave_dates[day]})"
             elif is_holiday: status_text = f"⛱️ {holiday_dates[day]}"
             elif is_sunday: status_text = "🔴 Sunday"
-
             days_list.append({
-                'day': day,
-                'date_str': curr_date.strftime("%d %b, %a"),
+                'day': day, 'date_str': curr_date.strftime("%d %b, %a"),
                 'is_locked': is_leave or is_holiday or is_sunday,
-                'status_text': status_text,
-                'selected_route_id': existing_plans.get(day)
+                'status_text': status_text, 'selected_route_id': existing_plans.get(day)
             })
 
         if days_list:
-            mtp_calendar_data.append({
-                'mtp_id': mtp.id,
-                'month': mtp.month,
-                'year': mtp.year,
-                'status': mtp.status,
-                'days': days_list
-            })
+            mtp_calendar_data.append({'mtp_id': mtp.id, 'month': mtp.month, 'year': mtp.year, 'status': mtp.status, 'days': days_list})
 
-    return Response({
-        'allowed_months': allowed_months,
-        'routes': routes_data,
-        'drafts': mtp_calendar_data
-    })
-
+    return Response({'allowed_months': allowed_months, 'routes': routes_data, 'drafts': mtp_calendar_data})
 
 def handle_post_mtp(employee, request):
     """Flutter se MTP Create, Save ya Submit karne ke liye"""

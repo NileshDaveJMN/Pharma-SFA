@@ -179,13 +179,14 @@ def api_dcr_report(request):
         visits_out = []
 
         if dcr_obj:
-            dr_v = dcr_obj.visits.filter(doctor__isnull=False).count()
-            chem_v = dcr_obj.visits.filter(chemist__isnull=False).count()
-            visit_count = dcr_obj.visits.count()
+            all_v = list(dcr_obj.visits.all())
+            dr_v = sum(1 for v in all_v if v.doctor_id)
+            chem_v = sum(1 for v in all_v if v.chemist_id)
+            visit_count = len(all_v)
             total_dr_visits += dr_v
             total_chem_visits += chem_v
 
-            for v in dcr_obj.visits.all():
+            for v in all_v:
                 visits_out.append({
                     'id': v.id,
                     'visit_type': 'Doctor' if v.doctor_id else 'Chemist',
@@ -1223,12 +1224,23 @@ def api_doctor_roi_report(request):
                 agg_data[doc.id]['items'].add(('No Gifts', 'Routine'))
 
     doc_ids = set(agg_data.keys())
+
+    # 🛡️ RX bhi WOHI employee scope use karega jo upar ledger (qs) use karta hai
+    # — warna shared doctors pe dusre MR ki sale RX mein ghus jati thi.
+    if is_manager_view and selected_emp_id:
+        rx_scope = {'party_line__report__employee_id': selected_emp_id}
+    elif is_manager_view:
+        rx_scope = {'party_line__report__employee__in': team_employees}
+    else:
+        rx_scope = {'party_line__report__employee': employee}
+
     rx_qs = DoctorRxMapping.objects.filter(
         doctor_id__in=doc_ids,
         party_line__report__month__gte=from_month,
         party_line__report__month__lte=to_month,
-        party_line__report__year=selected_year
-    ).select_related('party_line__product')
+        party_line__report__year=selected_year,
+        **rx_scope,   # 🌟 SCOPE ADD
+    ).select_related('party_line__product')    
     
     rx_dict = defaultdict(lambda: defaultdict(float))
     for rx in rx_qs:
@@ -1379,7 +1391,7 @@ def api_analysis_hub(request):
 
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
     try:
-        selected_emp = Employee.objects.get(id=int(selected_emp_id))
+        selected_emp = Employee.objects.get(id=int(selected_emp_id), company=employee.company)
     except (Employee.DoesNotExist, ValueError):
         return Response({'error': 'Employee not found'}, status=404)
 
@@ -1622,7 +1634,7 @@ def api_doctor_visit_history(request):
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
     
     try:
-        selected_emp = Employee.objects.get(id=int(selected_emp_id))
+        selected_emp = Employee.objects.get(id=int(selected_emp_id), company=employee.company)
     except (Employee.DoesNotExist, ValueError):
         selected_emp = employee
     
@@ -1713,6 +1725,8 @@ def api_doctor_visit_history(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_route_report(request):
+    from django.db.models import Count, Q
+
     try:
         employee = request.user.employee
     except AttributeError:
@@ -1728,21 +1742,25 @@ def api_route_report(request):
 
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
     try:
-        selected_emp = Employee.objects.get(id=int(selected_emp_id))
+        selected_emp = Employee.objects.get(id=int(selected_emp_id), company=employee.company)   # 🛡️ IDOR fix
     except (Employee.DoesNotExist, ValueError):
         selected_emp = employee
 
     sub_team = get_dropdown_team(selected_emp, ordered=False)
     my_terr_ids = get_team_territory_ids(sub_team)
-    routes = get_team_requested_routes(sub_team, my_terr_ids)
+
+    # 🚀 N+1 KILLED: route-wise doctor/chemist counts DB-level annotate se
+    routes = get_team_requested_routes(sub_team, my_terr_ids).select_related('territory').annotate(
+        doc_count=Count('doctor_set', filter=Q(doctor_set__status='Approved'), distinct=True),
+        chem_count=Count('chemist_set', filter=Q(chemist_set__status='Approved'), distinct=True),
+    )
 
     report_data = []
     gt_docs = 0
     gt_chems = 0
 
-    for r in routes:
-        doc_count = Doctor.objects.filter(route=r, status='Approved').count()
-        chem_count = Chemist.objects.filter(route=r, status='Approved').count()
+    for r in routes:   # 🚀 loop mein ZERO queries
+        doc_count, chem_count = r.doc_count, r.chem_count
         report_data.append({
             'route_name': r.name,
             'territory': r.territory.name if r.territory else 'N/A',
@@ -1801,8 +1819,6 @@ def api_route_report(request):
         'gt_chems': gt_chems,
         'gt_total': gt_docs + gt_chems,
     })
-
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def api_product_master(request):
@@ -1887,26 +1903,29 @@ def api_mr_inventory(request):
 
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
     try:
-        selected_emp = Employee.objects.get(id=int(selected_emp_id))
+        selected_emp = Employee.objects.get(id=int(selected_emp_id), company=employee.company)   # 🛡️ IDOR fix
     except (Employee.DoesNotExist, ValueError):
         selected_emp = employee
 
     # ── Stock Tab ──────────────────────────────────────────────────────────
-    # 🌟 FIX: pehle sab kuch (Sample/Routine/HighValue) ek hi 'inventory_data'
-    # list me mix ho jata tha. Ab 2 alag lists:
-    #   - sample_gift_data -> "Sample and Gift" tab (HighValue EXCLUDE)
-    #   - hv_stock_data    -> "HV Gifts" tab (sirf HighValue, stock-table
-    #     format me — doctor-wise nahi)
     stock_rows = MRInventory.objects.filter(employee=selected_emp).select_related('item')
+
+    # 🚀 N+1 KILLED: Saare aggregates loop se PEHLE, 3 hi queries mein:
+    recv_map = {}
+    for item_id, qty in PromoDispatch.objects.filter(employee=selected_emp, status='Received').values_list('item_id', 'quantity'):
+        recv_map[item_id] = recv_map.get(item_id, 0) + qty
+
+    dist_map = {}
+    ledger_map = {}   # (doctor_id, item_id, month, year) → qty — HV tracker ke liye
+    for item_id, doc_id, gm, gy, qty in DoctorROILedger.objects.filter(employee=selected_emp).values_list('item_id', 'doctor_id', 'date_given__month', 'date_given__year', 'quantity'):
+        dist_map[item_id] = dist_map.get(item_id, 0) + qty
+        ledger_map[(doc_id, item_id, gm, gy)] = ledger_map.get((doc_id, item_id, gm, gy), 0) + qty
+
     sample_gift_data = []
     hv_stock_data = []
-    for row in stock_rows:
-        received = PromoDispatch.objects.filter(
-            employee=selected_emp, item=row.item, status='Received'
-        ).aggregate(total=Sum('quantity'))['total'] or 0
-        distributed = DoctorROILedger.objects.filter(
-            employee=selected_emp, item=row.item
-        ).aggregate(total=Sum('quantity'))['total'] or 0
+    for row in stock_rows:   # 🚀 loop mein ZERO queries
+        received = recv_map.get(row.item_id, 0)
+        distributed = dist_map.get(row.item_id, 0)
         entry = {
             'item_name': row.item.name,
             'category': row.item.get_item_type_display(),
@@ -1927,11 +1946,8 @@ def api_mr_inventory(request):
     ).select_related('doctor', 'item').order_by('-year', '-month')
 
     hv_tracker = []
-    for plan in hv_plans:
-        dist_qty = DoctorROILedger.objects.filter(
-            employee=selected_emp, doctor=plan.doctor, item=plan.item,
-            date_given__month=plan.month, date_given__year=plan.year
-        ).aggregate(total=Sum('quantity'))['total'] or 0
+    for plan in hv_plans:   # 🚀 loop mein ZERO queries — ledger_map se
+        dist_qty = ledger_map.get((plan.doctor_id, plan.item_id, plan.month, plan.year), 0)
         final_status = 'Given' if dist_qty >= 1 else plan.get_status_display()
         hv_tracker.append({
             'doctor_name': plan.doctor.name,
@@ -1993,13 +2009,11 @@ def api_mr_inventory(request):
         'team_employees': [{'id': e.id, 'name': e.name} for e in team_employees] if is_manager_view else [],
         'is_manager_view': is_manager_view,
         'selected_emp_id': selected_emp_id,
-        'sample_gift_data': sample_gift_data,  # 🌟 FIX: naya split field (pehle 'inventory_data')
-        'hv_stock_data': hv_stock_data,        # 🌟 FIX: naya field — HV Gifts tab ab stock-table format use karega
-        'hv_tracker': hv_tracker,               # doctor-wise tracking — abhi bhi available hai agar chahiye ho
+        'sample_gift_data': sample_gift_data,
+        'hv_stock_data': hv_stock_data,
+        'hv_tracker': hv_tracker,
         'in_transit_items': in_transit_items,
     })
-
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_receive_dispatch(request):
