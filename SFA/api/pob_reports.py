@@ -61,7 +61,7 @@ def api_pob_report(request):
         'visit__daily_dcr__employee__headquarter__name',
         'product_id',
         'product__name',
-        'product__price',
+        'product__pts',        
         'month'
     ).annotate(
         total_samples=Sum('sample_qty'),
@@ -83,7 +83,7 @@ def api_pob_report(request):
             }
 
         if pid not in data_dict[eid]['products']:
-            price = float(d['product__price']) if d['product__price'] else 0.0
+            price = float(d['product_pts']) if d['product__pts'] else 0.0
             data_dict[eid]['products'][pid] = {
                 'name': d['product__name'],
                 'price': price,
