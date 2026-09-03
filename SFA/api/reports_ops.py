@@ -331,6 +331,10 @@ def api_product_master(request):
         {"id": 1, "name": "PPI", "pack_size": "10x10", "price": 109.0}
     ]
     """
+    try:
+        employee = request.user.employee
+    except AttributeError:
+        return Response({'error': 'Employee profile missing'}, status=400)
     products = Product.objects.filter(company=employee.company).order_by('name')  # 🌟 FIX: company-scoped
     return Response([
         {
@@ -608,19 +612,28 @@ def api_free_claims(request):
                     employee=selected_emp, stockist=stockist, month=month, year=year, status='Draft'
                 )
 
+            # 🚀 N+1 FIXED: Saare products EK query mein + EK bulk INSERT
+            prod_ids = [s['product_id'] for s in sales_agg]
+            prod_map = {p.id: p for p in Product.objects.filter(id__in=prod_ids, company=employee.company)}
+
+            line_objs = []
             for s in sales_agg:
-                prod = Product.objects.get(id=s['product_id'])
+                prod = prod_map.get(s['product_id'])
+                if not prod:
+                    continue
                 price = float(prod.price) if getattr(prod, 'price', None) else 0.0
-                FreeQtyClaimLine.objects.create(
+                line_objs.append(FreeQtyClaimLine(
                     master=master, stockist=stockist, product=prod,
                     total_billed_qty=s['tot_billed'], total_free_qty=s['tot_free'], claim_value=(s['tot_free'] * price)
-                )
-            
+                ))
+
+            FreeQtyClaimLine.objects.bulk_create(line_objs)
+
             if master.status != 'Rejected':
                 master.status = 'Draft'
             master.save()
 
-            return Response({'success': True, 'message': 'Claim successfully Generate/Sync ho gaya! 🎉'})
+            return Response({'success': True, 'message': 'Claim successfully Generate/Sync ho gaya! 🎉'})            
 # ==============================================================================
 # 📅 9. TOUR PLAN (MTP) REPORT
 # ==============================================================================
