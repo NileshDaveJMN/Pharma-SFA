@@ -93,7 +93,7 @@ def api_pob_report(request):
 
         sq = d['total_samples'] or 0
         oq = d['total_orders'] or 0
-        val = oq * data_dict[eid]['products'][pid]['price']
+        val = round(oq * data_dict[eid]['products'][pid]['price'], 2)
 
         data_dict[eid]['products'][pid]['monthly'][m]['samples'] += sq
         data_dict[eid]['products'][pid]['monthly'][m]['orders'] += oq
@@ -108,6 +108,9 @@ def api_pob_report(request):
     for eid, edata in data_dict.items():
         prod_list = []
         for pid, pdata in edata['products'].items():
+            # 🌟 FIX: Sirf detailing hui thi (0-0 qty) — report mein mat dikhao
+            if pdata['total_samples'] == 0 and pdata['total_orders'] == 0:
+                continue
             pdata['monthly_list'] = [pdata['monthly'][m] for m in months_range]
             prod_list.append(pdata)
 
@@ -121,6 +124,9 @@ def api_pob_report(request):
             gt_val += pdata['total_val']
 
         edata['products'] = sorted(prod_list, key=lambda x: x['name'])
+        # 🌟 FIX: Sab products 0-0 nikle (sirf detailing tha) — employee bhi hide karo
+        if not edata['products']:
+            continue
         pob_data.append(edata)
 
     pob_data = sorted(pob_data, key=lambda x: x['emp_name'])

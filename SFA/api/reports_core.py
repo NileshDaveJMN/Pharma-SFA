@@ -672,9 +672,9 @@ def api_primary_sales_report(request):
         party_out.append({
             'party_name': pdata['party_name'], 
             'products': prod_list,
-            'monthly_list': [st_monthly[m] for m in months_range], # 🌟 FIX
+            'monthly_list': [{'qty': st_monthly[m]['qty'], 'val': round(st_monthly[m]['val'], 2)} for m in months_range],
             'total_qty': st_tot_qty,                                # 🌟 FIX
-            'total_val': st_tot_val                                 # 🌟 FIX
+            'total_val': round(st_tot_val, 2                                 # 🌟 FIX
         })
     prod_out = []
     for pr_id, pr_data in prod_dict.items():
@@ -714,7 +714,7 @@ def api_primary_sales_report(request):
         
         'gt_monthly_list': gt_monthly_list,
         'grand_total_qty': gt_total_qty,
-        'grand_total_value': gt_total_val
+        'grand_total_value': round(gt_total_val, 2)
     })
 # 🌟 NAYE IMPORTS (Agar file me pehle se nahi hain)
 from collections import defaultdict
