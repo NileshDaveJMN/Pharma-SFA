@@ -594,7 +594,7 @@ def api_primary_sales_report(request):
     gt_total_qty, gt_total_val = 0, 0.0
 
     for s in sales:
-        val = float(s.received_qty) * float(s.product.price) if getattr(s.product, 'price', None) else 0.0
+        val = round(float(s.received_qty) * float(s.product.price), 2) if getattr(s.product, 'price', None) else 0.0
 
         # Party Data Grouping
         pid = s.stockist_id
@@ -641,7 +641,7 @@ def api_primary_sales_report(request):
 
     raw_sales = []
     for rs in raw_sales_query:
-        val = float(rs.quantity) * float(rs.product.price) if getattr(rs.product, 'price', None) else 0.0
+        val = round(float(rs.quantity) * float(rs.product.price), 2) if getattr(rs.product, 'price', None) else 0.0
         raw_sales.append({
             'date': rs.date.strftime('%d-%b-%y'),
             'stockist': rs.stockist.name,

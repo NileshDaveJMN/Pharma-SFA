@@ -83,7 +83,7 @@ def api_pob_report(request):
             }
 
         if pid not in data_dict[eid]['products']:
-            price = float(d['product_pts']) if d['product__pts'] else 0.0
+            price = float(d['product__pts']) if d['product__pts'] else 0.0    # ✅ double underscore            
             data_dict[eid]['products'][pid] = {
                 'name': d['product__name'],
                 'price': price,
