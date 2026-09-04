@@ -45,10 +45,10 @@ from SFA.models import Doctor, Chemist
 
 @employee_required
 def update_location_view(request, employee, role, target_id):
-        if role == 'doctor':
-        target = get_object_or_404(Doctor, id=target_id, company=employee.company)      # 🛡️
+    if role == 'doctor':
+        target = get_object_or_404(Doctor, id=target_id, company=employee.company)
     elif role == 'chemist':
-        target = get_object_or_404(Chemist, id=target_id, company=employee.company)     # 🛡️
+        target = get_object_or_404(Chemist, id=target_id, company=employee.company)
     else:
         return redirect('mr_dashboard')
 
@@ -1449,11 +1449,18 @@ def web_compose_view(request, employee):
         forward_to_id = request.GET.get('forward_to')
         
         if reply_to_id:
-            reply_to_msg = get_object_or_404(InternalMessage, id=reply_to_id)
+            reply_to_msg = get_object_or_404(
+                InternalMessage,
+                Q(receiver=employee) | Q(sender=employee),
+                id=reply_to_id
+            )
         elif forward_to_id:
-            forward_to_msg = get_object_or_404(InternalMessage, id=forward_to_id)
-            
-    elif request.method == 'POST':
+            forward_to_msg = get_object_or_404(
+                InternalMessage,
+                Q(receiver=employee) | Q(sender=employee),
+                id=forward_to_id
+            )
+    elif request.method == 'POST':        
         # 🌟 FIX: Multiple "To" recipients ab supported hain
         receiver_ids = request.POST.getlist('receiver_ids')
         subject = request.POST.get('subject')
@@ -1464,7 +1471,7 @@ def web_compose_view(request, employee):
 
             # 🌟 FIX: Pehle saare recipients ke naam nikal lo, taaki har copy mein
             # poori "To" list dikhe — recipient ko sirf apna naam nahi, sabka pata chale
-            recipients = list(Employee.objects.filter(id__in=receiver_ids))
+            recipients = list(Employee.objects.filter(id__in=receiver_ids, company=employee.company))
             recipients_display = ', '.join(r.name for r in recipients)
 
             sent_count = 0
@@ -1491,14 +1498,19 @@ def web_compose_view(request, employee):
     managers = employee.get_my_managers(include_inactive=False)
     admins = list(Employee.objects.filter(company=employee.company, designation='Admin', is_active=True))
     
+    # 🚀 N+1 FIXED: poori company EK query + Python tree (API organogram wala pattern)
+    children_map = {}
+    for e in Employee.objects.filter(company=employee.company, is_active=True):
+        if e.manager_id and e.manager_id != e.id:
+            children_map.setdefault(e.manager_id, []).append(e)
+
     def get_subs(emp):
         subs = []
-        direct = Employee.objects.filter(manager=emp, is_active=True)
-        for s in direct:
+        for s in children_map.get(emp.id, []):
             subs.append(s)
             subs.extend(get_subs(s))
         return subs
-        
+
     subordinates = get_subs(employee) if employee.designation != 'MR' else []
     all_emps = managers + subordinates + admins
     unique_emps = {e.id: e for e in all_emps if e.id != employee.id}
