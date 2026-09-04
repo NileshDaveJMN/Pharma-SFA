@@ -2,11 +2,17 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
-from SFA.models import FieldEvent, EventPhoto, EventLike, EventComment, Territory
+from django.utils import timezone
+import calendar
 from django.core.paginator import Paginator
-from SFA.models import FieldEvent, EventPhoto, EventLike, EventComment, Territory, Doctor, Chemist, Employee
+from SFA.models import (
+    FieldEvent, EventPhoto, EventLike, EventComment,
+    Territory, Doctor, Chemist, Employee
+)
+from SFA.services.team import get_full_team_employees
 from django.db.models import Count, Q
-from SFA.models import Employee # Agar Employee import nahi hai toh kar lijiye
+
+MONTHS_CHOICES = [(i, calendar.month_name[i]) for i in range(1, 13)]
 
 # ==============================================================================
 # 📢 1. COMMUNITY FEED (WebApp Wall)
@@ -14,34 +20,40 @@ from SFA.models import Employee # Agar Employee import nahi hai toh kar lijiye
 @login_required
 def community_feed(request):
     emp = request.user.employee
-    # Saari events nikalenge
-    event_list = FieldEvent.objects.filter(is_shared_in_community=True).select_related('employee', 'territory', 'doctor', 'chemist').order_by('-created_at')
-    
-    # 🌟 PAGINATION LOGIC: Ek baar mein sirf 15 events
-    paginator = Paginator(event_list, 10)  # 🌟 10 latest posts per page — bade data (lakhs events) pe bhi query bounded rahegi
+
+    # 🌟 Company-scoped: sirf APNI company ke employees ki shared events
+    event_list = FieldEvent.objects.filter(
+        is_shared_in_community=True,
+        employee__company=emp.company
+    ).select_related('employee', 'territory', 'doctor', 'chemist').order_by('-created_at')
+
+    # 🌟 PAGINATION LOGIC: Ek baar mein sirf 10 events
+    paginator = Paginator(event_list, 10)
     page_number = request.GET.get('page')
     events = paginator.get_page(page_number)
-    
+
+    # 🚀 N+1 FIXED: mere likes EK query mein, phir Python set lookup
+    my_liked_event_ids = set(EventLike.objects.filter(
+        employee=emp, event__in=events
+    ).values_list('event_id', flat=True))
     for ev in events:
-        ev.is_liked_by_me = ev.likes.filter(employee=emp).exists()
-        
-    # 🌟 Leaderboard (Top 5) — MONTHLY, current month tak hi scoped.
-    # Har naye mahine ye apne aap current month ke data pe shift ho jayega —
-    # total events history kitni bhi badh jaaye, ye query hamesha
-    # ek mahine tak bounded rahegi.
+        ev.is_liked_by_me = ev.id in my_liked_event_ids
+
+    # 🌟 Leaderboard (Top 5) — monthly + 🛡️ company-scoped
     today = timezone.now().date()
-    leaderboard = Employee.objects.annotate(
+    leaderboard = Employee.objects.filter(company=emp.company).annotate(
         total_events=Count(
             'field_events',
             filter=Q(
                 field_events__created_at__year=today.year,
                 field_events__created_at__month=today.month,
+                field_events__employee__company=emp.company,
             )
         )
     ).filter(total_events__gt=0).order_by('-total_events')[:5]
-        
+
     return render(request, 'community_feed.html', {
-        'events': events, 
+        'events': events,
         'leaderboard': leaderboard
     })
 
@@ -51,20 +63,20 @@ def community_feed(request):
 @login_required
 def create_event(request):
     emp = request.user.employee
-    
+
     if request.method == 'POST':
         subject = request.POST.get('subject')
         category = request.POST.get('category', 'Other')
         description = request.POST.get('description', '')
         is_shared = request.POST.get('is_shared_in_community') == 'on'
-        
+
         doc_id = request.POST.get('doctor')
         chem_id = request.POST.get('chemist')
-        
+
         if not subject:
             messages.error(request, "Event Subject is required!")
             return redirect('create_event')
-            
+
         event = FieldEvent.objects.create(
             employee=emp,
             subject=subject,
@@ -72,23 +84,29 @@ def create_event(request):
             description=description,
             is_shared_in_community=is_shared
         )
-        
-        # Save Doctor / Chemist if selected
-        if doc_id: event.doctor_id = doc_id
-        if chem_id: event.chemist_id = chem_id
+
+        # 🛡️ FIX: Company-scoped doctor/chemist — dusri company ka ID inject nahi hoga
+        if doc_id:
+            doc = Doctor.objects.filter(id=doc_id, company=emp.company).first()
+            if doc:
+                event.doctor = doc
+        if chem_id:
+            chem = Chemist.objects.filter(id=chem_id, company=emp.company).first()
+            if chem:
+                event.chemist = chem
         event.save()
-        
+
         photos = request.FILES.getlist('photos')
         for photo in photos:
             EventPhoto.objects.create(event=event, photo=photo)
-            
+
         messages.success(request, "Event successfully created!")
-        return redirect('event_report') # Create hone ke baad seedha Report par bhejo taaki wahan se share kar sake
-        
+        return redirect('event_report')
+
     # GET request - Show form with doctors/chemists
-    doctors = Doctor.objects.filter(company=emp.company)# Aap chahein toh filter laga sakte hain (e.g., company wise)
+    doctors = Doctor.objects.filter(company=emp.company)
     chemists = Chemist.objects.filter(company=emp.company)
-    
+
     return render(request, 'create_event.html', {'doctors': doctors, 'chemists': chemists})
 
 # ==============================================================================
@@ -97,17 +115,16 @@ def create_event(request):
 @login_required
 def toggle_like(request, event_id):
     emp = request.user.employee
-    event = get_object_or_404(FieldEvent, id=event_id)
-    
+    # 🛡️ FIX: company-scope — dusri company ke event pe like nahi
+    event = get_object_or_404(FieldEvent, id=event_id, employee__company=emp.company)
+
     like, created = EventLike.objects.get_or_create(event=event, employee=emp)
     if not created:
-        like.delete() # Pehle se tha toh Unlike kar do
-        
-    # Agar future mein AJAX (bina page reload) like banana ho, toh JsonResponse use hoga
+        like.delete()
+
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         return JsonResponse({'liked': created, 'likes_count': event.likes.count()})
-        
-    # Default: Jis page se like kiya tha wahi wapas bhej do
+
     return redirect(request.META.get('HTTP_REFERER', 'community_feed'))
 
 # ==============================================================================
@@ -116,46 +133,40 @@ def toggle_like(request, event_id):
 @login_required
 def add_comment(request, event_id):
     emp = request.user.employee
-    event = get_object_or_404(FieldEvent, id=event_id)
-    
+    # 🛡️ FIX: company-scope — dusri company ke event pe comment nahi
+    event = get_object_or_404(FieldEvent, id=event_id, employee__company=emp.company)
+
     if request.method == 'POST':
         comment_text = request.POST.get('comment')
         if comment_text:
             EventComment.objects.create(event=event, employee=emp, comment=comment_text)
             messages.success(request, "Comment added successfully!")
-            
+
     return redirect(request.META.get('HTTP_REFERER', 'community_feed'))
 
+# ==============================================================================
+# 🚀 5. SHARE EVENT FROM REPORT (duplicate wala — ab sirf EK definition)
+# ==============================================================================
 @login_required
 def share_event_from_report(request, event_id):
     # Sirf wahi MR share kar payega jisne event banaya hai
     event = get_object_or_404(FieldEvent, id=event_id, employee=request.user.employee)
-    
+
     event.is_shared_in_community = True
     event.save()
-    
+
     messages.success(request, "Event shared to Community Wall successfully! 🎉")
     return redirect('event_report')
-from SFA.services.team import get_full_team_employees
-import calendar
-from django.utils import timezone
-
-MONTHS_CHOICES = [(i, calendar.month_name[i]) for i in range(1, 13)]
 
 # ==============================================================================
-# 📸 5. EVENT REPORT (Reports Hub)
+# 📸 6. EVENT REPORT (Reports Hub)
 # ==============================================================================
 @login_required
 def event_report(request):
     emp = request.user.employee
-    # Manager hai toh uski poori team (khud + subordinates), MR hai toh sirf khud
     team_emps = get_full_team_employees(emp)
     is_manager_view = team_emps.count() > 1
 
-    # 🌟 Month/Year filter — DEFAULT current month.
-    # Ye zaroori hai: bina filter ke saara history load hoga, aur 1-2 saal
-    # baad events/photos badhne par ye page bahut heavy ho jayega / server
-    # crash kara sakta hai. Month-wise filter se hamesha ek bounded query rahegi.
     today = timezone.now().date()
     try:
         selected_month = int(request.GET.get('month', today.month))
@@ -167,9 +178,13 @@ def event_report(request):
         selected_year = today.year
 
     if is_manager_view:
-        # Manager ko pehle apna MR select karna hoga — tabhi query chalegi.
         raw_emp_id = request.GET.get('employee_id')
         selected_emp_id = int(raw_emp_id) if raw_emp_id else None
+
+        # 🛡️ IDOR FIX: Manager sirf APNI team ke member ki events dekh sakta hai
+        if selected_emp_id and not team_emps.filter(id=selected_emp_id).exists():
+            selected_emp_id = None
+
         if selected_emp_id:
             events = FieldEvent.objects.filter(
                 employee_id=selected_emp_id,
@@ -179,7 +194,6 @@ def event_report(request):
         else:
             events = FieldEvent.objects.none()
     else:
-        # MR khud — apna hi data, employee select karne ki zarurat nahi.
         selected_emp_id = emp.id
         events = FieldEvent.objects.filter(
             employee_id=emp.id,
@@ -200,17 +214,3 @@ def event_report(request):
         'selected_year': selected_year,
         'months_choices': MONTHS_CHOICES,
     })
-
-# ==============================================================================
-# 🚀 6. SHARE EVENT FROM REPORT
-# ==============================================================================
-@login_required
-def share_event_from_report(request, event_id):
-    # Sirf wahi MR share kar payega jisne event banaya hai
-    event = get_object_or_404(FieldEvent, id=event_id, employee=request.user.employee)
-    
-    event.is_shared_in_community = True
-    event.save()
-    
-    messages.success(request, "Event shared to Community Wall successfully! 🎉")
-    return redirect('event_report')
