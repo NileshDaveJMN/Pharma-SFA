@@ -53,6 +53,7 @@ urlpatterns = [
     path('notifications/unread/', core_api.api_unread_notifications_count, name='api_unread_notifs_count'),    
     path('messages/',         core_api.api_messages,         name='api_messages'),
     path('my-requests/',      core_api.api_my_requests,      name='api_my_requests'),
+    path('reports/my-requests/', core_api.api_my_requests, name='api_my_requests_v2'),   # 🌟 Flutter
     path('visits/<int:visit_id>/edit/', core_api.api_edit_visit, name='api_edit_visit'),
     path('mtp/',              core_api.api_mtp,              name='api_mtp'),
     path('calendar/events/',  core_api.api_calendar_events,  name='api_calendar_events'),    
