@@ -39,7 +39,7 @@ def add_doctor_view(request, employee):
         # 2. Check karo kis MR ko allocate karna hai (Manager ne select kiya ya khud MR hai)
         allocated_id = request.POST.get('allocated_to')
         if allocated_id and employee.designation != 'MR':
-            allocated_emp = get_object_or_404(Employee, id=allocated_id)
+            allocated_emp = get_object_or_404(Employee, id=allocated_id, company=employee.company)
         else:
             allocated_emp = employee
 
@@ -86,7 +86,7 @@ def add_chemist_view(request, employee):
     if request.method == "POST":
         allocated_id = request.POST.get('allocated_to')
         if allocated_id and employee.designation != 'MR':
-            allocated_emp = get_object_or_404(Employee, id=allocated_id)
+            allocated_emp = get_object_or_404(Employee, id=allocated_id, company=employee.company)
         else:
             allocated_emp = employee
 
@@ -121,7 +121,10 @@ def add_route_view(request, employee):
         category = request.POST.get('category', 'HQ')
         distance_from_hq = float(request.POST.get('distance_from_hq', 0) or 0)
         
-        if name and territory_id: 
+        if name and territory_id:
+            if not Territory.objects.filter(id=territory_id, company=employee.company).exists():
+                messages.error(request, "Invalid territory selected.")
+                return redirect('add_route') 
             Route.objects.create(
                 company=employee.company,
                 name=name, 
@@ -205,15 +208,15 @@ def add_tour_program_view(request, employee):
                     start_day = 32 # Skip saving anything
 
             num_days = calendar.monthrange(mtp.year, mtp.month)[1]
+            plan_objs = []
             for day in range(start_day, num_days + 1):
                 route_id = request.POST.get(f'route_{day}')
                 if route_id:
                     curr_date = date(mtp.year, mtp.month, day)
-                    # 🌟 NAYA: BACKEND SUNDAY BLOCKER 
-                    # (Agar kisi ne UI hack karke entry bhej bhi di, toh bhi save nahi hoga)
                     if curr_date.weekday() == 6:
-                        continue 
-                    DailyTourPlan.objects.create(mtp=mtp, date=curr_date, route_id=route_id)
+                        continue
+                    plan_objs.append(DailyTourPlan(mtp=mtp, date=curr_date, route_id=route_id))
+            DailyTourPlan.objects.bulk_create(plan_objs)   # 🚀 EK INSERT            
                     
             if action == 'submit_plan':
                 mtp.status = 'Pending'
@@ -237,43 +240,51 @@ def add_tour_program_view(request, employee):
 
     routes = Route.objects.filter(id__in=all_route_ids).select_related('territory').order_by('category', 'name')
 
+    # 🚀 N+1 FIXED: Leaves, Holidays, Plans — sab loop se PEHLE (API twin pattern)
+    all_leaves, all_holidays, plans_by_mtp = [], [], {}
+    if draft_mtps:
+        # RBM chain — EK baar (per-MTP walk khatam)
+        rbm_emp = None
+        for m in employee.get_my_managers():
+            if m.designation == 'RBM':
+                rbm_emp = m
+                break
+        holiday_creators = list(Employee.objects.filter(company=employee.company, designation='Admin').values_list('id', flat=True))
+        if rbm_emp:
+            holiday_creators.append(rbm_emp.id)
+
+        span_start = min(date(m.year, m.month, 1) for m in draft_mtps)
+        span_end = max(date(m.year, m.month, calendar.monthrange(m.year, m.month)[1]) for m in draft_mtps)
+
+        all_leaves = list(LeaveApplication.objects.filter(
+            employee=employee, status='Approved', start_date__lte=span_end, end_date__gte=span_start
+        ))
+        all_holidays = list(Holiday.objects.filter(
+            proposed_by_id__in=holiday_creators, status='Approved', date__gte=span_start, date__lte=span_end
+        ))
+        # Saare drafts ki daily plans — 1 query
+        for p in DailyTourPlan.objects.filter(mtp__in=draft_mtps).values('mtp_id', 'date', 'route_id'):
+            plans_by_mtp.setdefault(p['mtp_id'], {})[p['date'].day] = p['route_id']
+
     mtp_data = []
     for mtp in draft_mtps:
-        approved_leaves = LeaveApplication.objects.filter(
-            employee=employee, status='Approved',
-            start_date__lte=date(mtp.year, mtp.month, calendar.monthrange(mtp.year, mtp.month)[1]),
-            end_date__gte=date(mtp.year, mtp.month, 1)
-        )
-        
-        # Optimized Leave Mapping
+        # 🚀 Leaves — prefetched list se Python filter (0 queries)
         leave_dates = {}
-        for l in approved_leaves:
-            delta = l.end_date - l.start_date
-            for i in range(delta.days + 1):
-                d = l.start_date + timedelta(days=i)
-                if d.month == mtp.month and d.year == mtp.year:
-                    leave_dates[d.day] = l.leave_type
+        month_first = date(mtp.year, mtp.month, 1)
+        month_last = date(mtp.year, mtp.month, calendar.monthrange(mtp.year, mtp.month)[1])
+        for l in all_leaves:
+            if l.start_date <= month_last and l.end_date >= month_first:
+                d = l.start_date
+                while d <= l.end_date:
+                    if d.month == mtp.month and d.year == mtp.year:
+                        leave_dates[d.day] = l.leave_type
+                    d += timedelta(days=1)
 
-        # Fetch RBM for Holidays
-        rbm_emp = None
-        curr = employee
-        while curr:
-            if curr.designation == 'RBM':
-                rbm_emp = curr
-                break
-            curr = curr.manager
+        # 🚀 Holidays — prefetched se Python filter (0 queries)
+        holiday_dates = {h.date.day: h.name for h in all_holidays if h.date.month == mtp.month and h.date.year == mtp.year}
 
-        # FIX: Admin fetch with company scope
-        holiday_creators = list(Employee.objects.filter(company=employee.company, designation='Admin').values_list('id', flat=True))
-        if rbm_emp: holiday_creators.append(rbm_emp.id)
-
-        holidays = Holiday.objects.filter(
-            proposed_by_id__in=holiday_creators, status='Approved',
-            date__month=mtp.month, date__year=mtp.year
-        )
-        holiday_dates = {h.date.day: h.name for h in holidays}
-
-        existing_plans = {p.date.day: p.route_id for p in DailyTourPlan.objects.filter(mtp=mtp)}
+        # 🚀 Plans — prefetched dict se (0 queries)
+        existing_plans = plans_by_mtp.get(mtp.id, {})
 
         # 🌟 DOJ PATCH (GET LOGIC): Form generate karte waqt loop start point set karein
         start_day = 1
@@ -287,7 +298,7 @@ def add_tour_program_view(request, employee):
 
         days_list = []
         num_days = calendar.monthrange(mtp.year, mtp.month)[1]
-        
+
         # Loop ab Joining Date ke din se shuru hoga
         for day in range(start_day, num_days + 1):
             curr_date = date(mtp.year, mtp.month, day)
@@ -301,7 +312,7 @@ def add_tour_program_view(request, employee):
             elif is_holiday:
                 status_text = f"⛱️ {holiday_dates[day]}"
             elif is_sunday:
-                status_text = "🔴 Sunday (Weekly Off)" # 🌟 NAYA: Status Text
+                status_text = "🔴 Sunday (Weekly Off)"
 
             days_list.append({
                 'day_number': day,
@@ -309,7 +320,7 @@ def add_tour_program_view(request, employee):
                 'is_sunday': is_sunday,
                 'is_leave': is_leave,
                 'is_holiday': is_holiday,
-                'is_locked': is_leave or is_holiday or is_sunday, # 🌟 NAYA: UI Dropdown Lock
+                'is_locked': is_leave or is_holiday or is_sunday,
                 'status_text': status_text,
                 'selected_route_id': existing_plans.get(day)
             })
@@ -325,7 +336,7 @@ def add_tour_program_view(request, employee):
         'mtp_data': mtp_data,
         'routes': routes,
         'current_year': current_year,
-        'allowed_months': allowed_months 
+        'allowed_months': allowed_months
     })
 
 # 🌟 Helper function (Agar pehle add nahi kiya tha to ise upar rakhein)
@@ -357,9 +368,10 @@ def review_mtp_view(request, employee, mtp_id):
             mtp.save()
             
             # 🔔 AUTO-ALERT (To MR and Approver's Boss)
-            send_auto_alert(mtp.employee, "Tour Plan Rejected ❌", f"Aapka {mtp.month}/{mtp.year} ka Tour Plan {manager.name} ne reject kar diya hai.")
+            
+            send_auto_alert(mtp.employee, "Tour Plan Rejected ❌", f"Your Tour Plan for {mtp.month}/{mtp.year} has been rejected by {manager.name}.")
             if manager.manager:
-                send_auto_alert(manager.manager, "Team MTP Action 📊", f"{manager.name} ne {mtp.employee.name} ka {mtp.month}/{mtp.year} Tour Plan reject kiya hai.")
+                send_auto_alert(manager.manager, "Team MTP Action 📊", f"{manager.name} has rejected the Tour Plan of {mtp.employee.name} for {mtp.month}/{mtp.year}.")
                 
             return redirect('manager_approvals')
             
@@ -381,9 +393,9 @@ def review_mtp_view(request, employee, mtp_id):
             mtp.save()
             
             # 🔔 AUTO-ALERT (To MR and Approver's Boss)
-            send_auto_alert(mtp.employee, "Tour Plan Approved ✅", f"Aapka {mtp.month}/{mtp.year} ka Tour Plan {manager.name} ne approve kar diya hai.")
+            send_auto_alert(mtp.employee, "Tour Plan Approved ✅", f"Your Tour Plan for {mtp.month}/{mtp.year} has been approved by {manager.name}.")
             if manager.manager:
-                send_auto_alert(manager.manager, "Team MTP Action 📊", f"{manager.name} ne {mtp.employee.name} ka {mtp.month}/{mtp.year} Tour Plan approve kiya hai.")
+                send_auto_alert(manager.manager, "Team MTP Action 📊", f"{manager.name} has approved the Tour Plan of {mtp.employee.name} for {mtp.month}/{mtp.year}.")
                 
             return redirect('manager_approvals')
             
@@ -455,7 +467,7 @@ def request_holiday_view(request, employee):
                         return redirect('request_holiday')
                         
                     for r_id in selected_rbms:
-                        rbm_emp = get_object_or_404(Employee, id=r_id)
+                        rbm_emp = get_object_or_404(Employee, id=r_id, company=employee.company)
                         # 🌟 PROXY CREATION: Proposed_by me RBM ka naam dalega
                         Holiday.objects.get_or_create(date=h_date, proposed_by=rbm_emp, defaults={'name': name, 'status': status_val})
                     messages.success(request, f"Holiday successfully applied to {len(selected_rbms)} RBM(s) states!")
@@ -513,7 +525,9 @@ def apply_leave_view(request, employee):
                 )
                 messages.success(request, f"🚀 {l_type} for {days} day(s) applied successfully! Sent to manager.")
             else:
-                messages.error(request, f"❌ Insufficient {l_type} balance! You only have {eval(f'rem_{l_type.lower()}')} left.")
+                # 🛡️ SECURITY: eval hatao — dict lookup
+                balance_map = {'CL': rem_cl, 'SL': rem_sl, 'PL': rem_pl, 'LWP': 0}
+                messages.error(request, f"❌ Insufficient {l_type} balance! You only have {balance_map.get(l_type, 0)} left.")              
         return redirect('apply_leave')
 
     return render(request, 'apply_leave.html', {
@@ -566,7 +580,7 @@ def upload_primary_sales_view(request, employee):
             return redirect('upload_primary_sales')
 
         try:
-            rbm_emp = Employee.objects.get(id=selected_rbm_id)
+            rbm_emp = Employee.objects.get(id=selected_rbm_id, company=employee.company)
             state_team = get_full_team_employees(rbm_emp)
             state_terr_ids = state_team.exclude(headquarter__isnull=True).values_list('headquarter_id', flat=True)
             state_stockists = Stockist.objects.filter(territory_id__in=state_terr_ids)
@@ -753,7 +767,7 @@ def edit_doctor_list_view(request, employee):
             default_emp_id = str(first_subordinate.id)
             
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=selected_emp_id)
+    selected_emp = get_object_or_404(Employee, id=selected_emp_id, company=employee.company)
 
     # 🌟 FIX: Sirf Approved doctors dikhao jinko edit kiya ja sake
     doctors = Doctor.objects.filter(allocated_to=selected_emp, status='Approved').order_by('name')
@@ -863,7 +877,7 @@ def edit_chemist_list_view(request, employee):
             default_emp_id = str(first_subordinate.id)
             
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=selected_emp_id)
+    selected_emp = get_object_or_404(Employee, id=selected_emp_id, company=employee.company)
 
     # 3. Sirf Approved chemists dikhao
     chemists = Chemist.objects.filter(allocated_to=selected_emp, status='Approved').order_by('name')
@@ -1069,10 +1083,10 @@ def promo_dispatch_view(request, employee):
         qty = request.POST.get('quantity')
 
         try:
-            item = PromoItem.objects.get(id=item_id)
+            item = get_object_or_404(PromoItem, id=item_id, company=employee.company)
             count = 0
             for emp_id in emp_ids:
-                emp = Employee.objects.get(id=emp_id)
+                emp = get_object_or_404(Employee, id=emp_id, company=employee.company)
                 PromoDispatch.objects.create(
                     employee=emp, 
                     item=item, 
@@ -1116,7 +1130,8 @@ def gift_campaign_view(request, employee):
             messages.error(request, "❌ Please select an Item and at least one Doctor.")
             return redirect('gift_campaign')
 
-        item = get_object_or_404(PromoItem, id=item_id, item_type='HighValue')
+        # 🛡️ IDOR FIX: item company-scoped
+        item = get_object_or_404(PromoItem, id=item_id, item_type='HighValue', company=employee.company)
 
         # Check karo MR ke paas yeh item inventory mein hai
         inventory = MRInventory.objects.filter(employee=employee, item=item, stock_qty__gt=0).first()
@@ -1124,37 +1139,50 @@ def gift_campaign_view(request, employee):
             messages.error(request, f"❌ You do not have stock of {item.name}.")
             return redirect('gift_campaign')
 
-        # 🌟 FIX: Stock limit check karna
-        already_allocated = GiftCampaignPlan.objects.filter(
-            employee=employee, item=item, month=selected_month, year=selected_year, status__in=['Pending', 'Approved']
-        ).count()
+        # 🚀 N+1 FIXED: existing assignments EK query mein (per-doctor exists() hatao)
+        existing_doc_ids = set(GiftCampaignPlan.objects.filter(
+            employee=employee, item=item, month=selected_month, year=selected_year,
+            status__in=['Pending', 'Approved']
+        ).values_list('doctor_id', flat=True))
 
-        new_docs_to_add = []
-        for doc_id in doctor_ids:
-            # 🌟 FIX: Duplicate check mein sirf Pending/Approved ko check karega (Rejected ko dobara allow karega)
-            already = GiftCampaignPlan.objects.filter(
-                employee=employee, doctor_id=doc_id, item=item,
-                month=selected_month, year=selected_year,
-                status__in=['Pending', 'Approved']
-            ).exists()
-            if not already:
-                new_docs_to_add.append(doc_id)
+        # Rejected wale dobara allow honge (Purani logic jaisi hi)
+        new_docs_to_add = [d for d in doctor_ids if d not in existing_doc_ids]
 
-        # Agar stock valid hai, toh save kardo
-        created = 0
-        for doc_id in new_docs_to_add:
-            doctor = get_object_or_404(Doctor, id=doc_id)
-            GiftCampaignPlan.objects.create(
-                employee=employee, doctor=doctor, item=item,
-                month=selected_month, year=selected_year,
-                status='Pending'
+        # 🚀 Stock limit check (purane 'already_allocated' count ki jagah set ka len — same value)
+        already_allocated = len(existing_doc_ids)
+
+        if already_allocated + len(new_docs_to_add) > inventory.stock_qty:
+            available_to_assign = inventory.stock_qty - already_allocated
+            messages.error(
+                request,
+                f"❌ Stock Limit Exceeded! Total stock of {item.name} is {inventory.stock_qty} "
+                f"(of which {already_allocated} are already assigned). You can select only {available_to_assign} more."
             )
-            created += 1
+            return redirect('gift_campaign')
 
-        if created:
-            messages.success(request, f"✅ Gift Campaign sent to Manager for {created} Doctor(s)!")
-        else:
+        if not new_docs_to_add:
             messages.warning(request, "⚠️ All doctors are already in this month's plan.")
+            return redirect('gift_campaign')
+
+        # 🚀 N+1 FIXED: doctors EK query (🛡️ company-scoped) + bulk_create
+        valid_doctors = list(Doctor.objects.filter(id__in=new_docs_to_add, company=employee.company))
+        if len(set(new_docs_to_add)) != len(valid_doctors):
+            messages.error(request, "❌ Invalid doctor in selection.")
+            return redirect('gift_campaign')
+
+        # 🛡️ TRANSACTION: partial save se bachav
+        from django.db import transaction
+        with transaction.atomic():
+            GiftCampaignPlan.objects.bulk_create([
+                GiftCampaignPlan(
+                    employee=employee, doctor=d, item=item,
+                    month=selected_month, year=selected_year,
+                    status='Pending'
+                ) for d in valid_doctors
+            ])
+
+        created = len(valid_doctors)
+        messages.success(request, f"✅ Gift Campaign sent to Manager for {created} Doctor(s)!")
         return redirect('gift_campaign')
 
     # GET — MR ki HighValue inventory
@@ -1182,7 +1210,6 @@ def gift_campaign_view(request, employee):
         'months_choices': [(i, calendar.month_name[i]) for i in range(1, 13)],
         'current_year': current_year,
     })
-
 # ==============================================================================
 # 👨‍⚕️ VIEW DOCTOR PROFILE
 # ==============================================================================
@@ -1200,5 +1227,6 @@ from SFA.decorators import employee_required
 
 @employee_required
 def view_chemist_profile(request, employee, chem_id):
-    chemist = get_object_or_404(Chemist, id=chem_id)
+    team_employees = get_dropdown_team(employee, ordered=False)
+    chemist = get_object_or_404(Chemist, id=chem_id, allocated_to__in=team_employees)
     return render(request, 'chemist_profile.html', {'chemist': chemist})
