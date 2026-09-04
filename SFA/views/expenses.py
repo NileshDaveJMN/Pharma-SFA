@@ -113,11 +113,21 @@ def calculate_missing_expense(emp, ds_obj):
     if is_prev_night_stay and yesterday_ds.territory: start_hq = yesterday_ds.territory
     else: start_hq = emp.headquarter
 
+    # 🚀 N+1 KILLED: poori company ki HQ distances EK query mein (loop mein 0 queries)
+    hq_dist_map = {}
+    for h in HQDistance.objects.filter(company=emp.company).values('from_territory_id', 'to_territory_id', 'distance_km'):
+        hq_dist_map[(h['from_territory_id'], h['to_territory_id'])] = float(h['distance_km'])
+
+    def _dist(a, b):
+        """A→B ya B→A — dono direction check."""
+        if a is None or b is None or a == b: return 0.0
+        return hq_dist_map.get((a.id, b.id), hq_dist_map.get((b.id, a.id), 0.0))
+
     max_total = 0.0
     best_local = 0.0
     best_transit = 0.0
-    is_outside_hq = False 
-    
+    is_outside_hq = False
+
     for r in routes:
         local_dist = float(r.distance_from_hq or 0)
         transit_dist = 0.0
@@ -125,30 +135,28 @@ def calculate_missing_expense(emp, ds_obj):
 
         if emp.headquarter and work_hq and emp.headquarter != work_hq: is_outside_hq = True
 
+        # 🚀 Map lookup — pehle 2 queries thi (bidirectional fallback ke saath)
         if start_hq and work_hq and start_hq != work_hq:
-            hq_conn = HQDistance.objects.filter(from_territory=start_hq, to_territory=work_hq).first()
-            if not hq_conn: hq_conn = HQDistance.objects.filter(from_territory=work_hq, to_territory=start_hq).first()
-            transit_dist += float(hq_conn.distance_km) if hq_conn else 0.0
+            transit_dist += _dist(start_hq, work_hq)
 
+        # 🚀 Map lookup — return day wala bhi
         if is_return_day and work_hq and emp.headquarter and work_hq != emp.headquarter:
-            hq_conn_ret = HQDistance.objects.filter(from_territory=work_hq, to_territory=emp.headquarter).first()
-            if not hq_conn_ret: hq_conn_ret = HQDistance.objects.filter(from_territory=emp.headquarter, to_territory=work_hq).first()
-            transit_dist += float(hq_conn_ret.distance_km) if hq_conn_ret else 0.0
+            transit_dist += _dist(work_hq, emp.headquarter)
 
         route_total = local_dist + transit_dist
         if route_total > max_total:
             max_total = route_total
             best_local = local_dist
             best_transit = transit_dist
-            
+
     distance = max_total
     raw_cat = max((r.category for r in routes), key=lambda x: {'OUTSTATION': 3, 'EX_HQ': 2, 'HQ': 1}.get(x, 0)) if routes.exists() else 'HQ'
 
     if is_outside_hq: raw_cat = 'OUTSTATION' if night_stay or is_prev_night_stay else 'EX_HQ'
 
     if raw_cat == 'OUTSTATION':
-        if is_return_day or (not night_stay and not is_prev_night_stay): eff_cat = 'EX_HQ'       
-        else: eff_cat = 'OUTSTATION'  
+        if is_return_day or (not night_stay and not is_prev_night_stay): eff_cat = 'EX_HQ'
+        else: eff_cat = 'OUTSTATION'
     else: eff_cat = raw_cat
 
     try:
@@ -176,8 +184,6 @@ def calculate_missing_expense(emp, ds_obj):
         else: return {'da': round(float(da), 2), 'ta': 0, 'distance': distance, 'territory_category': eff_cat, 'night_stay': night_stay, 'is_slab3': True}
         return {'da': round(float(da), 2), 'ta': ta, 'distance': distance, 'territory_category': eff_cat, 'night_stay': night_stay, 'is_slab3': False}
     except TARate.DoesNotExist: return {'da': round(float(da), 2), 'ta': 0, 'distance': distance, 'territory_category': eff_cat, 'night_stay': night_stay, 'is_slab3': False}
-
-
 def _fill_missing_dates(master_report, employee):
     """Submit ke waqt pura month ensure karo — missing dates zero se fill karo, ya RECOVER karo."""
     import calendar

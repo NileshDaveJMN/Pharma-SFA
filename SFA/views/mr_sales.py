@@ -35,29 +35,60 @@ def mr_primary_sale_entry(request):
             sale_date = datetime.strptime(date_str, '%Y-%m-%d').date()
 
             # 🌟 BULK SAVE: Products save karein aur Statement Update karein
-            for item in items:
-                product = get_object_or_404(Product, id=item['product_id'], company=emp.company)
-                billed_qty = int(item['quantity'])
-                free_qty = int(item['free_qty'])
-                
-                # 1. Primary Sale Record banayein
-                PrimarySale.objects.create(
-                    date=sale_date,
-                    stockist=stockist,
-                    product=product,
-                    quantity=billed_qty,
-                    free_quantity=free_qty,
-                    batch_number=batch_number
-                )
-                
-                # 2. 🌟 FIX: Monthly Statement (Inventory) update karein
-                stat, _ = StockistProductStatement.objects.get_or_create(
-                    employee=emp, stockist=stockist, product=product, 
+            # 🚀 N+1 FIXED (API twin pattern): saare products EK query + bulk creates
+            product_ids = [item['product_id'] for item in items]
+            products_dict = {p.id: p for p in Product.objects.filter(
+                id__in=product_ids, company=emp.company
+            )}
+
+            # 🚀 Existing statements EK query
+            existing_stats = {
+                stat.product_id: stat for stat in StockistProductStatement.objects.filter(
+                    employee=emp, stockist=stockist, product_id__in=product_ids,
                     month=sale_date.month, year=sale_date.year
                 )
-                stat.received_qty += (billed_qty + free_qty)
-                stat.save()
-            
+            }
+
+            sales_to_create = []
+            stats_to_create = []
+            stats_to_update = []
+
+            for item in items:
+                product = products_dict.get(item['product_id'])
+                if not product:
+                    return JsonResponse({'status': 'error', 'message': f"Invalid product in invoice: {item['product_id']}"})
+
+                try:
+                    billed_qty = int(item['quantity'])
+                    free_qty = int(item['free_qty'])
+                except (TypeError, ValueError):
+                    return JsonResponse({'status': 'error', 'message': 'Invalid quantity values in invoice!'})
+
+                sales_to_create.append(PrimarySale(
+                    date=sale_date, stockist=stockist, product=product,
+                    quantity=billed_qty, free_quantity=free_qty, batch_number=batch_number
+                ))
+
+                stat = existing_stats.get(product.id)
+                if stat:
+                    stat.received_qty += (billed_qty + free_qty)
+                    stats_to_update.append(stat)
+                else:
+                    stats_to_create.append(StockistProductStatement(
+                        employee=emp, stockist=stockist, product=product,
+                        month=sale_date.month, year=sale_date.year,
+                        received_qty=(billed_qty + free_qty)
+                    ))
+
+            # 🛡️ TRANSACTION + 🚀 3 bulk queries (40 → ~5)
+            from django.db import transaction
+            with transaction.atomic():
+                PrimarySale.objects.bulk_create(sales_to_create)
+                if stats_to_update:
+                    StockistProductStatement.objects.bulk_update(stats_to_update, ['received_qty'])
+                if stats_to_create:
+                    StockistProductStatement.objects.bulk_create(stats_to_create)
+
             messages.success(request, f"✅ Invoice with {len(items)} products uploaded successfully for {stockist.name}!")
             return JsonResponse({'status': 'success'})
 
