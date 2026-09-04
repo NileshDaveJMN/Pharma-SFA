@@ -1751,8 +1751,8 @@ def api_route_report(request):
 
     # 🚀 N+1 KILLED: route-wise doctor/chemist counts DB-level annotate se
     routes = get_team_requested_routes(sub_team, my_terr_ids).select_related('territory').annotate(
-        doc_count=Count('doctor_set', filter=Q(doctor_set__status='Approved'), distinct=True),
-        chem_count=Count('chemist_set', filter=Q(chemist_set__status='Approved'), distinct=True),
+        doc_count=Count('doctor', filter=Q(doctor__status='Approved'), distinct=True),
+        chem_count=Count('chemist', filter=Q(chemist__status='Approved'), distinct=True),
     )
 
     report_data = []
