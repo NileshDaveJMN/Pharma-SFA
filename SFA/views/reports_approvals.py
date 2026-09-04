@@ -7,7 +7,7 @@ from SFA.models import (
     Employee, Doctor, Chemist, Route, Holiday, LeaveApplication,
     MonthlyTourProgram, MonthlyExpenseReport, MonthlyTargetMaster, 
     FreeQtyClaimMaster, GiftCampaignPlan, ChemistEditRequest, DoctorEditRequest,
-    DailyDCR, DCRProductDetail, SystemNotification, PharmaActivity
+    DailyDCR, DCRProductDetail, SystemNotification, PharmaActivity, LeaveBalance
 )
 from .auth import get_full_team_employees
 from SFA.decorators import employee_required
@@ -43,6 +43,20 @@ def manager_approval_hub(request, employee):
         elif itype == 'gift_campaign': obj = get_object_or_404(GiftCampaignPlan, id=iid)
         elif itype == 'chemist_edit': obj = get_object_or_404(ChemistEditRequest, id=iid)
         elif itype == 'doctor_edit': obj = get_object_or_404(DoctorEditRequest, id=iid)
+        
+        # 🛡️ IDOR FIX: Cross-company approve/reject block (API twin wala)
+        if obj is not None:
+            obj_company_id = None
+            if itype in ['doctor', 'chemist', 'route', 'holiday']:
+                obj_company_id = getattr(obj, 'company_id', None)
+            elif itype == 'target':
+                obj_company_id = obj.territory.company_id
+            else:
+                emp_ref = getattr(obj, 'employee', None)
+                obj_company_id = emp_ref.company_id if emp_ref else None
+            if obj_company_id != employee.company_id:
+                messages.error(request, "Access denied: You cannot approve or reject items from another company.")
+                return redirect('manager_approvals')
         
         if obj and action in ['approve', 'reject']:
             if action == 'approve':
@@ -202,20 +216,20 @@ def manager_approval_hub(request, employee):
         pending_gift_campaigns = list(GiftCampaignPlan.objects.filter(employee__in=team_members, status='Pending').select_related('employee', 'doctor', 'item'))
 
     return render(request, 'manager_approvals.html', {
-        'pending_mtps': MonthlyTourProgram.objects.filter(employee__in=team_members, status='Pending').order_by('-year', '-month'),
-        'pending_doctors': Doctor.objects.filter(allocated_to__in=team_members, status='Pending'),
-        'pending_chemists': Chemist.objects.filter(allocated_to__in=team_members, status='Pending'),
-        'pending_expenses': MonthlyExpenseReport.objects.filter(employee__in=team_members, status='Pending'),
+        'pending_mtps': MonthlyTourProgram.objects.filter(employee__in=team_members, status='Pending').select_related('employee').order_by('-year', '-month'),
+        'pending_doctors': Doctor.objects.filter(allocated_to__in=team_members, status='Pending').select_related('allocated_to'),
+        'pending_chemists': Chemist.objects.filter(allocated_to__in=team_members, status='Pending').select_related('allocated_to'),
+        'pending_expenses': MonthlyExpenseReport.objects.filter(employee__in=team_members, status='Pending').select_related('employee'),
         'pending_routes': Route.objects.filter(requested_by__in=team_members, status='Pending').select_related('territory', 'requested_by'),
-        'pending_holidays': Holiday.objects.filter(company=employee.company, status='Pending') if manager.designation in ['Admin', 'System Administrator'] else [], 
+        'pending_holidays': Holiday.objects.filter(company=employee.company, status='Pending').select_related('proposed_by') if manager.designation in ['Admin', 'System Administrator'] else [],
         'pending_targets': pending_targets,
         'pending_free_claims': pending_free_claims,
-        'pending_chemist_edits': ChemistEditRequest.objects.filter(employee__in=team_members, status='Pending'),
-        'pending_doctor_edits': DoctorEditRequest.objects.filter(employee__in=team_members, status='Pending'),
+        'pending_chemist_edits': ChemistEditRequest.objects.filter(employee__in=team_members, status='Pending').select_related('employee'),
+        'pending_doctor_edits': DoctorEditRequest.objects.filter(employee__in=team_members, status='Pending').select_related('employee'),
         'pending_gift_campaigns': pending_gift_campaigns,
         'manager_name': manager.name, 'designation': manager.designation,
-        'pending_leaves': LeaveApplication.objects.filter(employee__in=team_members, status='Pending').order_by('start_date'),
-    })
+        'pending_leaves': LeaveApplication.objects.filter(employee__in=team_members, status='Pending').select_related('employee').order_by('start_date'),
+    })   
 
 # ==============================================================================
 # 2. 📊 MANAGER REPORT VIEW (Daily Summary)
@@ -239,7 +253,8 @@ def send_auto_alert(employee, title, message):
 @employee_required
 def review_mtp_view(request, employee, mtp_id):
     manager = employee
-    mtp = get_object_or_404(MonthlyTourProgram, id=mtp_id)
+    # ✅ NAYI:
+    mtp = get_object_or_404(MonthlyTourProgram, id=mtp_id, employee__company=employee.company)    
     
     if mtp.employee not in get_full_team_employees(manager) and manager.designation != 'NSM': 
         return redirect('manager_approvals')
@@ -288,7 +303,10 @@ def review_mtp_view(request, employee, mtp_id):
 # ==============================================================================
 @employee_required
 def approve_activity_view(request, employee, activity_id):
-    activity = get_object_or_404(PharmaActivity, id=activity_id)
+    # 🛡️ FIX: company scope + sirf managers (MR reject bhi nahi kar sakta ab)
+    if employee.designation == 'MR':
+        return redirect('manager_approvals')
+    activity = get_object_or_404(PharmaActivity, id=activity_id, employee__company=employee.company)
     if request.method == "POST":
         action, remark = request.POST.get('action'), request.POST.get('remark', '')
         if action == 'Reject': 
