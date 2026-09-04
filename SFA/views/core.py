@@ -1717,7 +1717,7 @@ def transfer_data_view(request):
     if request.method == "GET" and request.GET.get('get_stats') == '1':
         emp_id = request.GET.get('emp_id')
         try:
-            emp = Employee.objects.get(id=emp_id)
+            emp = Employee.objects.get(id=emp_id, company=request.user.employee.company)
             data = {
                 'success': True,
                 'doctors': Doctor.objects.filter(allocated_to=emp).count(),
@@ -1759,8 +1759,8 @@ def transfer_data_view(request):
         try:
             # 🌟 transaction.atomic(): Agar koi ek line fail hui, toh sabkuch rollback ho jayega!
             with transaction.atomic(): 
-                old_emp = Employee.objects.get(id=old_emp_id)
-                new_emp = Employee.objects.get(id=new_emp_id)
+                old_emp = Employee.objects.get(id=old_emp_id, company=request.user.employee.company)   # 🛡️
+                new_emp = Employee.objects.get(id=new_emp_id, company=request.user.employee.company)   # 🛡️                
 
                 r = _transfer_employee_data(old_emp, new_emp)
 
@@ -1889,7 +1889,7 @@ def promote_employee_view(request):
     if request.method == "GET" and request.GET.get('get_stats') == '1':
         emp_id = request.GET.get('emp_id')
         try:
-            emp = Employee.objects.get(id=emp_id)
+            emp = Employee.objects.get(id=emp_id, company=request.user.employee.company)
             data = {
                 'success': True,
                 'designation': emp.designation,
@@ -1914,8 +1914,10 @@ def promote_employee_view(request):
 
         try:
             with transaction.atomic():
-                emp = Employee.objects.select_related('headquarter', 'manager').get(id=emp_id)
-                vacancy = Employee.objects.select_related('manager', 'headquarter').get(id=vacancy_id, is_placeholder=True)
+                emp = Employee.objects.select_related('headquarter', 'manager').get(
+                    id=emp_id, company=request.user.employee.company)
+                vacancy = Employee.objects.select_related('manager', 'headquarter').get(
+                    id=vacancy_id, is_placeholder=True, company=request.user.employee.company)
 
                 if emp.is_placeholder:
                     messages.warning(request, "⚠️ A vacant placeholder cannot be promoted.")
@@ -2035,7 +2037,8 @@ def resign_employee_view(request):
 
         try:
             with transaction.atomic():
-                old_emp = Employee.objects.select_related('headquarter', 'manager').get(id=emp_id)
+                old_emp = Employee.objects.select_related('headquarter', 'manager').get(
+                    id=emp_id, company=request.user.employee.company)   # 🛡️            
 
                 if old_emp.is_placeholder:
                     messages.warning(request, "⚠️ This is already a Vacant placeholder and cannot be resigned.")
