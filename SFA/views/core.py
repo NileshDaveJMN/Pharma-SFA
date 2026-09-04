@@ -45,10 +45,10 @@ from SFA.models import Doctor, Chemist
 
 @employee_required
 def update_location_view(request, employee, role, target_id):
-    if role == 'doctor':
-        target = get_object_or_404(Doctor, id=target_id)
+        if role == 'doctor':
+        target = get_object_or_404(Doctor, id=target_id, company=employee.company)      # 🛡️
     elif role == 'chemist':
-        target = get_object_or_404(Chemist, id=target_id)
+        target = get_object_or_404(Chemist, id=target_id, company=employee.company)     # 🛡️
     else:
         return redirect('mr_dashboard')
 
@@ -348,7 +348,7 @@ def request_hub_view(request, employee): return render(request, 'request_hub.htm
 
 @employee_required
 def view_hub_view(request, employee):
-    selected_emp = get_object_or_404(Employee, id=request.GET.get('employee_id', str(employee.id)))
+    selected_emp = get_object_or_404(Employee, id=request.GET.get('employee_id', str(employee.id)), company=employee.company)
     return render(request, 'view_hub.html', {'team_employees': get_full_team_employees(employee).order_by('-designation', 'name') if employee.designation != 'MR' else [employee], 'selected_emp_id': selected_emp.id, 'selected_employee_name': selected_emp.name, 'is_manager_view': employee.designation != 'MR'})
 
 
@@ -631,13 +631,21 @@ def day_start_view(request, employee):
         employee=employee, is_open=True, is_submitted=False
     ).order_by('date')
     
+    # 🚀 N+1 KILLED: leaves + holidays loop se PEHLE (API twin wala fix)
+    leave_ranges = list(LeaveApplication.objects.filter(
+        employee=employee, status='Approved',
+        start_date__lte=pending_days.first().date if pending_days else today
+    ).values('start_date', 'end_date'))
+    holidays = set(Holiday.objects.filter(
+        company=employee.company, status='Approved'
+    ).values_list('date', flat=True))
+
     oldest_open = None
     for dcr in pending_days:
-        # Check karo ki kya is din koi Leave ya Holiday approve ho chuki hai
-        is_leave_day = LeaveApplication.objects.filter(
-            employee=employee, status='Approved', start_date__lte=dcr.date, end_date__gte=dcr.date
-        ).exists()
-        is_holiday = Holiday.objects.filter(company=employee.company, date=dcr.date, status='Approved').exists()  # 🌟 FIX: company-scoped
+        d = dcr.date
+        is_leave_day = any(l['start_date'] <= d <= l['end_date'] for l in leave_ranges)
+        is_holiday = d in holidays
+        # ... baaki bilkul same (day_type + save + break)    
         
         if is_leave_day or is_holiday or dcr.date.weekday() == 6:
             # Agar Leave/Holiday phas gaya hai, toh us din ko silently close (lock) kar do
@@ -735,7 +743,7 @@ def day_start_view(request, employee):
                 alerts.append(msg)
                 
             if today.day > (setting.sale_upload_deadline_day if setting else 4) and not PartyWiseSaleReport.objects.filter(employee=employee, month=prev_month, year=prev_year).exists():
-                alerts.append(f"Pichle mahine ({prev_month}/{prev_year}) ki Party Wise Sale / Dr Wise entry pending hai!")
+                alerts.append(f"Last month's ({prev_month}/{prev_year}) Party Wise Sale / Dr Wise entry is pending!")
 
     # 🔵 B. STRICT RULES FOR MANAGER
     else:
@@ -829,7 +837,7 @@ def day_start_view(request, employee):
             return redirect('mr_dashboard')
 
         try:
-            joint_emp = Employee.objects.filter(id=joint_id).first() if joint_id else None
+            joint_emp = Employee.objects.filter(id=joint_id, company=employee.company).first() if joint_id else None
             
             day_start, created = DayStart.objects.get_or_create(
                 employee=employee, 
@@ -1072,121 +1080,144 @@ def doctor_visit_view(request, employee, doc_id):
         return redirect('mr_dashboard')
 
     if not open_day: return redirect('mr_dashboard')
-    doctor = get_object_or_404(Doctor, id=doc_id)
-    
+    # 🛡️ IDOR FIX: company-scope — dusri company ke doctor pe visit nahi
+    doctor = get_object_or_404(Doctor, id=doc_id, company=employee.company)
+
     if request.method == "POST":
         daily_dcr, _ = DailyDCR.objects.get_or_create(employee=employee, date=open_day.date)
-        
+
         setting = SystemSetting.objects.filter(company=employee.company).first()
         is_backdated = open_day.date < timezone.localdate()
         is_bypassed = False
         if is_backdated:
             if not setting or not setting.strict_geofence_for_backdate:
                 is_bypassed = True
-        
-        # 🌟 NAYA: Check if Digital Detailing was performed
+
+        # 🌟 Check if Digital Detailing was performed
         is_digital = request.POST.get('is_digital_detailing') == 'true'
-                
+
         visit = DCRVisit.objects.create(
-            daily_dcr=daily_dcr, 
-            route=doctor.route, 
-            doctor=doctor, 
-            remark=request.POST.get('remark', ''), 
-            latitude=request.POST.get('latitude') or None, 
+            daily_dcr=daily_dcr,
+            route=doctor.route,
+            doctor=doctor,
+            remark=request.POST.get('remark', ''),
+            latitude=request.POST.get('latitude') or None,
             longitude=request.POST.get('longitude') or None,
             geofence_bypassed=is_bypassed,
-            is_digital_detailing=is_digital  # 🌟 NAYA FIELD SAVED
+            is_digital_detailing=is_digital
         )
-        
+
         # 1. PRODUCT SAMPLING & INVENTORY DEDUCTION
-        for p in Product.objects.filter(company=employee.company):
+        products = list(Product.objects.filter(company=employee.company))
+        p_ids = [p.id for p in products]
+
+        # 🚀 N+1 FIXED: saari sample inventory EK query mein (loop mein 0 queries)
+        sample_inv_map = {}
+        if p_ids:
+            for inv in MRInventory.objects.filter(
+                employee=employee, item__item_type='Sample',
+                item__linked_product_id__in=p_ids
+            ).select_related('item'):
+                sample_inv_map.setdefault(inv.item.linked_product_id, inv)
+
+        va_rows = []
+        for p in products:
             is_det = request.POST.get(f'detailed_{p.id}') == 'on'
-            sq = int(request.POST.get(f'sample_{p.id}') or 0)
-            oq = int(request.POST.get(f'order_{p.id}') or 0)
-            
-            if is_det or sq > 0 or oq > 0: 
+            try:
+                sq = int(float(request.POST.get(f'sample_{p.id}') or 0))
+            except (TypeError, ValueError):
+                sq = 0
+            try:
+                oq = int(float(request.POST.get(f'order_{p.id}') or 0))
+            except (TypeError, ValueError):
+                oq = 0
+
+            if is_det or sq > 0 or oq > 0:
                 DCRProductDetail.objects.create(visit=visit, product=p, is_detailed=is_det, sample_qty=sq, order_qty=oq)
-                
+
                 if sq > 0:
-                    sample_inv = MRInventory.objects.filter(employee=employee, item__linked_product=p, item__item_type='Sample').first()
+                    sample_inv = sample_inv_map.get(p.id)   # 🚀 dict lookup — 0 query
                     if sample_inv and sample_inv.stock_qty >= sq:
                         sample_inv.stock_qty -= sq
-                        sample_inv.save()
 
-            # 🌟 NAYA: SCREEN TIME TRACKING SAVED
+            # 🌟 SCREEN TIME TRACKING — collect karo, phir bulk_create
             if is_digital:
-                time_spent = int(request.POST.get(f'va_time_{p.id}') or 0)
+                try:
+                    time_spent = int(float(request.POST.get(f'va_time_{p.id}') or 0))
+                except (TypeError, ValueError):
+                    time_spent = 0
                 if time_spent > 0:
-                    VAScreenTime.objects.create(
-                        visit=visit,
-                        product=p,
-                        duration_seconds=time_spent
-                    )
+                    va_rows.append(VAScreenTime(visit=visit, product=p, duration_seconds=time_spent))
+
+        # 🚀 EK bulk_update + EK bulk_create
+        if sample_inv_map:
+            MRInventory.objects.bulk_update(sample_inv_map.values(), ['stock_qty'])
+        if va_rows:
+            VAScreenTime.objects.bulk_create(va_rows)
 
         # 2. GIFTS/INPUTS DEDUCTION & ROI
+        gift_entries = []
         for key, value in request.POST.items():
             if key.startswith('promo_qty_') and value.strip():
                 try:
-                    qty_given = int(value)
-                    if qty_given > 0:
-                        item_id = int(key.replace('promo_qty_', ''))
-                        inventory = MRInventory.objects.get(employee=employee, item_id=item_id)
-                        
-                        if inventory.stock_qty >= qty_given:
-                            inventory.stock_qty -= qty_given
-                            inventory.save()
-                            
-                            total_val = float(inventory.item.price) * qty_given
-                            DoctorROILedger.objects.create(
-                                date_given=open_day.date, 
-                                doctor=doctor, 
-                                employee=employee, 
-                                item=inventory.item, 
-                                quantity=qty_given, 
-                                total_value=total_val,
-                                visit=visit
-                            )
-                except (ValueError, MRInventory.DoesNotExist) as e:
+                    qty = int(value)
+                    if qty > 0:
+                        gift_entries.append((int(key.replace('promo_qty_', '')), qty))
+                except ValueError:
                     pass
+
+        # 🚀 N+1 FIXED: gift inventories EK query mein
+        gift_inv_map = {}
+        if gift_entries:
+            for inv in MRInventory.objects.filter(
+                employee=employee, item_id__in=[i for i, q in gift_entries]
+            ).select_related('item'):
+                gift_inv_map.setdefault(inv.item_id, inv)
+
+        for item_id, qty_given in gift_entries:
+            inventory = gift_inv_map.get(item_id)
+            if inventory and inventory.stock_qty >= qty_given:
+                inventory.stock_qty -= qty_given
+                total_val = float(inventory.item.price) * qty_given
+                DoctorROILedger.objects.create(
+                    date_given=open_day.date, doctor=doctor, employee=employee,
+                    item=inventory.item, quantity=qty_given,
+                    total_value=total_val, visit=visit,
+                )
+        if gift_inv_map:
+            MRInventory.objects.bulk_update(gift_inv_map.values(), ['stock_qty'])
 
         # 🌟 AJAX request → chhota JSON response (page reload nahi hota)
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return JsonResponse({'status': 'ok', 'visit_id': visit.id})
         return redirect('mr_dashboard')
-    
+
+    # ───────────── GET (form render) — pehle jaisa hi optimized ─────────────
     my_inventory = MRInventory.objects.filter(employee=employee, stock_qty__gt=0).select_related('item')
     sample_stock_map = {inv.item.linked_product_id: inv.stock_qty for inv in my_inventory if inv.item.item_type == 'Sample' and inv.item.linked_product_id}
-    
-    # 🌟 NAYA: ZERO-OVERHEAD LOGIC FOR VA MEDIA
+
     is_va_enabled = getattr(employee.company, 'is_digital_va_enabled', False)
     products_with_stock = []
-    
-    # Pre-fetch VA slides if enabled to prevent N+1 queries
+
     va_media_dict = {}
     if is_va_enabled:
-        from SFA.models import ProductVAMedia
         slides = ProductVAMedia.objects.filter(company=employee.company, is_active=True).order_by('product_id', 'slide_order')
         for slide in slides:
             if slide.file:
-                if slide.product_id not in va_media_dict:
-                    va_media_dict[slide.product_id] = []
-                va_media_dict[slide.product_id].append({'url': slide.file.url, 'title': slide.title})
+                va_media_dict.setdefault(slide.product_id, []).append({'url': slide.file.url, 'title': slide.title})
 
     for p in Product.objects.filter(company=employee.company):
         products_with_stock.append({
             'product': p,
             'stock': sample_stock_map.get(p.id, 0),
-            'va_slides': va_media_dict.get(p.id, []) if is_va_enabled else []  # 🌟 Frontend ko bhejne ke liye
+            'va_slides': va_media_dict.get(p.id, []) if is_va_enabled else []
         })
-        
+
     today = open_day.date
-    approved_gift_ids = GiftCampaignPlan.objects.filter(
-        employee=employee,
-        doctor=doctor,
-        status='Approved',
-        month=today.month,
-        year=today.year
-    ).values_list('item_id', flat=True)
+    approved_gift_ids = set(GiftCampaignPlan.objects.filter(
+        employee=employee, doctor=doctor, status='Approved',
+        month=today.month, year=today.year
+    ).values_list('item_id', flat=True))
 
     gift_stock = []
     for inv in my_inventory:
@@ -1197,12 +1228,11 @@ def doctor_visit_view(request, employee, doc_id):
         gift_stock.append(inv)
 
     return render(request, 'dr_visit_form.html', {
-        'doctor': doctor, 
+        'doctor': doctor,
         'products_data': products_with_stock,
         'gift_stock': gift_stock,
-        'is_va_enabled': is_va_enabled # 🌟 HTML me if-condition ke liye
+        'is_va_enabled': is_va_enabled
     })
-
 @employee_required
 def chemist_visit_view(request, employee, chem_id):
     open_day, stuck_day = get_open_day(employee)
@@ -1212,15 +1242,30 @@ def chemist_visit_view(request, employee, chem_id):
         return redirect('mr_dashboard')
 
     if not open_day: return redirect('mr_dashboard')
-    chemist = get_object_or_404(Chemist, id=chem_id)
+    # 🛡️ IDOR FIX: company-scope
+    chemist = get_object_or_404(Chemist, id=chem_id, company=employee.company)
+
     if request.method == "POST":
         daily_dcr, _ = DailyDCR.objects.get_or_create(employee=employee, date=open_day.date)
-        visit = DCRVisit.objects.create(daily_dcr=daily_dcr, route=chemist.route, chemist=chemist, latitude=request.POST.get('latitude'), longitude=request.POST.get('longitude'))
+        visit = DCRVisit.objects.create(
+            daily_dcr=daily_dcr, route=chemist.route, chemist=chemist,
+            latitude=request.POST.get('latitude') or None,
+            longitude=request.POST.get('longitude') or None
+        )
         for p in Product.objects.filter(company=employee.company):
-            if int(request.POST.get(f'order_{p.id}', 0) or 0) > 0: DCRProductDetail.objects.create(visit=visit, product=p, sample_qty=0, order_qty=int(request.POST.get(f'order_{p.id}', 0)))
+            try:
+                oq = int(float(request.POST.get(f'order_{p.id}') or 0))
+            except (TypeError, ValueError):
+                oq = 0
+            if oq > 0:
+                DCRProductDetail.objects.create(visit=visit, product=p, sample_qty=0, order_qty=oq)
         return redirect('mr_dashboard')
-    return render(request, 'chemist_visit.html', {'chemist': chemist, 'products': Product.objects.filter(company=employee.company), 'today': open_day.date})
 
+    return render(request, 'chemist_visit.html', {
+        'chemist': chemist,
+        'products': Product.objects.filter(company=employee.company),
+        'today': open_day.date
+    })
 @employee_required
 def edit_visit_view(request, employee, visit_id):
     # 🌟 FIX: Ownership check (sirf apni hi visit edit ho sake) + DayEnd lock
@@ -1364,8 +1409,8 @@ def notice_board_view(request, employee):
 # 🌟 NAYA: Web Inbox View
 @employee_required
 def web_inbox_view(request, employee):
-    received_msgs = InternalMessage.objects.filter(receiver=employee).order_by('-sent_at')
-    sent_msgs = InternalMessage.objects.filter(sender=employee).order_by('-sent_at')
+    received_msgs = InternalMessage.objects.filter(receiver=employee).select_related('sender').order_by('-sent_at')
+    sent_msgs = InternalMessage.objects.filter(sender=employee).select_related('receiver').order_by('-sent_at')
     
     # Jaise hi page khule, received messages read ho jayein
     received_msgs.filter(is_read=False).update(is_read=True)
