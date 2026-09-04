@@ -36,7 +36,7 @@ def smart_secondary_report_view(request, employee):
             default_emp_id = str(first_sub.id)
             
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)   # 🛡️
     
     today = timezone.now().date()
     selected_month = int(request.GET.get('month') or today.month)
@@ -160,7 +160,7 @@ def primary_sales_report_view(request, employee):
             default_emp_id = str(first_sub.id)
             
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)   # 🛡️
     
     today = timezone.now().date()
     from_month = int(request.GET.get('from_month') or today.month)
@@ -315,7 +315,7 @@ def party_wise_sale_entry_view(request, employee):
     if not selected_emp_id:
         selected_emp_id = str(employee.id)
         
-    selected_emp = get_object_or_404(Employee, id=selected_emp_id)
+    selected_emp = get_object_or_404(Employee, id=selected_emp_id, company=employee.company)
     
     # Hamesha Pichla Mahina (Last Month)
     today = timezone.now().date()
@@ -350,25 +350,38 @@ def party_wise_sale_entry_view(request, employee):
             messages.error(request, "⚠️ Stockist missing! Please select a Stockist.")
             return redirect(f'/reports/party-wise-sale/?employee_id={selected_emp.id}')
             
-        posted_stockist = get_object_or_404(Stockist, id=posted_stockist_id)
+        posted_stockist = get_object_or_404(Stockist, id=posted_stockist_id, company=employee.company)
         chemist_id = request.POST.get('chemist_id')
         
         if not chemist_id:
             messages.error(request, "⚠️ Selecting a Chemist is required!")
             return redirect(f'/reports/party-wise-sale/?stockist_id={posted_stockist.id}&employee_id={selected_emp.id}')
             
-        chemist = get_object_or_404(Chemist, id=chemist_id)
+        chemist = get_object_or_404(Chemist, id=chemist_id, company=employee.company)
         report, created = PartyWiseSaleReport.objects.get_or_create(
             employee=selected_emp, stockist=posted_stockist, month=current_month, year=current_year
         )
         
         saved_any = False
+        lines_to_create = []
         for prod in Product.objects.filter(company=selected_emp.company):
-            b_qty = int(request.POST.get(f'billed_{prod.id}') or 0)
-            f_qty = int(request.POST.get(f'free_{prod.id}') or 0)
+            try:
+                b_qty = int(float(request.POST.get(f'billed_{prod.id}') or 0))
+            except (TypeError, ValueError):
+                b_qty = 0
+            try:
+                f_qty = int(float(request.POST.get(f'free_{prod.id}') or 0))
+            except (TypeError, ValueError):
+                f_qty = 0
             if b_qty > 0 or f_qty > 0:
-                PartyWiseSaleLine.objects.create(report=report, chemist=chemist, product=prod, billed_qty=b_qty, free_qty=f_qty)
-                saved_any = True
+                lines_to_create.append(PartyWiseSaleLine(
+                    report=report, chemist=chemist, product=prod,
+                    billed_qty=b_qty, free_qty=f_qty
+                ))
+        
+        if lines_to_create:
+            PartyWiseSaleLine.objects.bulk_create(lines_to_create)
+            saved_any = True
 
         if saved_any:
             messages.success(request, f"✅ Sale saved for {chemist.name} (By: {selected_emp.name}).")
@@ -385,50 +398,47 @@ def party_wise_sale_entry_view(request, employee):
         import calendar
         from datetime import date
         from django.db.models import Q, Sum
-        
-        # Target mahine (Last Month) ka aakhiri din nikal lo
+
         last_day_of_target_month = date(current_year, current_month, calendar.monthrange(current_year, current_month)[1])
 
+        # 🚀 N+1 KILLED (135 → 3 queries): 3 aggregates loop se PEHLE (API twin pattern)
+        primary_dict = {}
+        for row in PrimarySale.objects.filter(
+            stockist=selected_stockist, date__lte=last_day_of_target_month
+        ).values('product_id').annotate(
+            t_qty=Sum('quantity'), t_free=Sum('free_quantity')
+        ):
+            primary_dict[row['product_id']] = (row['t_qty'] or 0) + (row['t_free'] or 0)
+
+        past_sec_dict = {}
+        for row in PartyWiseSaleLine.objects.filter(
+            report__stockist=selected_stockist
+        ).filter(
+            Q(report__year__lt=current_year) | Q(report__year=current_year, report__month__lt=current_month)
+        ).values('product_id').annotate(tb=Sum('billed_qty'), tf=Sum('free_qty')):
+            past_sec_dict[row['product_id']] = (row['tb'] or 0) + (row['tf'] or 0)
+
+        curr_sec_dict = {}
+        for row in PartyWiseSaleLine.objects.filter(
+            report__stockist=selected_stockist,
+            report__month=current_month, report__year=current_year
+        ).values('product_id').annotate(tb=Sum('billed_qty'), tf=Sum('free_qty')):
+            curr_sec_dict[row['product_id']] = (row['tb'] or 0) + (row['tf'] or 0)
+
+        # 🚀 Loop mein ab ZERO queries — sirf dict lookups
         for prod in Product.objects.filter(company=selected_emp.company):
-            # 1. Company se received Total Primary Sale (Sirf target mahine ke end tak)
-            primary_agg = PrimarySale.objects.filter(
-                stockist=selected_stockist, 
-                product=prod,
-                date__lte=last_day_of_target_month
-            ).aggregate(tot_qty=Sum('quantity'), tot_free=Sum('free_quantity'))
-            total_lifetime_primary = (primary_agg['tot_qty'] or 0) + (primary_agg['tot_free'] or 0)
-            
-            # 2. Pichle saare mahinon mein jo Secondary Sale ho chuki hai
-            past_party_agg = PartyWiseSaleLine.objects.filter(
-                report__stockist=selected_stockist, 
-                product=prod
-            ).filter(
-                Q(report__year__lt=current_year) | Q(report__year=current_year, report__month__lt=current_month)
-            ).aggregate(tb=Sum('billed_qty'), tf=Sum('free_qty'))
-            total_past_secondary = (past_party_agg['tb'] or 0) + (past_party_agg['tf'] or 0)
-            
-            # 3. EXACT STOCK: Jo is mahine MR bill kar sakta hai (Total stock minus purani sale)
+            total_lifetime_primary = primary_dict.get(prod.id, 0)
+            total_past_secondary = past_sec_dict.get(prod.id, 0)
             stock_available_for_this_month = total_lifetime_primary - total_past_secondary
-            
-            # 4. Is current entry mein MR ne ab tak kitna bill kar diya hai
-            current_party_agg = PartyWiseSaleLine.objects.filter(
-                report__stockist=selected_stockist, 
-                product=prod,
-                report__month=current_month,
-                report__year=current_year
-            ).aggregate(tb=Sum('billed_qty'), tf=Sum('free_qty'))
-            billed_this_month = (current_party_agg['tb'] or 0) + (current_party_agg['tf'] or 0)
-            
-            # 5. Remaining Balance
+            billed_this_month = curr_sec_dict.get(prod.id, 0)
             current_balance = stock_available_for_this_month - billed_this_month
-            
-            # Agar stock zero hai toh line gayab kar do, taaki table clean rahe
+
             if stock_available_for_this_month > 0 or billed_this_month > 0:
                 balances.append({
-                    'product_id': prod.id, 
-                    'product_name': prod.name, 
-                    'total_sale': stock_available_for_this_month, 
-                    'billed': billed_this_month, 
+                    'product_id': prod.id,
+                    'product_name': prod.name,
+                    'total_sale': stock_available_for_this_month,
+                    'billed': billed_this_month,
                     'balance': current_balance
                 })
 
@@ -456,7 +466,7 @@ def classify_rx_entry_view(request, employee):
     selected_emp_id = request.GET.get('employee_id') or request.POST.get('employee_id')
     if not selected_emp_id: selected_emp_id = str(employee.id)
         
-    selected_emp = get_object_or_404(Employee, id=selected_emp_id)
+    selected_emp = get_object_or_404(Employee, id=selected_emp_id, company=employee.company)
     
     # 🌟 NAYA RULE 1: Hamesha Pichla Mahina hi khulega
     today = timezone.now().date()
@@ -482,7 +492,7 @@ def classify_rx_entry_view(request, employee):
     if not stockist_id: 
         messages.error(request, f"No Stockist is mapped in {selected_emp.name}'s territory!")
     else:
-        stockist = get_object_or_404(Stockist, id=stockist_id)
+        stockist = get_object_or_404(Stockist, id=stockist_id, company=employee.company)        # 🛡️
         report = PartyWiseSaleReport.objects.filter(stockist=stockist, month=month, year=year, employee=selected_emp).first()
         
         if report:
@@ -502,7 +512,11 @@ def classify_rx_entry_view(request, employee):
             messages.error(request, f"⚠️ Edit Locked! Classify Rx entries are only allowed until the {deadline} of each month. Please contact Admin.")
             return redirect(f"{request.path}?stockist_id={stockist_id}&employee_id={selected_emp.id}")
 
-        target_line = PartyWiseSaleLine.objects.get(id=request.POST.get('line_id'))
+        target_line = get_object_or_404(
+            PartyWiseSaleLine, id=request.POST.get('line_id'),
+            report__employee=selected_emp, report__stockist=stockist,
+            report__month=month, report__year=year
+        )
         m_billed = int(request.POST.get('mapped_billed', 0) or 0)
         m_free = int(request.POST.get('mapped_free', 0) or 0)
         
@@ -512,7 +526,12 @@ def classify_rx_entry_view(request, employee):
         if m_billed > (target_line.billed_qty - current_mapped_billed) or m_free > (target_line.free_qty - current_mapped_free): 
             messages.error(request, "Error! Allocation qty cannot be more than the Balance.")
         elif m_billed > 0 or m_free > 0: 
-            DoctorRxMapping.objects.create(party_line=target_line, doctor_id=request.POST.get('doctor_id'), mapped_billed_qty=m_billed, mapped_free_qty=m_free)
+            doc = Doctor.objects.filter(id=request.POST.get('doctor_id'), company=employee.company).first()
+            if doc:
+                DoctorRxMapping.objects.create(party_line=target_line, doctor=doc, mapped_billed_qty=m_billed, mapped_free_qty=m_free)
+                messages.success(request, f"Rx Classified for {selected_emp.name}!")
+            else:
+                messages.error(request, "Invalid doctor selection.")            
             messages.success(request, f"Rx Classified for {selected_emp.name}!")
             
         return redirect(f"{request.path}?stockist_id={stockist_id}&month={month}&year={year}&employee_id={selected_emp.id}")
@@ -539,7 +558,7 @@ def party_rx_report_view(request, employee):
             default_emp_id = str(first_sub.id)
             
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)   # 🛡️
     
     today = timezone.now().date()
     from_month = int(request.GET.get('from_month') or today.month)
@@ -775,7 +794,7 @@ def dr_wise_sale_report_view(request, employee):
             default_emp_id = str(first_sub.id)
             
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)   # 🛡️
     
     today = timezone.now().date()
     from_month = int(request.GET.get('from_month') or today.month)
@@ -962,7 +981,10 @@ def target_setting_view(request, employee):
         
         if action in ['Save_Draft', 'Submit_Manager']:
             for p in products:
-                t_qty = int(request.POST.get(f'target_{p.id}', 0) or 0)
+                try:
+                    t_qty = int(float(request.POST.get(f'target_{p.id}', 0) or 0))
+                except (TypeError, ValueError):
+                    t_qty = 0                
                 if t_qty > 0: 
                     # 🌟 FIX: employee=employee ko territory=employee.headquarter kiya
                     TerritoryTarget.objects.update_or_create(
@@ -1017,7 +1039,8 @@ def target_setting_view(request, employee):
 # ==============================================================================
 @employee_required
 def review_target_view(request, employee, target_id):
-    master = get_object_or_404(MonthlyTargetMaster, id=target_id)
+    # 🛡️ IDOR FIX: sirf apni company ka target
+    master = get_object_or_404(MonthlyTargetMaster, id=target_id, territory__company=employee.company)
     
     # 🌟 FIX 1: master.employee ab nahi raha, isliye territory se current active MR nikalna padega
     target_emp = Employee.objects.filter(company=employee.company, headquarter=master.territory, is_active=True).first()
@@ -1029,7 +1052,10 @@ def review_target_view(request, employee, target_id):
         action = request.POST.get('action')
         if action in ['Approve', 'Reject', 'Save_Only']:
             for p in products:
-                t_qty = int(request.POST.get(f'target_{p.id}', 0) or 0)
+                try:
+                    t_qty = int(float(request.POST.get(f'target_{p.id}', 0) or 0))
+                except (TypeError, ValueError):
+                    t_qty = 0                
                 if t_qty > 0: 
                     # 🌟 FIX 2: employee=target_emp ki jagah territory=master.territory aayega
                     TerritoryTarget.objects.update_or_create(
@@ -1109,7 +1135,7 @@ def sales_summary_report_view(request, employee):
             default_emp_id = str(first_sub.id)
             
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)   # 🛡️
     
     today = timezone.now().date()
     from_month = int(request.GET.get('from_month') or today.month)
