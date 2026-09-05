@@ -44,7 +44,9 @@ class TenantIsolationMixin:
                 return qs.filter(doctor__company=admin_company)
             elif hasattr(self.model, 'visit'): # 🌟 NAYA: VAScreenTime ke liye
                 return qs.filter(visit__daily_dcr__employee__company=admin_company)
-        except Exception:
+        except Exception as e:
+            print(f"⚠️ TENANT DEBUG: {e} | user={request.user.username}")   # 🌟 DEBUG
+            return qs.none()        
             return qs.none() # Error aane par list khali dikhegi
         return qs
 
