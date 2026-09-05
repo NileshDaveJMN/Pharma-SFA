@@ -35,7 +35,7 @@ def free_claim_view(request, employee):
             default_emp_id = str(first_sub.id)
 
     selected_emp_id = request.GET.get('employee_id') or request.POST.get('employee_id') or default_emp_id
-    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)
 
     selected_month = int(request.GET.get('month') or timezone.localdate().month)
     selected_year = int(request.GET.get('year') or timezone.localdate().year)
@@ -107,15 +107,23 @@ def free_claim_view(request, employee):
                         master.status = 'Draft'
                         master.save()
 
+                    # 🚀 N+1 FIXED: products EK query + bulk_create (API twin)
+                    prod_ids = [s['product_id'] for s in sales]
+                    prod_map = {p.id: p for p in Product.objects.filter(id__in=prod_ids, company=employee.company)}
+
+                    line_objs = []
                     for s in sales:
-                        prod = Product.objects.get(id=s['product_id'])
+                        prod = prod_map.get(s['product_id'])
+                        if not prod:
+                            continue
                         price = float(prod.price) if getattr(prod, 'price', None) else 0.0
                         val = s['tot_free'] * price
-
-                        FreeQtyClaimLine.objects.create(
+                        line_objs.append(FreeQtyClaimLine(
                             master=master, stockist=selected_stockist, product=prod,
                             total_billed_qty=s['tot_billed'], total_free_qty=s['tot_free'], claim_value=val
-                        )
+                        ))
+                    if line_objs:
+                        FreeQtyClaimLine.objects.bulk_create(line_objs)
                     messages.success(request, f"🎉 Free Claim Report for {selected_stockist.name} has been synced successfully!")
 
         elif action == 'submit':
@@ -163,7 +171,7 @@ def free_claim_view_readonly(request, employee):
             default_emp_id = str(first_sub.id)
 
     selected_emp_id = request.GET.get('employee_id') or default_emp_id
-    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)
 
     selected_month = int(request.GET.get('month') or timezone.localdate().month)
     selected_year = int(request.GET.get('year') or timezone.localdate().year)
@@ -219,7 +227,7 @@ def approve_free_claims_view(request, employee):
         claim_id = request.POST.get('claim_id')
         action = request.POST.get('action')
         remark = request.POST.get('remark', '')
-        claim = get_object_or_404(FreeQtyClaimMaster, id=claim_id)
+        claim = get_object_or_404(FreeQtyClaimMaster, id=claim_id, employee__company=employee.company)   # 🛡️
 
         if action == 'approve':
             if employee.designation == 'Admin':
@@ -286,15 +294,26 @@ def mr_inventory_view(request, employee):
         if first_sub: default_emp_id = str(first_sub.id)
 
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)
 
     in_transit_items = PromoDispatch.objects.filter(employee=selected_emp, status='In-Transit').order_by('-dispatch_date')
     my_stock_qs = MRInventory.objects.filter(employee=selected_emp).select_related('item').order_by('item__item_type', 'item__name')
 
     sample_gift_data = []
     hv_stock_data = []
+    # 🚀 N+1 KILLED: dispatch totals + ledger EK-2 queries mein (API twin)
+    recv_map = {}
+    for item_id, qty in PromoDispatch.objects.filter(employee=selected_emp, status='Received').values_list('item_id', 'quantity'):
+        recv_map[item_id] = recv_map.get(item_id, 0) + qty
+
+    ledger_map = {}   # (doctor_id, item_id) → latest ledger entry
+    for led in DoctorROILedger.objects.filter(employee=selected_emp).select_related('doctor', 'item').order_by('date_given'):
+        ledger_map[(led.doctor_id, led.item_id)] = led   # last wali jeetegi (order ascending)
+
+    sample_gift_data = []
+    hv_stock_data = []
     for stock in my_stock_qs:
-        total_rec = PromoDispatch.objects.filter(employee=selected_emp, item=stock.item, status='Received').aggregate(total=Sum('quantity'))['total'] or 0
+        total_rec = recv_map.get(stock.item_id, 0)      # 🚀 dict lookup
         distributed = total_rec - stock.stock_qty
         if distributed < 0: distributed = 0
         if total_rec > 0 or stock.stock_qty > 0 or distributed > 0:
@@ -307,9 +326,10 @@ def mr_inventory_view(request, employee):
     hv_plans = GiftCampaignPlan.objects.filter(employee=selected_emp, item__item_type='HighValue').select_related('doctor', 'item').order_by('-year', '-month')
     hv_tracker = []
     for plan in hv_plans:
-        ledger_entry = DoctorROILedger.objects.filter(employee=selected_emp, doctor=plan.doctor, item=plan.item).order_by('-date_given').first()
+        ledger_entry = ledger_map.get((plan.doctor_id, plan.item_id))   # 🚀 dict lookup
         dist_date = ledger_entry.date_given if ledger_entry else None
         dist_qty = ledger_entry.quantity if ledger_entry else 0
+        
         
         if dist_qty >= 1: status_badge = 'Delivered'
         elif plan.status == 'Approved': status_badge = 'Pending Delivery'
@@ -408,8 +428,14 @@ def gift_distribution_report(request, employee):
     selected_emp_id = request.GET.get('employee_id', '')
     inv_type = request.GET.get('inv_type', 'any_gift')
 
-    if is_manager_view and selected_emp_id: 
-        qs = DoctorROILedger.objects.filter(employee_id=selected_emp_id)
+    if is_manager_view and selected_emp_id:
+        # 🛡️ IDOR FIX: selected employee apni team ka ho
+        sel = Employee.objects.filter(id=selected_emp_id, company=employee.company).first()
+        if sel and not team_employees.filter(id=sel.id).exists():
+            qs = DoctorROILedger.objects.none(); plan_qs = GiftCampaignPlan.objects.none()
+        else:
+            qs = DoctorROILedger.objects.filter(employee_id=selected_emp_id)
+            plan_qs = GiftCampaignPlan.objects.filter(employee_id=selected_emp_id)
         plan_qs = GiftCampaignPlan.objects.filter(employee_id=selected_emp_id)
     elif is_manager_view: 
         qs = DoctorROILedger.objects.filter(employee__in=team_employees)
@@ -538,8 +564,14 @@ def doctor_roi_report(request):
     selected_emp_id = request.GET.get('employee_id', '')
     inv_type = request.GET.get('inv_type', 'any_gift')
 
-    if is_manager_view and selected_emp_id: 
-        qs = DoctorROILedger.objects.filter(employee_id=selected_emp_id)
+    if is_manager_view and selected_emp_id:
+        # 🛡️ IDOR FIX: selected employee apni team ka ho
+        sel = Employee.objects.filter(id=selected_emp_id, company=employee.company).first()
+        if sel and not team_employees.filter(id=sel.id).exists():
+            qs = DoctorROILedger.objects.none(); plan_qs = GiftCampaignPlan.objects.none()
+        else:
+            qs = DoctorROILedger.objects.filter(employee_id=selected_emp_id)
+            plan_qs = GiftCampaignPlan.objects.filter(employee_id=selected_emp_id)
         base_docs = Doctor.objects.filter(allocated_to_id=selected_emp_id)
     elif is_manager_view: 
         qs = DoctorROILedger.objects.filter(employee__in=team_employees)
