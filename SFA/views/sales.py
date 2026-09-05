@@ -1326,3 +1326,154 @@ def sales_summary_report_view(request, employee):
         'months_choices': [(i, calendar.month_name[i]) for i in range(1, 13)], 'months_headers': months_headers,
         'report_data': report_data, 'gt': gt, 'is_manager_view': employee.designation != 'MR'
     })
+    
+@employee_required
+def product_sales_report_view(request, employee):
+    team_employees = get_dropdown_team(employee, ordered=False)
+    default_emp_id = str(employee.id)
+    if employee.designation != 'MR':
+        first_sub = team_employees.exclude(id=employee.id).first()
+        if first_sub:
+            default_emp_id = str(first_sub.id)
+            
+    selected_emp_id = request.GET.get('employee_id', default_emp_id)
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)
+    
+    today = timezone.localdate()
+    from_month = int(request.GET.get('from_month') or today.month)
+    to_month = int(request.GET.get('to_month') or today.month)
+    selected_year = int(request.GET.get('year') or today.year)
+
+    if from_month > to_month:
+        from_month, to_month = to_month, from_month
+
+    months_range = list(range(from_month, to_month + 1))
+    months_headers = [(m, calendar.month_name[m][:3]) for m in months_range]
+
+    product_entries = DCRProductDetail.objects.filter(
+        visit__daily_dcr__employee=selected_emp, visit__daily_dcr__date__month__gte=from_month,
+        visit__daily_dcr__date__month__lte=to_month, visit__daily_dcr__date__year=selected_year
+    ).select_related('product', 'visit__daily_dcr')
+
+    products_dict = {p.id: {'name': p.name, 'price': float(p.price) if getattr(p, 'price', None) else 0.0} for p in Product.objects.filter(company=selected_emp.company)}
+    
+    agg_data = defaultdict(lambda: {'monthly': {m: {'samples': 0, 'orders': 0, 'val': 0.0} for m in months_range}, 'tot_samples': 0, 'tot_orders': 0, 'tot_val': 0.0})
+    gt_monthly = {m: {'samples': 0, 'orders': 0, 'val': 0.0} for m in months_range}
+    gt_samples, gt_orders, gt_val = 0, 0, 0.0
+
+    for entry in product_entries:
+        p_id, m = entry.product_id, entry.visit.daily_dcr.date.month
+        sq, oq = entry.sample_qty or 0, entry.order_qty or 0
+        if p_id not in products_dict: continue
+        price = products_dict[p_id]['price']
+        val = oq * price
+        
+        agg_data[p_id]['monthly'][m]['samples'] += sq; agg_data[p_id]['monthly'][m]['orders'] += oq; agg_data[p_id]['monthly'][m]['val'] += val
+        agg_data[p_id]['tot_samples'] += sq; agg_data[p_id]['tot_orders'] += oq; agg_data[p_id]['tot_val'] += val
+        
+        gt_monthly[m]['samples'] += sq; gt_monthly[m]['orders'] += oq; gt_monthly[m]['val'] += val
+        gt_samples += sq; gt_orders += oq; gt_val += val
+
+    report_data = []
+    for p_id, p_info in products_dict.items():
+        if p_id in agg_data and (agg_data[p_id]['tot_samples'] > 0 or agg_data[p_id]['tot_orders'] > 0):
+            p_data = agg_data[p_id]
+            report_data.append({'product_name': p_info['name'], 'price': p_info['price'], 'monthly_list': [p_data['monthly'][m] for m in months_range], 'tot_samples': p_data['tot_samples'], 'tot_orders': p_data['tot_orders'], 'tot_val': p_data['tot_val']})
+            
+    report_data.sort(key=lambda x: x['product_name'])
+    gt_monthly_list = [gt_monthly[m] for m in months_range]
+
+    if request.GET.get('export') == 'excel':
+        filename = f"POB_Report_{selected_emp.name}_M{from_month}-M{to_month}_{selected_year}.xlsx"
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "POB Report"
+        
+        period_str = f"{calendar.month_name[from_month][:3]} to {calendar.month_name[to_month][:3]} {selected_year}"
+        ws.append(['PRODUCT POB & SAMPLES REPORT (MONTH TREND)'])
+        ws.append(['Employee:', selected_emp.name, 'Period:', period_str])
+        ws.append([''])
+        ws['A1'].font = Font(bold=True, size=14, color="107C41")
+        ws['A2'].font = Font(bold=True); ws['C2'].font = Font(bold=True)
+        
+        header_fill = PatternFill(start_color="107C41", end_color="107C41", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True)
+        center_align = Alignment(horizontal="center", vertical="center")
+        
+        headers = ['Product Name', 'Price (₹)']
+        for m_num, m_name in months_headers: headers.extend([f'{m_name} Samples', f'{m_name} POB', f'{m_name} Value (₹)'])
+        headers.extend(['Total Samples', 'Total POB', 'Total Value (₹)'])
+        ws.append(headers)
+        
+        for col_num, cell in enumerate(ws[5], 1):
+            cell.fill = header_fill; cell.font = header_font; cell.alignment = center_align
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col_num)].width = 20 if col_num == 1 else 15
+            
+        for row in report_data:
+            row_data = [row['product_name'], round(row['price'], 2)]
+            for m_data in row['monthly_list']: row_data.extend([m_data['samples'], m_data['orders'], round(m_data['val'], 2)])
+            row_data.extend([row['tot_samples'], row['tot_orders'], round(row['tot_val'], 2)])
+            ws.append(row_data)
+            
+        ws.append([''])
+        gt_row = ['GRAND TOTAL', '']
+        for m_gt in gt_monthly_list: gt_row.extend([m_gt['samples'], m_gt['orders'], round(m_gt['val'], 2)])
+        gt_row.extend([gt_samples, gt_orders, round(gt_val, 2)])
+        
+        ws.append(gt_row)
+        for cell in ws[ws.max_row]: cell.font = Font(bold=True)
+            
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        response = HttpResponse(output.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    return render(request, 'pob_report.html', {
+        'team_employees': team_employees, 'selected_emp_id': int(selected_emp_id),
+        'from_month': from_month, 'to_month': to_month, 'selected_year': selected_year,
+        'months_choices': [(i, calendar.month_name[i]) for i in range(1, 13)], 'months_headers': months_headers,
+        'report_data': report_data, 'gt_monthly_list': gt_monthly_list, 'gt_samples': gt_samples, 'gt_orders': gt_orders, 'gt_val': gt_val,
+        'is_manager_view': employee.designation != 'MR'
+    })
+@employee_required
+def product_master_view(request, employee):
+    products = Product.objects.filter(company=employee.company).order_by('name')
+
+    if request.GET.get('export') == 'excel':
+        filename = "Product_Master_List.xlsx"
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Product List"
+        ws.append(['PRODUCT MASTER REPORT'])
+        ws.append(['Generated By:', employee.name])
+        ws.append([''])
+        ws['A1'].font = Font(bold=True, size=14, color="107C41")
+        ws['A2'].font = Font(bold=True)
+
+        header_fill = PatternFill(start_color="107C41", end_color="107C41", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True)
+        center_align = Alignment(horizontal="center", vertical="center")
+
+        headers = ['Sr No.', 'Product Name', 'Pack Size', 'MRP (₹)', 'PTR (₹)', 'PTS (₹)', 'GST Slab (%)']
+        ws.append(headers)
+        for col_num, cell in enumerate(ws[4], 1):
+            cell.fill = header_fill; cell.font = header_font; cell.alignment = center_align
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col_num)].width = 25 if col_num == 2 else 15
+
+        for idx, p in enumerate(products, 1):
+            mrp_val = float(p.mrp) if getattr(p, 'mrp', None) else 0.0
+            ptr_val = float(p.ptr) if getattr(p, 'ptr', None) else 0.0
+            pts_val = float(p.pts) if getattr(p, 'pts', None) else 0.0
+            gst_val = p.gst_slab if getattr(p, 'gst_slab', None) is not None else 0
+            ws.append([idx, p.name, p.pack_size, mrp_val, ptr_val, pts_val, gst_val])
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        response = HttpResponse(output.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    return render(request, 'product_master.html', {'products': products})    
