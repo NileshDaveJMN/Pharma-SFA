@@ -33,7 +33,7 @@ def analysis_hub_view(request, employee):
         if first_sub: default_emp_id = str(first_sub.id)
 
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)
 
     today = timezone.localdate()
     from_month = int(request.GET.get('from_month') or today.month)
@@ -283,7 +283,7 @@ def sales_summary_report_view(request, employee):
             default_emp_id = str(first_sub.id)
             
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)
     
     today = timezone.now().date()
     from_month = int(request.GET.get('from_month') or today.month)
@@ -500,7 +500,10 @@ def target_setting_view(request, employee):
         
         if action in ['Save_Draft', 'Submit_Manager']:
             for p in products:
-                t_qty = int(request.POST.get(f'target_{p.id}', 0) or 0)
+                try:
+                    t_qty = int(float(request.POST.get(f'target_{p.id}', 0) or 0))
+                except (TypeError, ValueError):
+                    t_qty = 0
                 if t_qty > 0: 
                     TerritoryTarget.objects.update_or_create(
                         territory=employee.headquarter, 
@@ -553,16 +556,26 @@ def target_setting_view(request, employee):
 # ==============================================================================
 @employee_required
 def review_target_view(request, employee, target_id):
-    master = get_object_or_404(MonthlyTargetMaster, id=target_id)
+    master = get_object_or_404(MonthlyTargetMaster, id=target_id, territory__company=employee.company)
     
-    target_emp = Employee.objects.filter(company=employee.company, headquarter=master.territory, is_active=True).first()
+    target_emp = None
+    for desig in ['MR', 'ABM', 'RBM', 'ZBM', 'NSM']:
+        target_emp = Employee.objects.filter(
+            company=employee.company, headquarter=master.territory,
+            is_active=True, designation=desig
+        ).first()
+        if target_emp:
+            break
     products = Product.objects.filter(company=employee.company)
 
     if request.method == "POST":
         action = request.POST.get('action')
         if action in ['Approve', 'Reject', 'Save_Only']:
             for p in products:
-                t_qty = int(request.POST.get(f'target_{p.id}', 0) or 0)
+                try:
+                    t_qty = int(float(request.POST.get(f'target_{p.id}', 0) or 0))
+                except (TypeError, ValueError):
+                    t_qty = 0
                 if t_qty > 0: 
                     TerritoryTarget.objects.update_or_create(
                         territory=master.territory, 
@@ -640,7 +653,7 @@ def dr_visit_history_view(request, employee):
         if first_sub: default_emp_id = str(first_sub.id)
             
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=selected_emp_id)
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)
     
     today = timezone.localdate()
     from_month = int(request.GET.get('from_month', 1))

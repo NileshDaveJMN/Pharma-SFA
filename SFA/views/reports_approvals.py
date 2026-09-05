@@ -17,14 +17,19 @@ from SFA.decorators import employee_required
 # ==============================================================================
 def _get_target_chain_starter(target):
     """
-    Target territory ka 'chain starter' = us HQ ka SABSE NEECHE wala
-    active employee (MR preferred) — kyunki .first() ABM/bade log bhi
-    de sakta hai jab ABM ka HQ MR ke same ho (classic pharma setup),
-    jisse approval chain ABM ko skip kar ke upar chali jaati thi.
+    Target territory ka 'chain starter' = us HQ ka SABSE NEECHE (junior-most)
+    active employee. MR → ABM → RBM → ZBM → NSM — jo pehle mil jaye.
+    
+    Kyunki: starter ke MANAGER-CHAIN se hi approval path banti hai
+    (ABM → RBM → ZBM → ... → Admin), isliye junior-most = sabse sahi starter.
+    
+    Pehle .first() tha jo SAME-HQ wale senior ko utha leta tha (jaise
+    Ahmedabad pe ZBM bhi hai) — jisse senior ke UPAR ki chain banti thi
+    aur neeche wale levels approve hi nahi kar paate the.
     """
     if not target.territory_id:
         return None
-    for desig in ['MR', 'ABM', 'RBM']:
+    for desig in ['MR', 'ABM', 'RBM', 'ZBM', 'NSM']:
         emp = Employee.objects.filter(
             headquarter_id=target.territory_id,
             is_active=True,
@@ -32,7 +37,9 @@ def _get_target_chain_starter(target):
         ).first()
         if emp:
             return emp
-    return None
+    return Employee.objects.filter(
+        headquarter_id=target.territory_id, is_active=True
+    ).first()
 @employee_required
 def manager_approval_hub(request, employee):
     manager = employee
