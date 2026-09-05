@@ -16,10 +16,23 @@ from SFA.decorators import employee_required
 # 1. 🛡️ MANAGER APPROVAL HUB (Main Dashboard)
 # ==============================================================================
 def _get_target_chain_starter(target):
+    """
+    Target territory ka 'chain starter' = us HQ ka SABSE NEECHE wala
+    active employee (MR preferred) — kyunki .first() ABM/bade log bhi
+    de sakta hai jab ABM ka HQ MR ke same ho (classic pharma setup),
+    jisse approval chain ABM ko skip kar ke upar chali jaati thi.
+    """
     if not target.territory_id:
         return None
-    return Employee.objects.filter(headquarter_id=target.territory_id, is_active=True).first()
-
+    for desig in ['MR', 'ABM', 'RBM']:
+        emp = Employee.objects.filter(
+            headquarter_id=target.territory_id,
+            is_active=True,
+            designation=desig
+        ).first()
+        if emp:
+            return emp
+    return None
 @employee_required
 def manager_approval_hub(request, employee):
     manager = employee
