@@ -17,7 +17,7 @@ from SFA.models import (
     Employee, Stockist, Chemist, Doctor, Product, PrimarySale,
     StockistProductStatement, MonthlyTargetMaster, PartyWiseSaleReport, 
     TerritoryTarget, PartyWiseSaleLine, DoctorRxMapping, Territory, 
-    PromoDispatch, MRInventory
+    PromoDispatch, MRInventory,  DCRProductDetail
 )
 from .auth import get_full_team_employees, get_dropdown_team, get_team_hq_territory_ids
 from SFA.decorators import employee_required
