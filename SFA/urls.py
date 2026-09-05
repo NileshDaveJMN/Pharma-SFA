@@ -27,13 +27,14 @@ from SFA.views.reports_ops import (
 )
 
 # 2. Primary & Secondary Business (Sales)
-from SFA.views.reports_sales import (
+from SFA.views.sales import (
     smart_secondary_report_view, primary_sales_report_view, 
     party_wise_sale_entry_view, classify_rx_entry_view, 
-    party_rx_report_view, dr_wise_sale_report_view, 
+    party_rx_report_view, dr_wise_sale_report_view,
+)
+from SFA.views.reports_sales import (
     product_sales_report_view, product_master_view
 )
-
 # 3. Promotions & Free Claims
 from SFA.views.reports_promo import (
     free_claim_view, free_claim_view_readonly, approve_free_claims_view, 
