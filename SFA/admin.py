@@ -468,7 +468,7 @@ class EventPhotoInline(admin.TabularInline):
     photo_preview.short_description = "Preview"
 
 @admin.register(FieldEvent)
-class FieldEventAdmin(admin.ModelAdmin):
+class FieldEventAdmin(TenantIsolationMixin, admin.ModelAdmin):     # 🛡️ ADD
     list_display = ('subject', 'employee', 'category', 'event_date', 'is_shared_in_community')
     list_filter = ('category', 'is_shared_in_community', 'event_date', 'territory')
     search_fields = ('subject', 'employee__name', 'description')
@@ -480,8 +480,8 @@ class FieldEventAdmin(admin.ModelAdmin):
         super().delete_model(request, obj)
         self.message_user(
             request,
-            f"✅ Event delete ho gaya, saath me {photos} photo(s) [Cloudinary se bhi], "
-            f"{likes} like(s), {comments} comment(s) bhi delete ho gaye.",
+            f"✅ Event is deleted, along with {photos} photo(s) [from Cloudinary too], "
+            f"{likes} like(s), {comments} comment(s) also deleted",
             messages.SUCCESS
         )
 
@@ -499,19 +499,19 @@ class FieldEventAdmin(admin.ModelAdmin):
         )
 
 @admin.register(EventPhoto)
-class EventPhotoAdmin(admin.ModelAdmin):
+class EventPhotoAdmin(TenantIsolationMixin, admin.ModelAdmin):    # 🛡️
     list_display = ('event', 'photo', 'uploaded_at')
     search_fields = ('event__subject',)
     list_filter = ('uploaded_at',)
 
 @admin.register(EventLike)
-class EventLikeAdmin(admin.ModelAdmin):
+class EventLikeAdmin(TenantIsolationMixin, admin.ModelAdmin):     # 🛡️
     list_display = ('event', 'employee', 'created_at')
     search_fields = ('event__subject', 'employee__name')
     list_filter = ('created_at',)
 
 @admin.register(EventComment)
-class EventCommentAdmin(admin.ModelAdmin):
+class EventCommentAdmin(TenantIsolationMixin, admin.ModelAdmin):  # 🛡️
     list_display = ('event', 'employee', 'comment', 'created_at')
     search_fields = ('event__subject', 'employee__name', 'comment')
     list_filter = ('created_at',)
