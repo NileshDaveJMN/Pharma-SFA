@@ -217,11 +217,13 @@ def api_approval_hub(request):
                     'territory': t.territory.name if t.territory_id else None,
                     'month': t.month, 'year': t.year, 'status': t.status,
                     'lines': [
-                        {
-                            'id': tt.id, 
-                            'product': tt.product.name,
-                            'target_qty': tt.target_qty
-                        } for tt in t.targets.all() # 🚀 OPTIMIZATION 2: Reverse relation query
+    {
+        'id': tt.id, 
+        'product': tt.product.name,
+        'target_qty': tt.target_qty
+    } for tt in TerritoryTarget.objects.filter(
+        territory=t.territory, month=t.month, year=t.year
+    ).select_related('product') # 🚀 OPTIMIZATION 2: Reverse relation query
                     ]
                 } for t in pending_targets
             ],
