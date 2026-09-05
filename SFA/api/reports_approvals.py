@@ -30,7 +30,7 @@ from SFA.services.team import (
     get_team_requested_routes,
     get_dropdown_team,
 )
-from SFA.views.reports import _get_target_chain_starter
+from SFA.views.reports_approvals import _get_target_chain_starter
 
 
 def _chain_approved_for_target(target, manager):
