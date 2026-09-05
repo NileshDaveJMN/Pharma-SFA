@@ -221,7 +221,7 @@ def api_approval_hub(request):
                             'id': tt.id, 
                             'product': tt.product.name,
                             'target_qty': tt.target_qty
-                        } for tt in t.territorytarget_set.all() # 🚀 OPTIMIZATION 2: Reverse relation query
+                        } for tt in t.targets.all() # 🚀 OPTIMIZATION 2: Reverse relation query
                     ]
                 } for t in pending_targets
             ],
