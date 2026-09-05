@@ -44,9 +44,7 @@ class TenantIsolationMixin:
                 return qs.filter(doctor__company=admin_company)
             elif hasattr(self.model, 'visit'): # 🌟 NAYA: VAScreenTime ke liye
                 return qs.filter(visit__daily_dcr__employee__company=admin_company)
-        except Exception as e:
-            print(f"⚠️ TENANT DEBUG: {e} | user={request.user.username}")   # 🌟 DEBUG
-            return qs.none()        
+        except Exception:
             return qs.none() # Error aane par list khali dikhegi
         return qs
 
@@ -76,6 +74,51 @@ class TenantIsolationMixin:
             except Exception:
                 pass
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+# ==============================================================================
+# 🛡️ 🌟 NAYA: SCOPED LIST FILTERS (list_filter mein bhi sirf apni company)
+# Django ka normal list_filter GLOBAL options dikhata tha — ye scoped hai!
+# ==============================================================================
+class ScopedCompanyFilter(admin.SimpleListFilter):
+    """Company list_filter — Company Admin ko sirf apni company dikhegi."""
+    title = 'Company'
+    parameter_name = 'company'
+
+    def lookups(self, request, model_admin):
+        if request.user.is_superuser:
+            return [(c.id, c.name) for c in Company.objects.all()]
+        try:
+            c = request.user.employee.company
+            return [(c.id, c.name)]
+        except Exception:
+            return []
+
+    def queryset(self, request, queryset):
+        val = self.value()
+        if val:
+            return queryset.filter(company_id=val)
+        return queryset
+
+
+class ScopedTerritoryFilter(admin.SimpleListFilter):
+    """Territory list_filter — Company Admin ko sirf apni company ke territories."""
+    title = 'Territory'
+    parameter_name = 'territory'
+
+    def lookups(self, request, model_admin):
+        if request.user.is_superuser:
+            return [(t.id, t.name) for t in Territory.objects.all()]
+        try:
+            return [(t.id, t.name) for t in Territory.objects.filter(company=request.user.employee.company)]
+        except Exception:
+            return []
+
+    def queryset(self, request, queryset):
+        val = self.value()
+        if val:
+            return queryset.filter(territory_id=val)
+        return queryset
 
 
 # ── Reusable Company Assignment Mixin ────────────────────────────────────────
@@ -149,7 +192,7 @@ class DoctorROILedgerAdmin(TenantIsolationMixin, admin.ModelAdmin):
 @admin.register(Route)
 class RouteAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
     list_display = ('name', 'territory', 'category', 'distance_from_hq', 'status')
-    list_filter = ('territory', 'category', 'status')
+    list_filter = (ScopedTerritoryFilter, 'category', 'status')
     list_editable = ('category', 'distance_from_hq', 'status')
     search_fields = ('name',)
     ordering = ('territory', 'category', 'name')
@@ -164,7 +207,7 @@ class TerritoryAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin)
 @admin.register(Employee)
 class EmployeeAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('id', 'name', 'employee_code', 'designation', 'is_active', 'manager', 'headquarter', 'joining_date')
-    list_filter = ('is_active', 'designation', 'headquarter')
+    list_filter = ('is_active', 'designation', ScopedTerritoryFilter)
     search_fields = ('name', 'employee_code', 'user__username')
     list_editable = ('is_active',) 
     actions = ['deactivate_employees']
@@ -193,14 +236,14 @@ class StockistAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
 @admin.register(Chemist)
 class ChemistAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
     list_display = ('name', 'company', 'territory', 'route', 'allocated_to', 'status')
-    list_filter = ('company', 'territory', 'route', 'status')
+    list_filter = (ScopedCompanyFilter, ScopedTerritoryFilter, 'route', 'status')   # 🛡️ SCOPED
     search_fields = ('name', 'phone')
     def get_queryset(self, request): return super().get_queryset(request).select_related('company', 'territory', 'route', 'allocated_to')
 
 @admin.register(Doctor)
 class DoctorAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
     list_display = ('name', 'company', 'specialty', 'territory', 'route', 'allocated_to', 'status')
-    list_filter = ('company', 'territory', 'route', 'specialty', 'status')
+    list_filter = (ScopedCompanyFilter, ScopedTerritoryFilter, 'route', 'specialty', 'status')   # 🛡️ SCOPED
     search_fields = ('name', 'specialty')
     def get_queryset(self, request): return super().get_queryset(request).select_related('company', 'territory', 'route', 'allocated_to')
 
@@ -377,7 +420,7 @@ class LeaveApplicationAdmin(TenantIsolationMixin, admin.ModelAdmin):
 @admin.register(SystemSetting)
 class SystemSettingAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
     list_display = ('__str__', 'company', 'enable_offline_mode', 'dcr_lock_days', 'without_tourplan_dcr_block')
-    list_filter = ('company',)
+    list_filter = (ScopedCompanyFilter,)   # 🛡️ SCOPED
     fieldsets = (
         ('General & App Settings', {'fields': ('company', 'allow_location_capture', 'enable_offline_mode', 'strict_geofence_for_backdate', 'allow_mr_primary_sale')}),
         ('Deadlines (Numeric Rules)', {'fields': ('dcr_lock_days', 'mtp_approval_deadline_day', 'expense_submit_deadline_day', 'sale_upload_deadline_day', 'free_claim_deadline_day', 'target_approval_deadline_day')}),
@@ -436,14 +479,32 @@ class ChemistEditRequestAdmin(TenantIsolationMixin, admin.ModelAdmin):
     list_display = ('chemist', 'req_name', 'employee', 'status', 'created_at')
     
 # ==============================================================================
-# 🌟 DIGITAL VA & CLM ADMIN
+# 🌟 DIGITAL VA & CLM ADMIN (🛡️ FULLY SCOPED — company filter + product dropdown + auto-set)
 # ==============================================================================
 @admin.register(ProductVAMedia)
 class ProductVAMediaAdmin(TenantIsolationMixin, AssignCompanyMixin, admin.ModelAdmin):
     list_display = ('product', 'company', 'title', 'slide_order', 'is_active', 'created_at')
-    list_filter = ('company', 'is_active', 'product')
+    list_filter = (ScopedCompanyFilter, 'is_active', 'product')   # 🛡️ SCOPED
     search_fields = ('product__name', 'title')
     ordering = ('company', 'product', 'slide_order')
+
+    # 🛡️ EXTRA GUARD: Product dropdown par company-scoping double-confirm
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if not request.user.is_superuser and db_field.name == 'product':
+            try:
+                kwargs['queryset'] = Product.objects.filter(company=request.user.employee.company)
+            except Exception:
+                pass
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    # 🛡️ SAVE GUARD: company force-set — galat selection bhi ho to correct rahegi
+    def save_model(self, request, obj, form, change):
+        if not request.user.is_superuser:
+            try:
+                obj.company = request.user.employee.company   # 🌟 AUTO-SET
+            except Exception:
+                pass
+        super().save_model(request, obj, form, change)
 
 @admin.register(VAScreenTime)
 class VAScreenTimeAdmin(TenantIsolationMixin, admin.ModelAdmin):
@@ -453,7 +514,7 @@ class VAScreenTimeAdmin(TenantIsolationMixin, admin.ModelAdmin):
 
 
 # ==============================================================================
-# 🌟 ACTIVITY & COMMUNITY HUB ADMIN
+# 🌟 ACTIVITY & COMMUNITY HUB ADMIN (🛡️ Tenant isolation added)
 # ==============================================================================
 from .models import FieldEvent, EventPhoto, EventLike, EventComment
 
@@ -470,9 +531,9 @@ class EventPhotoInline(admin.TabularInline):
     photo_preview.short_description = "Preview"
 
 @admin.register(FieldEvent)
-class FieldEventAdmin(TenantIsolationMixin, admin.ModelAdmin):     # 🛡️ ADD
+class FieldEventAdmin(TenantIsolationMixin, admin.ModelAdmin):     # 🛡️
     list_display = ('subject', 'employee', 'category', 'event_date', 'is_shared_in_community')
-    list_filter = ('category', 'is_shared_in_community', 'event_date', 'territory')
+    list_filter = ('category', 'is_shared_in_community', 'event_date', ScopedTerritoryFilter)   # 🛡️ SCOPED
     search_fields = ('subject', 'employee__name', 'description')
     inlines = [EventPhotoInline] 
     list_editable = ('is_shared_in_community',) 
@@ -482,8 +543,8 @@ class FieldEventAdmin(TenantIsolationMixin, admin.ModelAdmin):     # 🛡️ ADD
         super().delete_model(request, obj)
         self.message_user(
             request,
-            f"✅ Event is deleted, along with {photos} photo(s) [from Cloudinary too], "
-            f"{likes} like(s), {comments} comment(s) also deleted",
+            f"✅ Event deleted, along with {photos} photo(s) [from Cloudinary too], "
+            f"{likes} like(s), {comments} comment(s) also removed.",
             messages.SUCCESS
         )
 
@@ -495,8 +556,8 @@ class FieldEventAdmin(TenantIsolationMixin, admin.ModelAdmin):     # 🛡️ ADD
         super().delete_queryset(request, queryset)
         self.message_user(
             request,
-            f"✅ {count} event(s) delete ho gaye, saath me {total_photos} photo(s) [Cloudinary se bhi], "
-            f"{total_likes} like(s), {total_comments} comment(s) bhi delete ho gaye.",
+            f"✅ {count} event(s) deleted, along with {total_photos} photo(s) [from Cloudinary too], "
+            f"{total_likes} like(s), {total_comments} comment(s) also removed.",
             messages.SUCCESS
         )
 
@@ -516,4 +577,4 @@ class EventLikeAdmin(TenantIsolationMixin, admin.ModelAdmin):     # 🛡️
 class EventCommentAdmin(TenantIsolationMixin, admin.ModelAdmin):  # 🛡️
     list_display = ('event', 'employee', 'comment', 'created_at')
     search_fields = ('event__subject', 'employee__name', 'comment')
-    list_filter = ('created_at',)
+    list_filter = ('created_at',)        
