@@ -33,7 +33,7 @@ def dcr_report_view(request, employee):
             default_emp_id = str(first_sub.id)
             
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=selected_emp_id)
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)
     
     today = timezone.localdate()
     selected_month = int(request.GET.get('month') or today.month)
@@ -99,7 +99,7 @@ def expense_report_view(request, employee):
         if first_sub: default_emp_id = str(first_sub.id)
             
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=selected_emp_id)
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)
 
     selected_month  = int(request.GET.get('month') or timezone.localdate().month)
     selected_year   = int(request.GET.get('year') or timezone.localdate().year)
@@ -218,11 +218,15 @@ def network_report_view(request, employee):
         if first_sub: default_emp_id = str(first_sub.id)
             
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=selected_emp_id)
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)
     
     sub_team = get_dropdown_team(selected_emp, ordered=False)
     my_terr_ids = get_team_territory_ids(sub_team)
-    routes = get_team_requested_routes(sub_team, my_terr_ids)
+    from django.db.models import Count, Q
+    routes = get_team_requested_routes(sub_team, my_terr_ids).select_related('territory').annotate(
+        doc_count=Count('doctor', filter=Q(doctor__status='Approved'), distinct=True),
+        chem_count=Count('chemist', filter=Q(chemist__status='Approved'), distinct=True),
+    )
 
     active_tab = request.GET.get('tab', 'doctor')
     route_id = request.GET.get('route', '')
@@ -315,18 +319,21 @@ def route_report_view(request, employee):
         if first_sub: default_emp_id = str(first_sub.id)
             
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id))
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)
     
     sub_team = get_dropdown_team(selected_emp, ordered=False)
     my_terr_ids = get_team_territory_ids(sub_team)
-    routes = get_team_requested_routes(sub_team, my_terr_ids)
+    from django.db.models import Count, Q
+    routes = get_team_requested_routes(sub_team, my_terr_ids).select_related('territory').annotate(
+        doc_count=Count('doctor', filter=Q(doctor__status='Approved'), distinct=True),
+        chem_count=Count('chemist', filter=Q(chemist__status='Approved'), distinct=True),
+    )
 
     report_data = []
     gt_docs = 0; gt_chems = 0
 
-    for r in routes:
-        doc_count = Doctor.objects.filter(route=r, status='Approved').count()
-        chem_count = Chemist.objects.filter(route=r, status='Approved').count()
+    for r in routes:   # 🚀 loop mein ZERO queries
+        doc_count, chem_count = r.doc_count, r.chem_count
         report_data.append({
             'route_name': r.name, 'territory': r.territory.name if r.territory else 'N/A',
             'category': r.get_category_display() if r.category else 'HQ', 'distance': float(r.distance_from_hq or 0),
@@ -390,7 +397,7 @@ def tour_plan_report_view(request, employee):
         if first_sub: default_emp_id = str(first_sub.id)
             
     selected_emp_id = request.GET.get('employee_id', default_emp_id)
-    selected_emp = get_object_or_404(Employee, id=selected_emp_id)
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)
     
     selected_month = int(request.GET.get('month') or timezone.localdate().month)
     selected_year = int(request.GET.get('year') or timezone.localdate().year)
@@ -428,7 +435,7 @@ def tour_plan_report_view(request, employee):
 @employee_required
 def holiday_list_view(request, employee):
     selected_emp_id = request.GET.get('employee_id', str(employee.id))
-    selected_emp = get_object_or_404(Employee, id=selected_emp_id)
+    selected_emp = get_object_or_404(Employee, id=int(selected_emp_id), company=employee.company)
     
     rbm_emp = None
     curr = selected_emp
@@ -487,7 +494,10 @@ def holiday_list_view(request, employee):
 # ==============================================================================
 @employee_required
 def route_playback_view(request, employee, employee_id, date_str):
-    emp = get_object_or_404(Employee, id=employee_id)
+    emp = get_object_or_404(Employee, id=employee_id, company=employee.company)
+    allowed_ids = set(get_dropdown_team(employee, ordered=False).values_list('id', flat=True))
+    if emp.id not in allowed_ids and emp.id != employee.id:
+        return redirect('mr_dashboard')
     target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
 
     day_start = DayStart.objects.filter(employee=emp, date=target_date).first()
