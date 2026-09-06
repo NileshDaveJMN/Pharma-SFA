@@ -61,7 +61,7 @@ class Route(models.Model):
     category = models.CharField(max_length=15, choices=CATEGORY_CHOICES, default='HQ')
     distance_from_hq = models.DecimalField(max_digits=6, decimal_places=1, default=0.0, help_text="Distance in KM from HQ")
     requested_by = models.ForeignKey('Employee', on_delete=models.SET_NULL, null=True, blank=True, related_name='requested_routes')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending', db_index=True)   # 🚀 INDEX
 
     class Meta:
         # 🌟 NAYA: SaaS Fix - Ek territory me route name unique hoga
@@ -88,7 +88,7 @@ class Employee(models.Model):
     ]
     name = models.CharField(max_length=100)
     employee_code = models.CharField(max_length=50) # 🌟 FIX: unique=True HATA DIYA HAI
-    designation = models.CharField(max_length=5, choices=DESIGNATION_CHOICES, default='MR')
+    designation = models.CharField(max_length=5, choices=DESIGNATION_CHOICES, default='MR', db_index=True)   # 🚀 INDEX
     manager = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='subordinates')
     headquarter = models.ForeignKey(Territory, on_delete=models.SET_NULL, null=True, blank=True)
     phone = models.CharField(max_length=15)
@@ -97,7 +97,7 @@ class Employee(models.Model):
     # 🌟 NAYE FIELDS (Profile aur Resignation Handle Karne Ke Liye)
     photo = models.ImageField(upload_to='employee_photos/', blank=True, null=True, help_text="Employee ki profile photo")
     address = models.TextField(blank=True, null=True, help_text="Employee ka home address")
-    is_active = models.BooleanField(default=True, help_text="False matlab ye employee company chhod chuka hai ya inactive hai.")
+    is_active = models.BooleanField(default=True, db_index=True, help_text="False matlab ye employee company chhod chuka hai ya inactive hai.")   # 🚀 INDEX
     leaving_date = models.DateField(null=True, blank=True, help_text="Employee ke company chhodne ki tareekh.")
     # 🌟 NAYA: Personal & Family Info
     dob = models.DateField(null=True, blank=True, verbose_name="Date of Birth")
@@ -141,7 +141,7 @@ class Employee(models.Model):
     )
     is_placeholder = models.BooleanField(
         default=False,
-        help_text="True = ye ek 'Vacant_<HQ>' dummy employee hai, asli insaan nahi. Joint Work me normal employee jaisa hi treat hota hai (use individual hi maana jayega)."
+        help_text="True = ye ek 'Vacant_<HQ>' dummy employee hai, asli insaan nahi. Joint Work me normal employee jaisea hi treat hota hai (use individual hi maana jayega)."
     )
 
     class Meta:
@@ -165,7 +165,7 @@ class Employee(models.Model):
         return managers
 
     def clean(self):
-        # 🔒 Manager hierarchy me circular loop check (A->B->C->A jaisa)
+        # 🔒 Manager hierarchy me circular loop check (A->B->C->A jaisea)
         if self.manager_id is not None:
             if self.manager_id == self.id:
                 raise ValidationError({'manager': "Employee apna khud ka manager nahi ban sakta."})
@@ -177,7 +177,6 @@ class Employee(models.Model):
                     raise ValidationError({'manager': f"Ye manager assign nahi ho sakta — isse hierarchy me circular loop ban jayega ({boss.name} se hote hue wapas yahi tak)."})
                 seen_ids.add(boss.id)
                 boss = boss.manager
-
 class DARate(models.Model):
     DESIGNATION_CHOICES = [
         ('MR', 'Medical Representative'),
@@ -277,12 +276,12 @@ class Doctor(models.Model):
 
     # Core fields (existing)
     company      = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='doctors') # 🌟 CHANGED
-    name         = models.CharField(max_length=150)
+    name         = models.CharField(max_length=150, db_index=True)   # 🚀 INDEX
     specialty    = models.CharField(max_length=100, choices=SPECIALTY_CHOICES, blank=True, null=True) # 🌟 Updated
     territory    = models.ForeignKey(Territory, on_delete=models.CASCADE)
     route        = models.ForeignKey(Route, on_delete=models.SET_NULL, null=True, blank=True)
     allocated_to = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True)
-    status       = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    status       = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending', db_index=True)   # 🚀 INDEX
 
     # New fields
     address      = models.TextField(blank=True, null=True)
@@ -317,7 +316,7 @@ class Doctor(models.Model):
 class Chemist(models.Model):
     STATUS_CHOICES = (('Pending', 'Pending Approval'), ('Approved', 'Approved'), ('Rejected', 'Rejected'))
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='chemists')
-    name = models.CharField(max_length=150)
+    name = models.CharField(max_length=150, db_index=True)   # 🚀 INDEX
     address = models.TextField(blank=True, null=True, help_text="Chemist shop address")
     latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
@@ -326,7 +325,7 @@ class Chemist(models.Model):
     linked_stockist = models.ForeignKey(Stockist, on_delete=models.SET_NULL, null=True, blank=True)
     phone = models.CharField(max_length=15)
     allocated_to = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending', db_index=True)   # 🚀 INDEX
 
     # 🌟 NAYA: Owner Info & Card Photo
     owner_name = models.CharField(max_length=150, blank=True, null=True, help_text="Chemist shop owner ka naam")
@@ -380,7 +379,7 @@ class Product(models.Model):
         return self.pts
 
 class PrimarySale(models.Model):
-    date = models.DateField()
+    date = models.DateField(db_index=True)   # 🚀 INDEX
     stockist = models.ForeignKey(Stockist, on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField()
@@ -404,13 +403,13 @@ class RCPA_Audit(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity_prescribed = models.PositiveIntegerField()
-
+    
 class MonthlyTourProgram(models.Model):
     STATUS_CHOICES = (('Draft', 'Draft'), ('Pending', 'Pending Approval'), ('Approved', 'Approved'), ('Rejected', 'Rejected'))
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
     month = models.IntegerField()
     year = models.IntegerField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Draft')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Draft', db_index=True)   # 🚀 INDEX
     manager_remark = models.TextField(blank=True, null=True)
     is_modified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -425,7 +424,7 @@ class DailyTourPlan(models.Model):
 
 class DailyDCR(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
-    date = models.DateField()
+    date = models.DateField(db_index=True)   # 🚀 INDEX
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta: unique_together = ('employee', 'date')
     def __str__(self): return f"{self.employee.name} | {self.date}"
@@ -435,7 +434,7 @@ class DailyDCR(models.Model):
 # ==============================================================================
 class DailyDCRStatus(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
-    date = models.DateField()
+    date = models.DateField(db_index=True)   # 🚀 INDEX
     
     is_open = models.BooleanField(default=True, help_text="Kya is din ka DCR bharna allowed hai?")
     is_submitted = models.BooleanField(default=False, help_text="Day End hone par True ho jayega")
@@ -469,7 +468,7 @@ class DCRVisit(models.Model):
     doctor = models.ForeignKey(Doctor, on_delete=models.SET_NULL, null=True, blank=True)
     chemist = models.ForeignKey(Chemist, on_delete=models.SET_NULL, null=True, blank=True)
     remark = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)   # 🚀 INDEX
     latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     geofence_bypassed = models.BooleanField(
@@ -492,7 +491,7 @@ class DCRProductDetail(models.Model):
 
 class DayEnd(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
-    date = models.DateField()
+    date = models.DateField(db_index=True)   # 🚀 INDEX
     is_closed = models.BooleanField(default=True)
     closed_at = models.DateTimeField(auto_now_add=True)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
@@ -508,7 +507,7 @@ class DayStart(models.Model):
     ]
     
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
-    date = models.DateField()
+    date = models.DateField(db_index=True)   # 🚀 INDEX
     territory = models.ForeignKey(Territory, on_delete=models.CASCADE, null=True, blank=True)
     routes = models.ManyToManyField(Route, blank=True)
     night_stay = models.BooleanField(default=False)
@@ -544,7 +543,7 @@ class DailyExpense(models.Model):
     ]
     monthly_report = models.ForeignKey(MonthlyExpenseReport, on_delete=models.CASCADE, related_name='daily_lines', null=True, blank=True)
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='expenses')
-    date = models.DateField()
+    date = models.DateField(db_index=True)   # 🚀 INDEX
     territory_category = models.CharField(max_length=15, choices=TERRITORY_CATEGORY_CHOICES, blank=True, null=True)
     night_stay = models.BooleanField(default=False)
     distance_km = models.DecimalField(max_digits=6, decimal_places=1, default=0.0)
@@ -608,7 +607,7 @@ class PharmaActivity(models.Model):
     manager_remark = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     def __str__(self): return f"{self.title} | {self.doctor.name} | {self.status}"
-
+    
 # ==============================================================================
 # 🏢 NAYA: PARTY-WISE SALE & DOCTOR RX CLASSIFICATION MODELS
 # ==============================================================================
@@ -689,7 +688,7 @@ class MonthlyTargetMaster(models.Model):
     
     month = models.IntegerField(help_text="Month in number (e.g., 1 for Jan, 5 for May)")
     year = models.IntegerField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Draft')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Draft', db_index=True)   # 🚀 INDEX
     manager_remark = models.TextField(blank=True, null=True)
     approved_by_managers = models.JSONField(default=list, blank=True)
 
@@ -709,7 +708,7 @@ class MonthlyTargetMaster(models.Model):
 class Holiday(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="holidays") # 🌟 CHANGED
     name = models.CharField(max_length=100)
-    date = models.DateField()
+    date = models.DateField(db_index=True)   # 🚀 INDEX
     proposed_by = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='proposed_holidays')
     status = models.CharField(max_length=20, choices=[('Pending', 'Pending'), ('Approved', 'Approved'), ('Rejected', 'Rejected')], default='Pending')
 
@@ -760,7 +759,7 @@ class LeaveApplication(models.Model):
     
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='leave_applications')
     leave_type = models.CharField(max_length=5, choices=LEAVE_TYPES)
-    start_date = models.DateField()
+    start_date = models.DateField(db_index=True)   # 🚀 INDEX
     end_date = models.DateField()
     reason = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
@@ -825,8 +824,8 @@ class SystemNotification(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='notifications')
     title = models.CharField(max_length=150)
     message = models.TextField()
-    is_read = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False, db_index=True)   # 🚀 INDEX
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)   # 🚀 INDEX
 
     def __str__(self):
         return f"Alert for {self.employee.name} - {self.title}"
@@ -838,7 +837,7 @@ class DirectMessage(models.Model):
     sender = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='sent_messages')
     receiver = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='received_messages')
     message = models.TextField()
-    is_read = models.BooleanField(default=False)
+    is_read = models.BooleanField(default=False, db_index=True)   # 🚀 INDEX
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -900,7 +899,7 @@ class FreeQtyClaimMaster(models.Model):
     stockist = models.ForeignKey(Stockist, on_delete=models.CASCADE, null=True, blank=True)
     month = models.IntegerField()
     year = models.IntegerField()
-    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='Draft')
+    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='Draft', db_index=True)   # 🚀 INDEX
     
     # Approval tracking (Managers ke IDs is list mein save honge)
     approved_by_managers = models.JSONField(default=list, blank=True) 
@@ -962,7 +961,7 @@ class PromoDispatch(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
     item = models.ForeignKey(PromoItem, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='In-Transit')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='In-Transit', db_index=True)   # 🚀 INDEX
     received_date = models.DateField(null=True, blank=True)
 
     def __str__(self):
@@ -992,7 +991,7 @@ class GiftCampaignPlan(models.Model):
     item = models.ForeignKey(PromoItem, on_delete=models.CASCADE)
     month = models.IntegerField()
     year = models.IntegerField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Pending', db_index=True)   # 🚀 INDEX
     manager_remark = models.TextField(blank=True, null=True)
 
     def __str__(self):
@@ -1000,18 +999,15 @@ class GiftCampaignPlan(models.Model):
 
 
 class DoctorROILedger(models.Model):
-    date_given = models.DateField()
+    date_given = models.DateField(db_index=True)   # 🚀 INDEX
     doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE)
     employee = models.ForeignKey(Employee, null=True, on_delete=models.SET_NULL)
     item = models.ForeignKey(PromoItem, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField()
     total_value = models.DecimalField(max_digits=10, decimal_places=2)
     visit = models.ForeignKey('DCRVisit', null=True, blank=True, on_delete=models.SET_NULL, related_name='roi_entries', help_text="Kis visit ke through ye gift diya gaya. Visit delete hone par yahan se inventory reverse karne ke liye zaroori hai.")
-
     def __str__(self):
-        return f"{self.doctor.name} received {self.item.name} (₹{self.total_value})"
-
-
+        return f"{self.doctor.name} received {self.item.name} (₹{self.total_value})"          
 def reverse_visit_inventory(visit):
     """
     Ek DCRVisit ko delete karne se PEHLE ye function call karna ZAROORI hai.
@@ -1039,6 +1035,7 @@ def reverse_visit_inventory(visit):
             inv.stock_qty += entry.quantity
             inv.save()
         entry.delete()
+
 # ==========================================
 # ✏️ EDIT REQUEST TRACKERS (DOCTOR & CHEMIST)
 # ==========================================
@@ -1109,7 +1106,7 @@ class InternalMessage(models.Model):
     
     subject = models.CharField(max_length=255)
     body = models.TextField()
-    is_read = models.BooleanField(default=False)
+    is_read = models.BooleanField(default=False, db_index=True)   # 🚀 INDEX
     sent_at = models.DateTimeField(auto_now_add=True)
     
     # 🌟 Reply/Forward ke liye parent message (Optional)
@@ -1157,7 +1154,8 @@ class WeeklyStockistSaleMaster(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE)
     stockist = models.ForeignKey(Stockist, on_delete=models.CASCADE)
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
-    week_ending_date = models.DateField() # Hamesha Saturday ki date hogi
+    week_ending_date = models.DateField(db_index=True)   # 🚀 INDEX
+    # Hamesha Saturday ki date hogi
     
     # Mandatory values in ₹
     total_sec_sale_value = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
@@ -1227,7 +1225,7 @@ class FieldEvent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     
     # 🌟 Toggle for Community Wall (Agar True hai, toh sabko dikhega)
-    is_shared_in_community = models.BooleanField(default=False)
+    is_shared_in_community = models.BooleanField(default=False, db_index=True)   # 🚀 INDEX
     
     def __str__(self):
         return f"{self.subject} - {self.employee.name} ({self.category})"
@@ -1341,4 +1339,4 @@ class VAScreenTime(models.Model):
 
     def __str__(self):
         doc_name = self.visit.doctor.name if self.visit and self.visit.doctor else "Unknown"
-        return f"Dr. {doc_name} - {self.product.name} ({self.duration_seconds} sec)"
+        return f"Dr. {doc_name} - {self.product.name} ({self.duration_seconds} sec)"       
