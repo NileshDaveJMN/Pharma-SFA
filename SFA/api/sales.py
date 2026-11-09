@@ -8,7 +8,12 @@ Sales & Visit REST API endpoints for Flutter.
   2. api_party_wise_submit     → bulk_create + transaction (40 → ~4 queries)
   3. api_gift_campaign GET     → select_related
   4. api_gift_campaign POST    → bulk_create + transaction (25 → ~6 queries)
-  (api_target_setting, api_today_visits, visit form, chemist submit — UNCHANGED, already clean)
+
+🌟🌟 DIGITAL VA PATCH (NAYA — is version mein):
+  5. api_doctor_visit_form    → response mein 'va_slides' (ProductVAMedia + Cloudinary f_auto,q_auto)
+  6. api_doctor_visit_submit  → 'va_screen_times' accept karke VAScreenTime bulk_create
+  7. 🛡️ SECURITY: doctor + chemist visit ke product_ids ab company-scope validate hote hain
+  8. 🐛 FIX: api_gift_campaign POST — 'valid_doctors' NameError (undefined variable) + doctor company-scope
 """
 from datetime import datetime, date
 import calendar
@@ -28,7 +33,8 @@ from SFA.models import (
     DayEnd, MRInventory, GiftCampaignPlan, DoctorROILedger,
     PartyWiseSaleReport, PartyWiseSaleLine, PrimarySale,
     SystemSetting, MonthlyTargetMaster, TerritoryTarget,
-    DoctorRxMapping
+    DoctorRxMapping,
+    ProductVAMedia, VAScreenTime,  # 🌟 DIGITAL VA models
 )
 from SFA.services.team import get_dropdown_team
 from SFA.views.core import get_open_day
@@ -97,6 +103,29 @@ def api_doctor_visit_form(request, doc_id):
             'price': float(inv.item.price) if inv.item.price else 0.0,
         })
 
+    # ── 🌟 DIGITAL VA SLIDES (company ke products ki active slides) ─────────────
+    # Flutter app inhe "Detailed" mark kiye products ke liye VA player mein dikhata hai.
+    va_slides = []
+    for s in ProductVAMedia.objects.filter(
+        product__company=employee.company, is_active=True
+    ).select_related('product').order_by('product_id', 'slide_order'):
+        try:
+            url = s.file.url
+        except Exception:
+            continue
+        if not url:
+            continue
+        # Cloudinary ho to auto-format + auto-quality (mobile pe fast load, data bachta hai)
+        if 'res.cloudinary.com' in url and '/upload/' in url:
+            url = url.replace('/upload/', '/upload/f_auto,q_auto/', 1)
+        va_slides.append({
+            'product_id': s.product_id,
+            'product_name': s.product.name,
+            'title': s.title,
+            'file': url,
+            'slide_order': s.slide_order,
+        })
+
     return Response({
         'doctor': {
             'id': doctor.id,
@@ -108,6 +137,7 @@ def api_doctor_visit_form(request, doc_id):
         'working_date': str(today),
         'products': products,
         'gifts': gifts,
+        'va_slides': va_slides,  # 🌟 NAYA
     })
 
 
@@ -156,6 +186,11 @@ def api_doctor_visit_submit(request):
             products_payload = [p for p in (data.get('products') or []) if p.get('product_id')]
             p_ids = [p.get('product_id') for p in products_payload]
 
+            # 🛡️ SECURITY FIX: sirf apni company ke products hi visit mein aa sakte hain
+            valid_p_ids = set(
+                Product.objects.filter(company=employee.company, id__in=p_ids).values_list('id', flat=True)
+            ) if p_ids else set()
+
             # 🚀 FIX: Saari sample inventory EK query mein (pehle loop mein per-product thi)
             sample_inv_map = {}
             if p_ids:
@@ -171,7 +206,7 @@ def api_doctor_visit_submit(request):
                 sq = int(prod_data.get('sample_qty') or 0)
                 oq = int(prod_data.get('order_qty') or 0)
 
-                if is_det or sq > 0 or oq > 0:
+                if (is_det or sq > 0 or oq > 0) and p_id in valid_p_ids:
                     DCRProductDetail.objects.create(visit=visit, product_id=p_id, is_detailed=is_det, sample_qty=sq, order_qty=oq)
                     sample_inv = sample_inv_map.get(p_id)   # 🚀 dict lookup — 0 query
                     if sample_inv and sample_inv.stock_qty >= sq:
@@ -208,6 +243,30 @@ def api_doctor_visit_submit(request):
 
             if gift_inv_map:
                 MRInventory.objects.bulk_update(gift_inv_map.values(), ['stock_qty'])
+
+            # ── 🌟 DIGITAL VA SCREEN TIME (Flutter VA player se) ───────────
+            # Payload: [{'product_id': 12, 'seconds': 45}, ...]
+            va_times = []
+            for vt in (data.get('va_screen_times') or []):
+                try:
+                    va_pid = vt.get('product_id')
+                    va_secs = int(vt.get('seconds') or 0)
+                except (TypeError, ValueError):
+                    continue
+                if va_pid and va_secs > 0:
+                    va_times.append((va_pid, va_secs))
+
+            if va_times:
+                # 🛡️ Company-scope: sirf apni company ke products ka hi time save hoga
+                valid_va_ids = set(
+                    Product.objects.filter(
+                        company=employee.company, id__in=[p for p, _ in va_times]
+                    ).values_list('id', flat=True)
+                )
+                VAScreenTime.objects.bulk_create([
+                    VAScreenTime(visit=visit, product_id=vp, duration_seconds=vs)
+                    for vp, vs in va_times if vp in valid_va_ids
+                ])
 
         return Response({'message': f'Visit for Dr. {doctor.name} has been saved successfully!', 'visit_id': visit.id}, status=201)
 
@@ -249,9 +308,16 @@ def api_chemist_visit_submit(request):
             latitude=data.get('latitude') or None, longitude=data.get('longitude') or None,
         )
 
-        for prod_data in (data.get('products') or []):
+        # 🛡️ SECURITY FIX: sirf apni company ke products hi order mein aa sakte hain
+        chem_products = [pd for pd in (data.get('products') or []) if pd.get('product_id')]
+        chem_p_ids = [pd.get('product_id') for pd in chem_products]
+        valid_p_ids = set(
+            Product.objects.filter(company=employee.company, id__in=chem_p_ids).values_list('id', flat=True)
+        ) if chem_p_ids else set()
+
+        for prod_data in chem_products:
             oq = int(prod_data.get('order_qty') or 0)
-            if oq > 0:
+            if oq > 0 and prod_data.get('product_id') in valid_p_ids:
                 DCRProductDetail.objects.create(visit=visit, product_id=prod_data.get('product_id'), sample_qty=0, order_qty=oq)
 
         return Response({'message': f'Visit for {chemist.name} has been saved successfully!', 'visit_id': visit.id}, status=201)
@@ -414,7 +480,7 @@ def api_party_wise_get(request):
         ).values('product_id').annotate(
             t_qty=Sum('quantity'), t_free=Sum('free_quantity')
         )
-        primary_dict = {item['product_id']: (item['t_qty'] or 0) + (item['t_free'] or 0) for item in primary_agg}
+        primary_dict = {item['product_id']: (item['t_qty'] or 0) + (item['free_qty'] or 0) for item in primary_agg}
 
         # 2. Past Secondary Sale Aggregation
         past_party_agg = PartyWiseSaleLine.objects.filter(
@@ -469,6 +535,7 @@ def api_party_wise_get(request):
         'balances': balances, 'chemists': chem_data, 'doctors': doc_data,
         'all_products': prod_data
     })
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_party_wise_submit(request):
@@ -544,6 +611,7 @@ def api_party_wise_submit(request):
 
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
 # ====================================================================
 # 🎯 TARGET SETTING API (Optimized Bulk Create)
 # ====================================================================
@@ -617,7 +685,7 @@ def api_target_setting(request):
 
         master.save()
         return Response({'success': True, 'message': msg})
-        
+
 # ====================================================================
 # 9. GIFT CAMPAIGN API
 # ====================================================================
@@ -643,6 +711,7 @@ def api_gift_campaign(request):
         ]
 
         return Response({'success': True, 'gifts': gifts_data, 'doctors': doctors_data, 'history': history_data})
+
     if request.method == 'POST':
         item_id = request.data.get('item_id')
         doctor_ids = request.data.get('doctor_ids', [])
@@ -662,20 +731,31 @@ def api_gift_campaign(request):
             employee=employee, item_id=item_id, month=month, year=year,
             status__in=['Pending', 'Approved']
         ).values_list('doctor_id', flat=True))
-        new_docs_to_add = [d for d in doctor_ids if d not in already_doc_ids]
+
+        # 🌟 FIX (BUG): 'valid_doctors' undefined tha (NameError → 500 error) — ab define kiya.
+        # 🛡️ SECURITY: sirf apni company ke, khud ko allocated, Approved doctors hi campaign
+        # mein aa sakte hain (cross-tenant / tampering block).
+        valid_doctors = list(Doctor.objects.filter(
+            id__in=doctor_ids,
+            company=employee.company,
+            allocated_to=employee,
+            status='Approved',
+        ))
+        new_docs_to_add = [d for d in valid_doctors if d.id not in already_doc_ids]
 
         if len(already_doc_ids) + len(new_docs_to_add) > inventory.stock_qty:
             available_to_assign = inventory.stock_qty - len(already_doc_ids)
             return Response({'success': False, 'error': f'Stock Limit Exceeded! Total stock for {inventory.item.name} is {inventory.stock_qty} (of which {len(already_doc_ids)} are already assigned). You can only select {available_to_assign} more.'}, status=400)
-            # 🛡️ TRANSACTION + 🚀 EK bulk INSERT (pehle per-doctor INSERT tha)
+
+        if not new_docs_to_add:
+            return Response({'success': False, 'error': 'Selected doctor(s) already have this item assigned for this month.'}, status=400)
+
+        # 🛡️ TRANSACTION + 🚀 EK bulk INSERT (pehle per-doctor INSERT tha)
         with transaction.atomic():
             GiftCampaignPlan.objects.bulk_create([
                 GiftCampaignPlan(employee=employee, doctor=d, item_id=item_id, month=month, year=year, status='Pending')
-                for d in valid_doctors
+                for d in new_docs_to_add
             ])
 
-        created = len(valid_doctors)
+        created = len(new_docs_to_add)
         return Response({'success': True, 'message': f'Campaign for {created} Doctor(s) has been submitted to the Manager!'})
-
-
-    
